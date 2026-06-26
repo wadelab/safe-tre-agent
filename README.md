@@ -16,6 +16,9 @@ It runs entirely on **synthetic** data and is **model-agnostic** (OpenAI-compati
 client → OpenRouter, local vLLM/Ollama, or any compatible endpoint). A deterministic
 `MockLLM` lets the whole pipeline and the red-team run offline.
 
+> **📄 Full write-up with architecture, enclave and sequence diagrams, threat
+> model and results: [`docs/writeup.md`](docs/writeup.md).**
+
 ## Where it sits
 
 The agent runs **inside** the enclave; only outputs cross a gateway. The model
@@ -73,6 +76,11 @@ the real data): `donors` (quasi-identifiers), `apps` (reference), `events`
 planted in `free_text`, code-channel smuggling of identifiers, a two-query
 differencing attack, and a direct re-identification request. `run_redteam.py`
 replays each with the gateway OFF and ON and reports what actually leaked.
+
+![Red-team: gateway off vs on](docs/figures/redteam_results.png)
+
+**5/5 attacks neutralised; 3/6 would leak row-level data with the gateway off.**
+Benign analysis flows through; small-cell queries are redacted and released.
 
 ## Status & honesty
 
