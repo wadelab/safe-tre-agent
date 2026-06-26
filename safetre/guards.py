@@ -67,7 +67,7 @@ def run_in_sandbox(code: str, tables: dict[str, pd.DataFrame]) -> SandboxResult:
     # expose copies so the agent cannot mutate the source tables
     env.update({name: df.copy() for name, df in tables.items()})
     try:
-        exec(code, env)  # noqa: S102 - sandboxed namespace, static-checked
+        exec(code, env)  # nosec B102 # noqa: S102 - legacy/escalation path: static-checked, restricted builtins
     except Exception as exc:  # noqa: BLE001
         return SandboxResult(ok=False, error=f"{type(exc).__name__}: {exc}")
     result = env.get("result")

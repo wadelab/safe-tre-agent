@@ -49,18 +49,40 @@ NL request
 - **Five Safes** — vetting = Safe Projects/People; gateway = Safe Outputs; local
   model = Safe Settings.
 
-## Quick start (offline, no API key)
+## Quick start (uv, offline, no API key)
 
 ```bash
-pip install -r requirements.txt
-python scripts/make_data.py                       # synthetic SDDS-style data -> ./data
-python scripts/demo.py "mean spend by age band"   # one guarded request, end to end
-python redteam/run_redteam.py                      # gateway OFF vs ON, leakage table
-pytest -q
+uv sync --all-extras                              # pinned env from uv.lock
+uv run python scripts/make_data.py                # synthetic SDDS-style data -> ./data
+uv run python scripts/demo.py "mean spend by age band"
+uv run python redteam/run_redteam.py              # gateway OFF vs ON, leakage table
+uv run pytest -q
 ```
 
 Use a real model by setting the OpenAI-compatible env vars in `.env` (see
 `.env.example`) and `SAFETRE_LLM=real`.
+
+## Web interface (Phase 1 — security-first)
+
+```bash
+uv run uvicorn safetre_web.app:app --host 127.0.0.1 --port 8800   # or scripts/run_web.sh
+# expose to your tailnet:  tailscale serve --bg 8800
+```
+
+The web layer is built security-first (the model is treated as untrusted):
+
+- **No code execution.** The LLM only proposes a **`QuerySpec`** (Pydantic,
+  `extra="forbid"`); anything off the allowlisted catalogue is rejected before it
+  runs. A read-only **DuckDB** engine compiles the validated spec to
+  **parameterised** SQL — no SQL-injection surface, no arbitrary code.
+- **Identity = Safe People.** Behind `tailscale serve` the authenticated tailnet
+  login is used for access control (`SAFETRE_ALLOWLIST`) and the audit trail.
+- **Hash-chained audit log** (`safetre/audit.py`) — every request, spec and
+  decision, tamper-evident (`GET /api/audit/verify`).
+- **Hardened headers** (strict CSP `script-src 'self'`, no CDN JS) and a
+  **least-privilege systemd unit** (`deploy/safetre-web.service`).
+- Binds `127.0.0.1` only; per-user `SessionAuditor` makes differencing/budget
+  controls persist across a session.
 
 ## The dataset (synthetic)
 
@@ -82,20 +104,29 @@ replays each with the gateway OFF and ON and reports what actually leaked.
 **5/5 attacks neutralised; 3/6 would leak row-level data with the gateway off.**
 Benign analysis flows through; small-cell queries are redacted and released.
 
-## Status & honesty
+## Two execution paths
 
-Prototype / work-in-progress. The sandbox is **defence-in-depth illustration, not
-a secure jail** — production needs real container isolation (gVisor/Firecracker),
-ACRO proper, a trained output-checker model, and DP accounting for the session
-budget. The point here is to make the *agentic* disclosure problem concrete and
-measurable, and to show the control surface that addresses it.
+- **Secure (web / Phase 1):** validated `QuerySpec` → read-only DuckDB. No code
+  runs; this is the default and what the web interface uses.
+- **Legacy / escalation (CLI):** the original "LLM writes pandas" path
+  (`safetre/analyst.py` + `guards.py`) is retained for the red-team narrative and
+  as the human-reviewed escalation route for analyses the DSL can't express. Its
+  sandbox is **defence-in-depth illustration, not a secure jail** — that path
+  would need real container isolation (gVisor/Firecracker) before real data.
+
+Remaining for production either way: ACRO proper, a trained output-checker model,
+and DP accounting for the session budget.
 
 ## Layout
 
 ```
-safetre/     schema, synthetic data, guards (static+sandbox), disclosure gateway,
-             session auditor, HITL, LLM client (+ MockLLM), analyst loop
-scripts/     make_data.py, demo.py
-redteam/     attacks.yaml, run_redteam.py
-tests/       pytest unit tests
+safetre/      query (QuerySpec), engine (DuckDB), planner, service,   ← secure path
+              disclosure gateway, session auditor, audit (hash-chain),
+              schema, synthetic data, analyst+guards (legacy/escalation), llm
+safetre_web/  FastAPI app, identity (Safe People), session, templates, static
+scripts/      make_data.py, demo.py, make_figures.py, run_web.sh
+redteam/      attacks.yaml, run_redteam.py
+deploy/       safetre-web.service (hardened systemd unit)
+docs/         writeup.md + figures
+tests/        pytest (37): disclosure, pipeline, secure (QuerySpec/engine/audit), web
 ```

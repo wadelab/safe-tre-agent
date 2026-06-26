@@ -5,3 +5,6 @@ data/*.csv
 redteam/results.csv
 .venv/
 .pytest_cache/
+*.db
+*.db-wal
+*.db-shm

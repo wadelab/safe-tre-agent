@@ -1,0 +1,40 @@
+[project]
+name = "safe-tre-agent"
+version = "0.1.0"
+description = "Safe-outputs gateway for an AI analyst inside a Trusted Research Environment"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pandas>=2.0",
+    "numpy>=1.24",
+    "pyyaml>=6.0",
+    "pydantic>=2.6",   # validated QuerySpec — the security boundary, not optional
+    "duckdb>=1.0",     # read-only query engine
+]
+
+[project.optional-dependencies]
+web = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "jinja2>=3.1",
+    "httpx>=0.27",
+]
+llm = [
+    "openai>=1.30",    # any OpenAI-compatible endpoint (local vLLM/Ollama in prod)
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "matplotlib>=3.7",  # write-up figure
+    "bandit>=1.7",      # security linter (SAST)
+    "pip-audit>=2.7",   # dependency vulnerability audit
+]
+
+# App, not a library: let uv manage the env without building/installing the project.
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

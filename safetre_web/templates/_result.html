@@ -1,0 +1,31 @@
+<div class="card status-{{ r.status }}">
+  <div class="status-line">
+    <span class="status-badge">{{ r.status | upper }}</span>
+    {% if r.message %}<span class="status-msg">{{ r.message }}</span>{% endif %}
+    <span class="budget">session budget left: {{ budget_left }}</span>
+  </div>
+
+  {% if r.spec %}
+  <details class="spec" open>
+    <summary>validated QuerySpec</summary>
+    <code>{{ r.spec }}</code>
+  </details>
+  {% endif %}
+
+  {% if table_html %}
+  <div class="table-wrap">{{ table_html | safe }}</div>
+  {% endif %}
+
+  {% if r.findings %}
+  <ul class="findings">
+    {% for f in r.findings %}
+    <li class="sev-{{ f.severity }}"><strong>{{ f.rule }}</strong> — {{ f.detail }}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+
+  <details class="trace">
+    <summary>pipeline trace</summary>
+    <ol>{% for step in r.trace %}<li>{{ step }}</li>{% endfor %}</ol>
+  </details>
+</div>

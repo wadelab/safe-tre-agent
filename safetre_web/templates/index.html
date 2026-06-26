@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>safe-tre-agent</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<main>
+  <header>
+    <h1>safe-tre-agent <span class="tag">TRE safe-outputs gateway</span></h1>
+    <p class="muted">
+      Signed in as <strong>{{ user }}</strong>
+      {% if allowed %}<span class="ok-pill">Safe&nbsp;People&nbsp;✓</span>
+      {% else %}<span class="deny-pill">not on allowlist</span>{% endif %}
+      · synthetic data · the model proposes a validated query, never code
+    </p>
+  </header>
+
+  <section class="ask">
+    <form id="qform" autocomplete="off">
+      <label for="q">Ask for an aggregate</label>
+      <div class="row">
+        <input id="q" name="q" type="text" maxlength="500"
+               placeholder="e.g. mean spend by age band" required>
+        <button type="submit">Run</button>
+      </div>
+    </form>
+    <div id="result" class="result"></div>
+  </section>
+
+  <section class="catalogue">
+    <h2>What you can query</h2>
+    <p class="muted">Anything outside this catalogue is rejected before it runs.</p>
+    {% for ds, info in catalogue.items() %}
+    <div class="ds">
+      <h3>{{ ds }}</h3>
+      <p><span class="k">dimensions</span> {{ info.dims.keys() | join(", ") }}</p>
+      <p><span class="k">measures</span> {{ info.measures | join(", ") }}</p>
+    </div>
+    {% endfor %}
+  </section>
+
+  <footer class="muted">
+    Aggregates only · min cell size enforced · differencing audited ·
+    every request hash-chain logged.
+  </footer>
+</main>
+<script src="/static/app.js"></script>
+</body>
+</html>
