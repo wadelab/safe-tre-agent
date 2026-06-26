@@ -162,9 +162,9 @@ interfaces. Getting the control surface right on a TRE is a tractable first step
 ## Reproduce
 
 ```bash
-pip install -r requirements.txt
-python scripts/make_data.py
-python redteam/run_redteam.py        # the results table above
-python scripts/make_figures.py       # regenerates the figure
-pytest -q
+uv sync --all-extras
+uv run python scripts/make_data.py
+uv run python redteam/run_redteam.py        # the results table above
+uv run python scripts/make_figures.py       # regenerates the figure
+uv run pytest -q
 ```

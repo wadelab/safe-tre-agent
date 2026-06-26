@@ -30,6 +30,8 @@ markdown_extensions:
 
 nav:
   - Home: index.md
+  - Install: install.md
+  - User guide: userguide.md
   - Architecture: architecture.md
   - Security model: security.md
   - Safepod model: safepod.md
@@ -38,6 +40,5 @@ nav:
   - Hardening log: hardening-log.md
   - Round 2 plan: round2-plan.md
   - Deployment: deployment.md
-  - Usage: usage.md
   - Development: development.md
   - Research write-up: writeup.md

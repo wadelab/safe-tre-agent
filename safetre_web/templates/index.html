@@ -7,44 +7,110 @@
   <link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
-<main>
-  <header>
-    <h1>safe-tre-agent <span class="tag">TRE safe-outputs gateway</span></h1>
-    <p class="muted">
-      Signed in as <strong>{{ user }}</strong>
-      {% if allowed %}<span class="ok-pill">Safe&nbsp;People&nbsp;✓</span>
-      {% else %}<span class="deny-pill">not on allowlist</span>{% endif %}
-      · synthetic data · the model proposes a validated query, never code
-    </p>
+<main class="shell">
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">Trusted Research Environment</p>
+      <h1>Analysis workspace</h1>
+    </div>
+    <div class="identity {% if allowed %}is-allowed{% else %}is-denied{% endif %}">
+      <span class="identity-label">Signed in</span>
+      <strong>{{ user }}</strong>
+      {% if allowed %}<span class="state">Safe People</span>
+      {% else %}<span class="state">Not allowlisted</span>{% endif %}
+    </div>
   </header>
 
-  <section class="ask">
-    <form id="qform" autocomplete="off">
-      <label for="q">Ask for an aggregate</label>
-      <div class="row">
-        <input id="q" name="q" type="text" maxlength="500"
-               placeholder="e.g. mean spend by age band" required>
-        <button type="submit">Run</button>
+  <div class="grid">
+    <section class="query-surface" aria-labelledby="query-title">
+      <div class="surface-head">
+        <div>
+          <h2 id="query-title">New aggregate request</h2>
+          <p class="muted">Manifest {{ manifest.manifest_sha256[:10] }}</p>
+        </div>
+        <a class="manifest-link" href="/api/manifest">Manifest</a>
       </div>
-    </form>
-    <div id="result" class="result"></div>
-  </section>
 
-  <section class="catalogue">
-    <h2>What you can query</h2>
-    <p class="muted">Anything outside this catalogue is rejected before it runs.</p>
-    {% for ds, info in catalogue.items() %}
-    <div class="ds">
-      <h3>{{ ds }}</h3>
-      <p><span class="k">dimensions</span> {{ info.dims.keys() | join(", ") }}</p>
-      <p><span class="k">measures</span> {{ info.measures | join(", ") }}</p>
-    </div>
-    {% endfor %}
-  </section>
+      <form id="qform" autocomplete="off">
+        <label for="q">Research question</label>
+        <textarea id="q" name="q" maxlength="500"
+                  placeholder="mean spend by age band" required></textarea>
+        <div class="actions">
+          <span id="charcount" class="count">0 / 500</span>
+          <button id="runbtn" type="submit">Run query</button>
+        </div>
+      </form>
 
-  <footer class="muted">
-    Aggregates only · min cell size enforced · differencing audited ·
-    every request hash-chain logged.
+      <div class="examples" aria-label="Example queries">
+        <button type="button" data-query="mean spend by age band">Mean spend</button>
+        <button type="button" data-query="mean wellbeing by canton">Wellbeing</button>
+        <button type="button" data-query="total spend by device os for purchases">Device spend</button>
+      </div>
+
+      <div id="result" class="result">
+        <div class="empty-state">
+          <span class="dot"></span>
+          <div>
+            <strong>Ready</strong>
+            <p>Results appear here after safepod validation.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <aside class="side-rail" aria-label="Available analysis catalogue">
+      <section class="rail-section">
+        <div class="rail-title">
+          <h2>Available tools</h2>
+          <span>{{ manifest.tools | length }}</span>
+        </div>
+        {% for tool in manifest.tools %}
+        <div class="tool-row">
+          <strong>{{ tool.id }}</strong>
+          <span>{{ tool.status }}</span>
+        </div>
+        {% endfor %}
+      </section>
+
+      <section class="rail-section">
+        <div class="rail-title">
+          <h2>Datasets</h2>
+          <span>{{ catalogue | length }}</span>
+        </div>
+        {% for ds, info in catalogue.items() %}
+        <details class="dataset" {% if loop.first %}open{% endif %}>
+          <summary>{{ ds }}</summary>
+          <dl>
+            <dt>Dimensions</dt>
+            <dd>{{ info.dims.keys() | join(", ") }}</dd>
+            <dt>Measures</dt>
+            <dd>{{ info.measures | join(", ") }}</dd>
+          </dl>
+        </details>
+        {% endfor %}
+      </section>
+
+      <section class="rail-section compact">
+        <div class="metric">
+          <span>Min cell</span>
+          <strong>10</strong>
+        </div>
+        <div class="metric">
+          <span>Count rounding</span>
+          <strong>5</strong>
+        </div>
+        <div class="metric">
+          <span>Raw rows</span>
+          <strong>Never</strong>
+        </div>
+      </section>
+    </aside>
+  </div>
+
+  <footer>
+    <span>Hash-chained audit log</span>
+    <span>Disclosure checked outputs</span>
+    <span>Session differencing audit</span>
   </footer>
 </main>
 <script src="/static/app.js"></script>

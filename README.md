@@ -20,12 +20,14 @@ is that local models will become strong enough for planning — roughly a good
 `MockLLM` lets the whole pipeline and the red-team run offline.
 
 > **📚 Documentation:** [`docs/`](docs/index.md) —
+> [Install](docs/install.md) ·
+> [User guide](docs/userguide.md) ·
 > [Architecture](docs/architecture.md) ·
 > [Security model](docs/security.md) ·
 > [Safepod model](docs/safepod.md) ·
 > [Model runtime](docs/model-runtime.md) ·
+> [Tool manifest](docs/tool-manifest.md) ·
 > [Deployment](docs/deployment.md) ·
-> [Usage](docs/usage.md) ·
 > [Development](docs/development.md) ·
 > [Research write-up](docs/writeup.md).
 > Browse as a site with `uv run --group docs mkdocs serve`.
@@ -43,8 +45,8 @@ data is synthetic.
 NL request
   → vetting          intent / blocked-purpose check, per-session budget
   → planner (LLM)    proposes QuerySpec JSON; local model runtime is swappable
-  → static check     no imports / IO / network; must assign `result`
-  → sandbox          restricted exec against copies of the synthetic tables
+  → validation       strict Pydantic allowlist; anything else is rejected
+  → engine           read-only DuckDB views; parameterised SQL
   → safe-outputs     ACRO-style: min cell size, suppression, identifier/free-text egress
   → session auditor  differencing / triangulation / query budget   ← agentic-novel
   → human-in-loop    medium findings escalate; high findings deny

@@ -12,6 +12,8 @@ every output; and every request is written to a tamper-evident audit log.
 
 | If you want to… | Read |
 |---|---|
+| Install or run the project | [Install](install.md) |
+| Use the interface as a researcher | [User guide](userguide.md) |
 | Understand how the system is built | [Architecture](architecture.md) |
 | Understand the threat model and controls | [Security model](security.md) |
 | Understand the physical deployment boundary | [Safepod model](safepod.md) |
@@ -19,7 +21,6 @@ every output; and every request is written to a tamper-evident audit log.
 | Understand the two-LLM tool contract | [Tool manifest](tool-manifest.md) |
 | See what's been red-teamed and fixed | [Hardening log](hardening-log.md) |
 | Run it on a host / tailnet | [Deployment](deployment.md) |
-| Use the web interface as a researcher | [Usage](usage.md) |
 | Work on the code | [Development](development.md) |
 | Read the research rationale | [Write-up](writeup.md) |
 

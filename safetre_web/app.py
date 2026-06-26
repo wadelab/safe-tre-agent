@@ -84,8 +84,10 @@ async def restricted_channel(request: Request, call_next):
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request):
     user, allowed = current_user(request)
+    manifest = manifest_for_response()
     return templates.TemplateResponse(request, "index.html", {
         "user": user, "allowed": allowed, "catalogue": CATALOGUE,
+        "manifest": manifest,
     })
 
 
@@ -106,6 +108,7 @@ def query(request: Request, body: QueryRequest):
     if result.output is not None:
         table_html = result.output.to_html(index=False, border=0,
                                             classes="agg", escape=True)
+        table_html = table_html.replace(' style="text-align: right;"', "")
     spent = getattr(sess.auditor, "_spent", 0)
     return templates.TemplateResponse(request, "_result.html", {
         "r": result, "table_html": table_html,

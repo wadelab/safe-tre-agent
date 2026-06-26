@@ -54,6 +54,7 @@ def test_benign_query_released_with_table():
     assert r.status_code == 200
     assert "status-released" in r.text
     assert "<table" in r.text
+    assert 'style="' not in r.text
 
 
 def test_small_cell_redacted():
