@@ -33,6 +33,21 @@ The single most important property: **the untrusted model cannot reach the data
 or the host except through a validated QuerySpec.** It cannot run code, write
 SQL, open files, or make network calls.
 
+## Physical boundary: the safepod
+
+For real data, the server and row-level data sit inside a **safepod**: a locked,
+tamper-evident physical and operational boundary. Researchers do not get general
+network access to the host. They use a **restricted channel** that carries only
+authenticated requests in and checked aggregate outputs out.
+
+In the current deployment model that channel is `tailscale serve` into a
+localhost-only web app. The app now enforces the assumption in code: requests
+whose real peer address is outside `SAFETRE_CHANNEL_ALLOW_NETS` are rejected
+before identity, planning, or query execution. Forwarded headers are ignored for
+this decision.
+
+See [Safepod model](safepod.md) for the physical controls and failure modes.
+
 ## Threats and controls
 
 | # | Threat | Vector | Control | Where |
@@ -48,6 +63,7 @@ SQL, open files, or make network calls.
 | 9 | Tamper with the record | edit/delete/**recompute** audit rows | **HMAC-keyed** chain (off-box key); `verify(expected_head)` checks an off-box anchor | `audit.py` |
 | 10 | XSS in the UI | hostile content rendered | strict CSP (`script-src 'self'`), Jinja autoescape, pandas `escape=True` | `app.py`, templates |
 | 11 | DoS / LLM cost amplification | request flood; huge `in` list; pathological group-by | per-user rate limit (429); `in`≤50, group-by≤3; DuckDB memory/thread + row caps | `rate.py`, `query.py`, `engine.py` |
+| 12 | Bypass the safepod channel | accidental public bind, direct LAN access, spoofed proxy headers | restricted-channel middleware checks real peer address; uvicorn binds localhost; systemd/network firewall deny non-channel traffic | `safetre_web/channel.py`, deployment |
 
 The red-team (`redteam/run_redteam.py`) and the test suite exercise these
 directly (see `tests/test_secure.py`, `test_invariants.py`, `test_disclosure.py`).
@@ -85,6 +101,12 @@ The application is one layer; the deployment is another. See
 - **Network:** binds `127.0.0.1`; exposed only via `tailscale serve`. The tailnet
   (WireGuard) is the perimeter; tailscale ACLs scope which users reach the
   service; an app-level allowlist (`SAFETRE_ALLOWLIST`) is the Safe People gate.
+  The app also rejects requests outside `SAFETRE_CHANNEL_ALLOW_NETS`, so the
+  restricted-channel assumption is checked at runtime.
+- **Physical safepod:** the data host belongs in a locked, tamper-evident room,
+  rack, cabinet, or appliance enclosure. Disable unused physical ports and
+  radios, use disk encryption and firmware controls, log maintenance, and mirror
+  or anchor the audit chain outside the pod.
 - **Process:** `deploy/safetre-web.service` runs under systemd with
   `DynamicUser`, `ProtectSystem=strict`, `PrivateTmp`, `RestrictAddressFamilies`,
   `SystemCallFilter=@system-service`, an empty `CapabilityBoundingSet`, and
@@ -127,6 +149,9 @@ the [first hardening round](hardening-log.md), what remains:
 - Remote-LLM mode (`SAFETRE_LLM=real` to a non-local endpoint) egresses the
   *research questions* and is an SSRF target; production must pin the endpoint to
   a **local** model.
+- Safepod physical controls are operational, not fully testable in this repo:
+  disk encryption, tamper evidence, port blocking, audit anchoring, and
+  maintenance process must be implemented per site.
 - The legacy code-execution path (`guards.py`) is **illustration, not a secure
   jail**; it is not exposed by the web interface and would need real container
   isolation (gVisor / Firecracker) before any use.

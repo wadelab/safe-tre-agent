@@ -19,6 +19,7 @@ client → OpenRouter, local vLLM/Ollama, or any compatible endpoint). A determi
 > **📚 Documentation:** [`docs/`](docs/index.md) —
 > [Architecture](docs/architecture.md) ·
 > [Security model](docs/security.md) ·
+> [Safepod model](docs/safepod.md) ·
 > [Deployment](docs/deployment.md) ·
 > [Usage](docs/usage.md) ·
 > [Development](docs/development.md) ·
@@ -27,10 +28,12 @@ client → OpenRouter, local vLLM/Ollama, or any compatible endpoint). A determi
 
 ## Where it sits
 
-The agent runs **inside** the enclave; only outputs cross a gateway. The model
-never needs raw data to leave — which is *why* a production deployment must use a
-**local** model (a remote API would itself be an egress channel). Remote models are
-fine here only because the data is synthetic.
+The agent runs **inside** the enclave; only outputs cross a gateway. For real
+data, the data and server sit inside a **safepod** and researchers communicate
+through a **restricted channel**. The model never needs raw data to leave —
+which is *why* a production deployment must use a **local** model (a remote API
+would itself be an egress channel). Remote models are fine here only because the
+data is synthetic.
 
 ```
 NL request
@@ -83,6 +86,9 @@ The web layer is built security-first (the model is treated as untrusted):
   **parameterised** SQL — no SQL-injection surface, no arbitrary code.
 - **Identity = Safe People.** Behind `tailscale serve` the authenticated tailnet
   login is used for access control (`SAFETRE_ALLOWLIST`) and the audit trail.
+- **Restricted channel.** The app rejects requests whose real peer address is
+  outside `SAFETRE_CHANNEL_ALLOW_NETS` (loopback by default), making the
+  `tailscale serve` → localhost topology an enforced safepod boundary.
 - **Hash-chained audit log** (`safetre/audit.py`) — every request, spec and
   decision, tamper-evident (`GET /api/audit/verify`).
 - **Hardened headers** (strict CSP `script-src 'self'`, no CDN JS) and a

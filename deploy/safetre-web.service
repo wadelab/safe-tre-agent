@@ -16,6 +16,9 @@ WorkingDirectory=/probox/raid/toolbox/git/safe-tre-agent
 Environment=PYTHONPATH=/probox/raid/toolbox/git/safe-tre-agent
 Environment=SAFETRE_LLM=mock
 Environment=SAFETRE_AUDIT_DB=/var/lib/safetre/audit.db
+Environment=SAFETRE_REQUIRE_IDENTITY=1
+Environment=SAFETRE_RESTRICTED_CHANNEL=1
+Environment=SAFETRE_CHANNEL_ALLOW_NETS=127.0.0.1/32,::1/128
 # bind localhost only; expose via `tailscale serve --bg 8800`
 ExecStart=/probox/raid/toolbox/git/safe-tre-agent/.venv/bin/uvicorn safetre_web.app:app --host 127.0.0.1 --port 8800
 
@@ -37,6 +40,9 @@ RestrictRealtime=yes
 RestrictSUIDSGID=yes
 RestrictNamespaces=yes
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+IPAddressDeny=any
+IPAddressAllow=127.0.0.0/8
+IPAddressAllow=::1/128
 LockPersonality=yes
 MemoryDenyWriteExecute=yes
 SystemCallArchitectures=native

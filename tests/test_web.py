@@ -5,6 +5,7 @@ import tempfile
 
 os.environ.setdefault("SAFETRE_AUDIT_DB", os.path.join(tempfile.mkdtemp(), "audit.db"))
 os.environ.setdefault("SAFETRE_AUDIT_KEY", "web-test-key")
+os.environ.setdefault("SAFETRE_RESTRICTED_CHANNEL", "1")
 
 from fastapi.testclient import TestClient  # noqa: E402
 
@@ -21,6 +22,31 @@ def test_index_and_security_headers():
     assert "script-src 'self'" in headers["content-security-policy"]
     assert headers["x-frame-options"] == "DENY"
     assert headers["x-content-type-options"] == "nosniff"
+
+
+def test_restricted_channel_blocks_direct_client(monkeypatch):
+    monkeypatch.setenv("SAFETRE_RESTRICTED_CHANNEL", "1")
+    monkeypatch.setenv("SAFETRE_CHANNEL_ALLOW_NETS", "127.0.0.1/32,::1/128")
+    direct = TestClient(app, client=("203.0.113.10", 50000))
+    r = direct.get("/healthz", headers={"X-Forwarded-For": "127.0.0.1"})
+    assert r.status_code == 403
+    assert r.json()["detail"] == "restricted channel required"
+
+
+def test_restricted_channel_allows_configured_network(monkeypatch):
+    monkeypatch.setenv("SAFETRE_RESTRICTED_CHANNEL", "1")
+    monkeypatch.setenv("SAFETRE_CHANNEL_ALLOW_NETS", "127.0.0.1/32,::1/128,203.0.113.0/24")
+    channel = TestClient(app, client=("203.0.113.10", 50000))
+    assert channel.get("/healthz").status_code == 200
+
+
+def test_restricted_channel_bad_config_fails_closed(monkeypatch):
+    monkeypatch.setenv("SAFETRE_RESTRICTED_CHANNEL", "1")
+    monkeypatch.setenv("SAFETRE_CHANNEL_ALLOW_NETS", "not-a-cidr")
+    channel = TestClient(app, client=("127.0.0.1", 50000))
+    r = channel.get("/healthz")
+    assert r.status_code == 403
+    assert "invalid restricted-channel config" in r.json()["reason"]
 
 
 def test_benign_query_released_with_table():

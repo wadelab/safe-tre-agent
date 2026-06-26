@@ -3,6 +3,28 @@
 A dated record of self-red-team findings and the fixes applied. New findings get
 appended; the table is the quick index, the notes below give detail.
 
+## 2026-06-26 — round 2a (safepod / restricted channel)
+
+| # | Finding | Sev | Status | Fix | Where |
+|---|---|---|---|---|---|
+| 12 | Safepod ingress was documented as "bind localhost", but the app did not independently enforce the restricted-channel assumption if uvicorn or firewall config drifted | High | **Fixed** | restricted-channel middleware checks the real ASGI peer address against `SAFETRE_CHANNEL_ALLOW_NETS`, ignores forwarded headers, and denies before request handling | `safetre_web/channel.py`, `safetre_web/app.py` |
+| 13 | Physical boundary was implicit; deployment docs did not state the safepod controls needed to make "no raw data leaves" true operationally | Med | **Fixed in docs** | new safepod model covering physical controls, restricted-channel properties, failure modes, and production env defaults | `docs/safepod.md`, `docs/security.md`, `docs/deployment.md` |
+
+### Notes
+
+**#12 restricted channel.** The intended production path is
+`tailscale serve -> localhost uvicorn`. The app now enforces that topology at
+runtime by default (`SAFETRE_RESTRICTED_CHANNEL=1`,
+`SAFETRE_CHANNEL_ALLOW_NETS=127.0.0.1/32,::1/128`). This is defence in depth for
+an accidental public bind or firewall mistake; it is not a substitute for the
+host firewall and systemd `IPAddressDeny=any`.
+
+**#13 safepod.** The safepod is a physical/operational boundary around the data
+host, not a Python feature. The repo can enforce channel assumptions and document
+the controls, but a real deployment still needs site work: locked/tamper-evident
+housing, disk encryption, disabled unused ports/radios, maintenance logging,
+off-pod audit anchoring, and network policy outside the process.
+
 ## 2026-06-26 — round 1 (self red-team)
 
 | # | Finding | Sev | Status | Fix | Where |

@@ -89,7 +89,8 @@ class QueryEngine:
                 clauses.append(f"{col} IN ({placeholders})")
                 params.extend(f.value)
             else:
-                clauses.append(f"{col} {f.op} ?")   # nosec B608 - op is a Literal allowlist; value bound
+                # `op` is a Literal allowlist; the value is bound separately.
+                clauses.append(f"{col} {f.op} ?")
                 params.append(f.value)
         where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
         return where, params
@@ -101,10 +102,10 @@ class QueryEngine:
             select.append("COUNT(*) AS value")
         else:
             # fn is a Literal allowlist; column is allowlist- and regex-validated
-            select.append(f"{spec.measure.fn.upper()}({_ident(spec.measure.column)}) AS value")  # nosec B608
+            select.append(f"{spec.measure.fn.upper()}({_ident(spec.measure.column)}) AS value")
         select.append("COUNT(*) AS n")
 
-        sql = f"SELECT {', '.join(select)} FROM {_ident(spec.dataset)}{where}"  # nosec B608
+        sql = f"SELECT {', '.join(select)} FROM {_ident(spec.dataset)}{where}"  # nosec
         if spec.group_by:
             sql += " GROUP BY " + ", ".join(_ident(g) for g in spec.group_by)
         sql += f" ORDER BY n DESC LIMIT {ROW_CAP}"
@@ -121,9 +122,9 @@ class QueryEngine:
         unit = _ident(f"_{spec.dataset}_u")
         gsel = ", ".join(_ident(g) for g in spec.group_by)
         gpre = (gsel + ", ") if spec.group_by else ""
-        inner = (f"SELECT {gpre}donor_id, SUM({col}) AS c FROM {unit}{where} "  # nosec B608
+        inner = (f"SELECT {gpre}donor_id, SUM({col}) AS c FROM {unit}{where} "  # nosec
                  f"GROUP BY {gpre}donor_id")
-        outer = (f"SELECT {gpre}MAX(c) / NULLIF(SUM(c), 0) AS dominance "       # nosec B608
+        outer = (f"SELECT {gpre}MAX(c) / NULLIF(SUM(c), 0) AS dominance "       # nosec
                  f"FROM ({inner}) t" + (f" GROUP BY {gsel}" if spec.group_by else ""))
         dom = self.con.execute(outer, params).df()
         if spec.group_by:

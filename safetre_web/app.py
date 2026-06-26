@@ -2,6 +2,7 @@
 
 Security posture:
 - binds 127.0.0.1 only (exposed via `tailscale serve`);
+- rejects requests outside the configured restricted channel;
 - strict security headers incl. a tight Content-Security-Policy (script-src 'self');
 - requests validated by Pydantic (length-capped); JSON only (no multipart dep);
 - identity -> Safe People allowlist; per-user SessionAuditor;
@@ -15,7 +16,7 @@ import os
 import pathlib
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
@@ -26,6 +27,7 @@ from safetre.planner import LLMPlanner, MockPlanner
 from safetre.query import CATALOGUE
 from safetre.service import QueryService
 
+from .channel import channel_allowed
 from .identity import current_user
 from .rate import RateLimiter
 from .session import SessionStore
@@ -65,6 +67,17 @@ async def security_headers(request: Request, call_next):
     resp.headers["Referrer-Policy"] = "no-referrer"
     resp.headers["X-Frame-Options"] = "DENY"
     return resp
+
+
+@app.middleware("http")
+async def restricted_channel(request: Request, call_next):
+    allowed, reason = channel_allowed(request)
+    if not allowed:
+        return JSONResponse(
+            {"detail": "restricted channel required", "reason": reason},
+            status_code=403,
+        )
+    return await call_next(request)
 
 
 @app.get("/", response_class=HTMLResponse)
