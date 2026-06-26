@@ -1,0 +1,12 @@
+# Default policy. Mirrors common TRE conventions (e.g. NHS min cell size).
+disclosure:
+  min_cell_size: 10        # suppress aggregate cells with fewer underlying individuals
+  max_output_rows: 100     # outputs larger than this look like a row dump
+session:
+  query_budget: 20         # max released aggregates per session before review
+  differencing_delta: 10   # flag same-measure totals differing by < this
+hitl:
+  default: human           # borderline (medium) findings escalate to a human
+model:
+  backend: mock            # mock | real
+  # real backend is configured via .env (OpenAI-compatible)
