@@ -40,6 +40,7 @@ CAT_OPS = {"==", "!=", "in"}
 NUM_OPS = {"==", "!=", "<", "<=", ">", ">=", "in"}
 MAX_GROUP_BY = 3
 MAX_FILTERS = 5
+MAX_IN_VALUES = 50      # cap `in` lists to bound query cost (DoS)
 
 
 class Measure(BaseModel):
@@ -112,6 +113,8 @@ class QuerySpec(BaseModel):
         vals = f.value if f.op == "in" else [f.value]
         if f.op == "in" and not isinstance(f.value, list):
             raise ValueError("`in` requires a list value")
+        if f.op == "in" and len(f.value) > MAX_IN_VALUES:
+            raise ValueError(f"`in` list too long (max {MAX_IN_VALUES})")
         for v in vals:
             if kind == "cat" and not isinstance(v, str):
                 raise ValueError(f"{f.column!r} expects string value(s)")

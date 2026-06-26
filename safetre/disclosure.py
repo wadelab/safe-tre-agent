@@ -15,6 +15,8 @@ import pandas as pd
 from .schema import identifier_columns, sensitive_columns
 
 COUNT_COLUMNS = {"n", "count", "size", "freq", "n_donors"}
+DOM_THRESHOLD = 0.5      # suppress a cell if one contributor exceeds this share
+ROUND_BASE = 5           # released counts are rounded to this base
 
 
 @dataclass
@@ -62,11 +64,23 @@ def leak_detector(df: pd.DataFrame | None) -> list[Finding]:
                                     f"{len(small)} cell(s) in '{c}' below threshold "
                                     f"{DisclosurePolicy.DEFAULT_THRESHOLD}"))
 
+    # dominance (p%-rule): one contributor dominates a cell's sum/mean
+    if "dominance" in cols:
+        dominated = df[df["dominance"] > DOM_THRESHOLD]
+        if len(dominated) > 0:
+            findings.append(Finding("high", "dominance",
+                                    f"{len(dominated)} cell(s) where one contributor "
+                                    f"exceeds {DOM_THRESHOLD:.0%} of the total"))
+
     # excessive granularity (looks like a row dump)
     if len(df) > DisclosurePolicy.DEFAULT_MAX_ROWS and not _count_cols(df):
         findings.append(Finding("medium", "too_granular",
                                 f"{len(df)} rows with no aggregation"))
     return findings
+
+
+# findings that are resolved by suppressing the offending rows rather than denying
+SUPPRESSABLE = {"small_cell", "dominance"}
 
 
 @dataclass
@@ -75,6 +89,15 @@ class DisclosurePolicy:
     DEFAULT_MAX_ROWS: int = 100
     threshold: int = 10
     max_rows: int = 100
+    dom_threshold: float = DOM_THRESHOLD
+    round_base: int = ROUND_BASE
+
+    def _finalize(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Drop the internal dominance helper and round released counts."""
+        out = df.drop(columns=["dominance"], errors="ignore").copy()
+        for c in _count_cols(out):
+            out[c] = (out[c] / self.round_base).round().astype(int) * self.round_base
+        return out
 
     def apply(self, df: pd.DataFrame | None):
         """Return (released_df_or_None, action, findings).
@@ -86,18 +109,19 @@ class DisclosurePolicy:
             return None, "deny", findings
 
         high = [f for f in findings if f.severity == "high"]
-        # small cells alone -> redact (suppress offending rows); other high -> deny
-        non_smallcell_high = [f for f in high if f.rule != "small_cell"]
-        if non_smallcell_high:
+        # non-suppressable high findings (identifier/free-text/raw) -> deny outright
+        if any(f.rule not in SUPPRESSABLE for f in high):
             return None, "deny", findings
 
-        if any(f.rule == "small_cell" for f in high):
+        if any(f.rule in SUPPRESSABLE for f in high):
             redacted = df.copy()
             for c in _count_cols(redacted):
                 redacted = redacted[redacted[c] >= self.threshold]
-            return redacted, "redacted", findings
+            if "dominance" in redacted.columns:
+                redacted = redacted[redacted["dominance"] <= self.dom_threshold]
+            return self._finalize(redacted), "redacted", findings
 
-        return df, "release", findings
+        return self._finalize(df), "release", findings
 
 
 @dataclass

@@ -1,0 +1,12 @@
+# The security boundary. Any change to these files requires explicit review by
+# the owner — they are where a one-line backdoor would live (e.g. exposing an
+# identifier in a view, weakening the QuerySpec allowlist, or lowering a
+# disclosure threshold). Enable "Require review from Code Owners" in branch
+# protection for this to bite.
+
+/safetre/query.py          @wadelab
+/safetre/engine.py         @wadelab
+/safetre/disclosure.py     @wadelab
+/safetre/audit.py          @wadelab
+/safetre_web/identity.py   @wadelab
+/.github/                  @wadelab

@@ -40,16 +40,19 @@ SQL, open files, or make network calls.
 | 1 | Arbitrary code / RCE | model writes hostile code | model writes **no code**; only a QuerySpec | `query.py` |
 | 2 | SQL injection | crafted filter value | values are **bound parameters**; identifiers allowlisted + regex-checked | `engine.py` |
 | 3 | Identifier / free-text egress | query selects `donor_id` / `free_text` | not in any view, not in the catalogue, and re-checked at the gateway | `engine.py`, `disclosure.py` |
-| 4 | Small-cell disclosure | over-granular grouping | minimum cell size (10); offending cells suppressed | `disclosure.py` |
-| 5 | Differencing / triangulation | many "safe" queries combined | per-session auditor flags near-equal totals; query budget | `disclosure.py` |
+| 4 | Small-cell / dominance disclosure | over-granular grouping; one donor dominating a cell | minimum cell size (10); **p%-dominance** suppression; counts rounded to 5 | `disclosure.py`, `engine.py` |
+| 5 | Differencing / triangulation | many "safe" queries combined | per-session auditor flags near-equal totals; query budget *(shallow — see roadmap)* | `disclosure.py` |
 | 6 | Prompt injection via data | planted `free_text` tells model to exfiltrate | model can only emit a QuerySpec; `free_text` is unqueryable | `query.py` |
-| 7 | Hostile intent | "give me row-level records…" | intent vetting rejects pre-planning | `analyst.py` |
-| 8 | Header spoofing (identity) | forge `Tailscale-User-Login` | app binds `127.0.0.1`; only the local tailscale proxy can inject it | `app.py`, deployment |
-| 9 | Tamper with the record | edit/delete audit rows | hash-chained log; `verify()` detects any break | `audit.py` |
+| 7 | Hostile intent | "give me row-level records…" | intent vetting rejects pre-planning *(defence in depth only — the allowlist is the real boundary)* | `analyst.py` |
+| 8 | Header spoofing (identity) | forge `Tailscale-User-Login` | binds `127.0.0.1`; only canonical header trusted (`X-` dropped); `SAFETRE_REQUIRE_IDENTITY` fails closed | `identity.py`, deployment |
+| 9 | Tamper with the record | edit/delete/**recompute** audit rows | **HMAC-keyed** chain (off-box key); `verify(expected_head)` checks an off-box anchor | `audit.py` |
 | 10 | XSS in the UI | hostile content rendered | strict CSP (`script-src 'self'`), Jinja autoescape, pandas `escape=True` | `app.py`, templates |
+| 11 | DoS / LLM cost amplification | request flood; huge `in` list; pathological group-by | per-user rate limit (429); `in`≤50, group-by≤3; DuckDB memory/thread + row caps | `rate.py`, `query.py`, `engine.py` |
 
-The red-team (`redteam/run_redteam.py`) and the test suite exercise 1, 3–7 and 9
-directly. See [Usage § What gets denied](usage.md#what-gets-denied-or-redacted).
+The red-team (`redteam/run_redteam.py`) and the test suite exercise these
+directly (see `tests/test_secure.py`, `test_invariants.py`, `test_disclosure.py`).
+A running record of findings and fixes is in the
+[hardening log](hardening-log.md).
 
 ## Why a QuerySpec instead of a sandbox
 
@@ -94,28 +97,41 @@ The application is one layer; the deployment is another. See
 ## Supply chain
 
 Dependencies are pinned and hashed in `uv.lock`. `bandit` (SAST) and `pip-audit`
-(dependency CVEs) are dev dependencies and part of the intended CI gate:
+(dependency CVEs) run in CI (`.github/workflows/ci.yml`) on every PR, alongside
+the test suite and the boundary invariants (`tests/test_invariants.py`):
 
 ```bash
 uv run bandit -r safetre safetre_web
 uv run pip-audit
 ```
 
+CI uses the `pull_request` trigger (fork PRs get no secrets), `permissions:
+contents: read`, and actions pinned by commit SHA. CODEOWNERS gates the four
+boundary files.
+
 ## Limitations and roadmap
 
-This is **Phase 1 on synthetic data**. It is honest about what it is not:
+This is **Phase 1 on synthetic data**. It is honest about what it is not. After
+the [first hardening round](hardening-log.md), what remains:
 
-- The legacy code-execution path (`guards.py`) is **defence-in-depth
-  illustration, not a secure jail**. It is not exposed by the web interface; if
-  it is ever used it needs real container isolation (gVisor / Firecracker).
-- The disclosure engine is a lightweight, ACRO-inspired stand-in. Production
-  should wrap **ACRO** proper (p%-dominance, class disclosure).
-- The query budget is a heuristic; it should become a formal **differential
-  privacy** accountant.
+- **Differencing control is shallow.** The session auditor tracks count totals,
+  not query *lineage* or the measure values — differencing on sums across
+  overlapping cohorts can still evade it. Needs lineage tracking and, ultimately,
+  a **differential-privacy accountant**.
+- **Only primary suppression.** A suppressed small/dominated cell can sometimes
+  be reconstructed from released margins; needs **complementary suppression**.
+- The disclosure engine is an ACRO-*inspired* stand-in (it now does threshold +
+  dominance + rounding); production should wrap **ACRO** proper.
+- The audit log is HMAC-keyed but should be **mirrored off-box** and its key held
+  off-box for full tamper-resistance.
+- Remote-LLM mode (`SAFETRE_LLM=real` to a non-local endpoint) egresses the
+  *research questions* and is an SSRF target; production must pin the endpoint to
+  a **local** model.
+- The legacy code-execution path (`guards.py`) is **illustration, not a secure
+  jail**; it is not exposed by the web interface and would need real container
+  isolation (gVisor / Firecracker) before any use.
 - Human-in-the-loop is a policy stub; production pairs it with a reviewer queue
   and an AI output-checker.
-- The audit log should be **mirrored off-box** so a host compromise cannot erase
-  the trail.
 
 | Phase | Scope | State |
 |---|---|---|

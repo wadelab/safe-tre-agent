@@ -1,0 +1,33 @@
+name: ci
+
+# `pull_request` (not pull_request_target): fork PRs run with NO secrets and a
+# read-only token, so a malicious PR cannot exfiltrate anything.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read          # least privilege
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      # actions pinned by commit SHA (not movable tags)
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+      - name: Sync (frozen — exactly uv.lock)
+        run: uv sync --all-extras --frozen
+      - name: Tests
+        run: uv run pytest -q
+      - name: SAST (bandit)
+        run: uv run bandit -q -r safetre safetre_web
+      - name: Dependency audit (CVEs)
+        run: uv run pip-audit            # relax to advisory (continue-on-error) if it blocks on an unfixable transitive CVE

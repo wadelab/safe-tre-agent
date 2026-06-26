@@ -4,6 +4,7 @@ import os
 import tempfile
 
 os.environ.setdefault("SAFETRE_AUDIT_DB", os.path.join(tempfile.mkdtemp(), "audit.db"))
+os.environ.setdefault("SAFETRE_AUDIT_KEY", "web-test-key")
 
 from fastapi.testclient import TestClient  # noqa: E402
 
@@ -50,3 +51,11 @@ def test_oversize_request_rejected():
 def test_audit_chain_intact():
     client.post("/api/query", json={"q": "mean spend by age band"})
     assert client.get("/api/audit/verify").json()["chain_intact"] is True
+
+
+def test_rate_limiter_per_user():
+    from safetre_web.rate import RateLimiter
+    rl = RateLimiter(capacity=3, window_sec=60)
+    assert all(rl.allow("alice") for _ in range(3))
+    assert rl.allow("alice") is False          # bucket exhausted
+    assert rl.allow("bob") is True             # independent per user

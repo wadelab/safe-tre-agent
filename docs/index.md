@@ -14,6 +14,7 @@ every output; and every request is written to a tamper-evident audit log.
 |---|---|
 | Understand how the system is built | [Architecture](architecture.md) |
 | Understand the threat model and controls | [Security model](security.md) |
+| See what's been red-teamed and fixed | [Hardening log](hardening-log.md) |
 | Run it on a host / tailnet | [Deployment](deployment.md) |
 | Use the web interface as a researcher | [Usage](usage.md) |
 | Work on the code | [Development](development.md) |

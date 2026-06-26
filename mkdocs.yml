@@ -32,6 +32,7 @@ nav:
   - Home: index.md
   - Architecture: architecture.md
   - Security model: security.md
+  - Hardening log: hardening-log.md
   - Deployment: deployment.md
   - Usage: usage.md
   - Development: development.md

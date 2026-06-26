@@ -27,6 +27,7 @@ from safetre.query import CATALOGUE
 from safetre.service import QueryService
 
 from .identity import current_user
+from .rate import RateLimiter
 from .session import SessionStore
 
 BASE = pathlib.Path(__file__).parent
@@ -39,6 +40,7 @@ _tables = synth.load_csvs() if _data.is_dir() and any(_data.glob("*.csv")) else 
 service = QueryService(_tables)
 audit_log = AuditLog(os.environ.get("SAFETRE_AUDIT_DB", "audit.db"))
 sessions = SessionStore()
+limiter = RateLimiter(int(os.environ.get("SAFETRE_RATE_LIMIT", "120")))
 
 
 def make_planner():
@@ -78,6 +80,8 @@ def query(request: Request, body: QueryRequest):
     user, allowed = current_user(request)
     if not allowed:
         raise HTTPException(403, "not on the Safe People allowlist")
+    if not limiter.allow(user):
+        raise HTTPException(429, "rate limit exceeded; slow down")
 
     sess = sessions.get(user)
     result = service.handle(body.q, make_planner(), auditor=sess.auditor,
