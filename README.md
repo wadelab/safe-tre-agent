@@ -16,8 +16,14 @@ It runs entirely on **synthetic** data and is **model-agnostic** (OpenAI-compati
 client → OpenRouter, local vLLM/Ollama, or any compatible endpoint). A deterministic
 `MockLLM` lets the whole pipeline and the red-team run offline.
 
-> **📄 Full write-up with architecture, enclave and sequence diagrams, threat
-> model and results: [`docs/writeup.md`](docs/writeup.md).**
+> **📚 Documentation:** [`docs/`](docs/index.md) —
+> [Architecture](docs/architecture.md) ·
+> [Security model](docs/security.md) ·
+> [Deployment](docs/deployment.md) ·
+> [Usage](docs/usage.md) ·
+> [Development](docs/development.md) ·
+> [Research write-up](docs/writeup.md).
+> Browse as a site with `uv run --group docs mkdocs serve`.
 
 ## Where it sits
 

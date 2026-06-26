@@ -8,3 +8,4 @@ redteam/results.csv
 *.db
 *.db-wal
 *.db-shm
+site/

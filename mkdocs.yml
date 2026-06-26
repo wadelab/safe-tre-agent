@@ -1,0 +1,38 @@
+site_name: safe-tre-agent
+site_description: A safe-outputs gateway for an AI analyst inside a Trusted Research Environment
+docs_dir: docs
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: blue grey
+      accent: indigo
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - toc.follow
+
+markdown_extensions:
+  - admonition
+  - tables
+  - attr_list
+  - toc:
+      permalink: true
+  - pymdownx.highlight
+  - pymdownx.inlinehilite
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+nav:
+  - Home: index.md
+  - Architecture: architecture.md
+  - Security model: security.md
+  - Deployment: deployment.md
+  - Usage: usage.md
+  - Development: development.md
+  - Research write-up: writeup.md

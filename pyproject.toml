@@ -30,6 +30,9 @@ dev = [
     "bandit>=1.7",      # security linter (SAST)
     "pip-audit>=2.7",   # dependency vulnerability audit
 ]
+docs = [
+    "mkdocs-material>=9.5",   # optional: `uv run --group docs mkdocs serve`
+]
 
 # App, not a library: let uv manage the env without building/installing the project.
 [tool.uv]
