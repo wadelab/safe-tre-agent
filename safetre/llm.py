@@ -1,17 +1,28 @@
-"""Model interface — OpenAI-compatible, so any backend works via config.
+"""Model interface: local-first, model-agnostic completion clients.
 
-Point OPENAI_BASE_URL at OpenRouter, a local vLLM/Ollama server, or an
-provider-compatible endpoint and set SAFETRE_MODEL. No provider SDK lock-in.
+The secure pipeline treats the model as untrusted regardless of capability. A
+future 120B-class local model may plan better, but it still only proposes JSON
+that the deterministic QuerySpec boundary validates.
 
-A deterministic MockLLM is provided so the pipeline and red-team run offline
-(no API key needed); swap in LLMClient for a real model.
+The default real adapter speaks the OpenAI-compatible chat-completions protocol
+over plain HTTP so it can target vLLM, llama.cpp server, Ollama-compatible
+proxies, or another local runtime without a provider SDK dependency.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+import json
 import os
 import re
 import textwrap
+from urllib import error, parse, request
+
+DEFAULT_LLM_BASE_URL = "http://127.0.0.1:8000/v1"
+DEFAULT_LLM_MODEL = "local-120b"
+DEFAULT_ALLOWED_HOSTS = "localhost,127.0.0.1,::1"
+FALSEY = {"0", "false", "no", "off"}
+TRUTHY = {"1", "true", "yes", "on"}
 
 
 def _strip_code_fences(text: str) -> str:
@@ -19,27 +30,108 @@ def _strip_code_fences(text: str) -> str:
     return (m.group(1) if m else text).strip()
 
 
+def _env(name: str, fallback: str | None = None) -> str | None:
+    value = os.environ.get(name)
+    if value not in (None, ""):
+        return value
+    return fallback
+
+
+def _bool_env(name: str, default: bool = False) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    value = raw.strip().lower()
+    if value in TRUTHY:
+        return True
+    if value in FALSEY:
+        return False
+    return default
+
+
+def _allowed_hosts() -> set[str]:
+    raw = os.environ.get("SAFETRE_ALLOWED_LLM_HOSTS", DEFAULT_ALLOWED_HOSTS)
+    return {part.strip().lower() for part in raw.split(",") if part.strip()}
+
+
+@dataclass(frozen=True)
+class LLMConfig:
+    """Configuration for an OpenAI-compatible local model endpoint."""
+
+    base_url: str = DEFAULT_LLM_BASE_URL
+    model: str = DEFAULT_LLM_MODEL
+    api_key: str = "local"
+    temperature: float = 0.0
+    timeout: float = 60.0
+
+    @classmethod
+    def from_env(cls, *, model: str | None = None, base_url: str | None = None,
+                 api_key: str | None = None, temperature: float | None = None):
+        resolved = cls(
+            base_url=base_url or _env("SAFETRE_LLM_BASE_URL", _env("OPENAI_BASE_URL", DEFAULT_LLM_BASE_URL)),
+            model=model or _env("SAFETRE_LLM_MODEL", _env("SAFETRE_MODEL", DEFAULT_LLM_MODEL)),
+            api_key=api_key or _env("SAFETRE_LLM_API_KEY", _env("OPENAI_API_KEY", "local")),
+            temperature=(
+                temperature if temperature is not None
+                else float(os.environ.get("SAFETRE_LLM_TEMPERATURE", "0"))
+            ),
+            timeout=float(os.environ.get("SAFETRE_LLM_TIMEOUT", "60")),
+        )
+        resolved.validate()
+        return resolved
+
+    def validate(self) -> None:
+        parsed = parse.urlparse(self.base_url)
+        if parsed.scheme not in ("http", "https") or not parsed.hostname:
+            raise ValueError("SAFETRE_LLM_BASE_URL must be an http(s) URL with a host")
+        if _bool_env("SAFETRE_ALLOW_REMOTE_LLM", default=False):
+            return
+        host = parsed.hostname.lower()
+        if host not in _allowed_hosts():
+            raise ValueError(
+                f"LLM endpoint host {host!r} is not allowed; set "
+                "SAFETRE_ALLOWED_LLM_HOSTS for an in-safepod model host or "
+                "SAFETRE_ALLOW_REMOTE_LLM=1 for synthetic-data development"
+            )
+
+    @property
+    def chat_completions_url(self) -> str:
+        return self.base_url.rstrip("/") + "/chat/completions"
+
+
 class LLMClient:
-    """Thin wrapper over any OpenAI-compatible chat-completions endpoint."""
+    """Thin wrapper over an OpenAI-compatible chat-completions endpoint."""
 
     def __init__(self, model: str | None = None, base_url: str | None = None,
-                 api_key: str | None = None, temperature: float = 0.0):
-        from openai import OpenAI  # imported lazily so offline use needs no openai
-        self.model = model or os.environ.get("SAFETRE_MODEL", "provider-d/model-mini")
-        self.temperature = temperature
-        self.client = OpenAI(
-            base_url=base_url or os.environ.get("OPENAI_BASE_URL", "https://openrouter.ai/api/v1"),
-            api_key=api_key or os.environ.get("OPENAI_API_KEY", ""),
+                 api_key: str | None = None, temperature: float | None = None):
+        self.config = LLMConfig.from_env(
+            model=model, base_url=base_url, api_key=api_key, temperature=temperature,
         )
 
     def complete(self, system: str, user: str) -> str:
-        resp = self.client.chat.completions.create(
-            model=self.model,
-            temperature=self.temperature,
-            messages=[{"role": "system", "content": system},
-                      {"role": "user", "content": user}],
+        payload = {
+            "model": self.config.model,
+            "temperature": self.config.temperature,
+            "messages": [{"role": "system", "content": system},
+                         {"role": "user", "content": user}],
+        }
+        body = json.dumps(payload).encode()
+        headers = {"Content-Type": "application/json"}
+        if self.config.api_key:
+            headers["Authorization"] = f"Bearer {self.config.api_key}"
+        req = request.Request(
+            self.config.chat_completions_url, data=body, headers=headers, method="POST",
         )
-        return _strip_code_fences(resp.choices[0].message.content or "")
+        try:
+            with request.urlopen(req, timeout=self.config.timeout) as resp:  # nosec B310
+                data = json.loads(resp.read().decode())
+        except error.URLError as exc:
+            raise RuntimeError(f"LLM request failed: {exc}") from exc
+        try:
+            content = data["choices"][0]["message"]["content"]
+        except (KeyError, IndexError, TypeError) as exc:
+            raise RuntimeError("LLM response did not match chat-completions schema") from exc
+        return _strip_code_fences(content or "")
 
 
 class MockLLM:

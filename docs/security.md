@@ -33,6 +33,26 @@ The single most important property: **the untrusted model cannot reach the data
 or the host except through a validated QuerySpec.** It cannot run code, write
 SQL, open files, or make network calls.
 
+## Model posture
+
+Assume local models become good enough to plan well. The target capability is a
+strong local model, roughly 120B-class, served inside the safepod on testing
+hardware or an H100-class production accelerator profile. That assumption only
+improves ergonomics: better `QuerySpec` proposals, fewer failed parses, and more
+natural researcher interaction.
+
+It does **not** change the trust model. The model remains adversarial for
+security purposes. It receives only the request and catalogue prompt, proposes
+JSON, and the validator decides what can run. The default real client is
+local-first and rejects non-allowlisted model hosts unless
+`SAFETRE_ALLOW_REMOTE_LLM=1` is explicitly set for synthetic-data development.
+
+For a two-LLM deployment, the outside model receives a public tool manifest and
+proposes tool calls from it. The safepod treats that proposal as untrusted input.
+The manifest helps the outside model plan; it does not authorize execution. An
+inside model may add advisory review findings for statistical appropriateness,
+but deterministic schemas, policy checks, and disclosure controls decide.
+
 ## Physical boundary: the safepod
 
 For real data, the server and row-level data sit inside a **safepod**: a locked,
@@ -64,6 +84,8 @@ See [Safepod model](safepod.md) for the physical controls and failure modes.
 | 10 | XSS in the UI | hostile content rendered | strict CSP (`script-src 'self'`), Jinja autoescape, pandas `escape=True` | `app.py`, templates |
 | 11 | DoS / LLM cost amplification | request flood; huge `in` list; pathological group-by | per-user rate limit (429); `in`≤50, group-by≤3; DuckDB memory/thread + row caps | `rate.py`, `query.py`, `engine.py` |
 | 12 | Bypass the safepod channel | accidental public bind, direct LAN access, spoofed proxy headers | restricted-channel middleware checks real peer address; uvicorn binds localhost; systemd/network firewall deny non-channel traffic | `safetre_web/channel.py`, deployment |
+| 13 | LLM endpoint egress / SSRF | real planner configured to external or internal service URL | local-first default; allowlisted model endpoint hosts; remote endpoints require explicit synthetic-data opt-in | `safetre/llm.py` |
+| 14 | Tool-manifest drift | outside planner proposes unavailable or outdated tools | manifest hash, deterministic safepod validation, planned tools are non-executable until implemented and reviewed | `safetre/manifest.py`, `query.py` |
 
 The red-team (`redteam/run_redteam.py`) and the test suite exercise these
 directly (see `tests/test_secure.py`, `test_invariants.py`, `test_disclosure.py`).
@@ -111,8 +133,10 @@ The application is one layer; the deployment is another. See
   `DynamicUser`, `ProtectSystem=strict`, `PrivateTmp`, `RestrictAddressFamilies`,
   `SystemCallFilter=@system-service`, an empty `CapabilityBoundingSet`, and
   `MemoryDenyWriteExecute`. Run `systemd-analyze security safetre-web` to audit.
-- **Model:** in production, a **local** model (vLLM/Ollama on the same host).
-  A remote API would itself be a data-egress channel.
+- **Model:** in production, a **local** model runtime on loopback or a fixed
+  safepod host. A remote API would itself be a data-egress channel. The default
+  model client is protocol-based, not SDK-bound, and targets an OpenAI-compatible
+  local HTTP endpoint.
 - **Secrets:** none in the repo; provided via systemd `LoadCredential=` / env with
   `0077` umask; never inherited by anything that touches data.
 
@@ -146,9 +170,9 @@ the [first hardening round](hardening-log.md), what remains:
   dominance + rounding); production should wrap **ACRO** proper.
 - The audit log is HMAC-keyed but should be **mirrored off-box** and its key held
   off-box for full tamper-resistance.
-- Remote-LLM mode (`SAFETRE_LLM=real` to a non-local endpoint) egresses the
-  *research questions* and is an SSRF target; production must pin the endpoint to
-  a **local** model.
+- Remote-LLM mode to a non-local endpoint still egresses the *research
+  questions*. The code now requires `SAFETRE_ALLOW_REMOTE_LLM=1`, but that flag
+  remains synthetic-data-only and must not be enabled for real safepod data.
 - Safepod physical controls are operational, not fully testable in this repo:
   disk encryption, tamper evidence, port blocking, audit anchoring, and
   maintenance process must be implemented per site.

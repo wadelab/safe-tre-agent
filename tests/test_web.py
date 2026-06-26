@@ -74,6 +74,16 @@ def test_oversize_request_rejected():
     assert r.status_code == 422
 
 
+def test_manifest_endpoint_is_public_contract():
+    r = client.get("/api/manifest")
+    assert r.status_code == 200
+    manifest = r.json()
+    assert manifest["manifest_sha256"]
+    assert {tool["id"] for tool in manifest["tools"]} == {"aggregate_query"}
+    assert "free_text" not in r.text
+    assert "donor_id" not in r.text
+
+
 def test_audit_chain_intact():
     client.post("/api/query", json={"q": "mean spend by age band"})
     assert client.get("/api/audit/verify").json()["chain_intact"] is True

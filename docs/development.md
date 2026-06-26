@@ -7,14 +7,15 @@ pinned in `uv.lock`.
 
 ```bash
 uv sync --all-extras          # runtime + web + llm + dev tools
-uv run pytest -q              # 37 tests
+uv run pytest -q
 uv run python scripts/demo.py "mean spend by age band"
 uv run uvicorn safetre_web.app:app --host 127.0.0.1 --port 8800
 ```
 
-Dependency groups: `web` (FastAPI stack), `llm` (OpenAI client), and the default
-`dev` group (`pytest`, `matplotlib`, `bandit`, `pip-audit`). The project itself
-is not packaged (`tool.uv.package = false`); `pytest`'s `pythonpath = ["."]` puts
+Dependency groups: `web` (FastAPI stack), `llm` (kept for command compatibility;
+the real model adapter uses stdlib HTTP), and the default `dev` group
+(`pytest`, `matplotlib`, `bandit`, `pip-audit`). The project itself is not
+packaged (`tool.uv.package = false`); `pytest`'s `pythonpath = ["."]` puts
 `safetre` / `safetre_web` on the path.
 
 ## Repository layout
@@ -40,6 +41,8 @@ uv run pytest -q
 | File | Covers |
 |---|---|
 | `test_secure.py` | QuerySpec validation, engine injection-safety, end-to-end service, audit chain tamper-evidence |
+| `test_llm.py` | local-first model endpoint config and chat-completions protocol adapter |
+| `test_manifest.py` | public tool manifest safety and executable/planned tool separation |
 | `test_web.py` | FastAPI endpoints, security headers, denial renders no table, oversize → 422 |
 | `test_disclosure.py` | gateway rules (min cell, egress, differencing) |
 | `test_pipeline.py` | legacy guarded analyst path and sandbox isolation |
@@ -57,18 +60,25 @@ engine or the legacy sandbox.
 ## Extending the catalogue
 
 The catalogue is the security boundary, so changes are deliberate and reviewed.
-To add a queryable dimension or measure:
+To add a queryable dimension, measure, or tool:
 
 1. Add the column to the relevant dataset in `CATALOGUE` (`safetre/query.py`),
    with its type (`cat` / `bool` / `int`) for dimensions.
 2. Make sure the column is **selected by the corresponding view** in
    `safetre/engine.py` (and only safe columns — never `donor_id`, `free_text`,
    raw ages or timestamps).
-3. Add a validation test in `tests/test_secure.py` (accept the new valid spec;
+3. Update the public manifest in `safetre/manifest.py` only if the capability is
+   safe to publish outside the safepod.
+4. Add a validation test in `tests/test_secure.py` (accept the new valid spec;
    confirm anything off-allowlist is still rejected).
 
 Never widen a view to expose an identifier or free-text column — that is the one
 invariant the whole design rests on.
+
+Future stats tools (GLM, regression, ANOVA, etc.) must enter as fixed-function
+tool schemas plus deterministic validators. Listing a tool in
+`planned_tool_classes` does not make it executable; only `tools[]` entries with
+`status: "available"` may be proposed.
 
 ## Adding a disclosure control
 

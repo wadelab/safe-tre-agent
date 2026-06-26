@@ -25,6 +25,20 @@ the controls, but a real deployment still needs site work: locked/tamper-evident
 housing, disk encryption, disabled unused ports/radios, maintenance logging,
 off-pod audit anchoring, and network policy outside the process.
 
+## 2026-06-26 — round 2b (model runtime agnosticism)
+
+| # | Finding | Sev | Status | Fix | Where |
+|---|---|---|---|---|---|
+| 10 | Real-model config defaulted to a hosted OpenRouter-style endpoint and used a provider SDK, making the local-model production posture weaker than the docs implied | Med | **Fixed** | local-first `SAFETRE_LLM_*` config, no SDK dependency, stdlib OpenAI-compatible HTTP adapter, host allowlist, explicit `SAFETRE_ALLOW_REMOTE_LLM=1` for synthetic-data remote use | `safetre/llm.py`, `.env.example`, `docs/model-runtime.md` |
+
+### Notes
+
+**#10 model runtime.** The repo now assumes a capable local planner model,
+roughly 120B-class, while still treating the model as adversarial. Production
+uses a local `/v1/chat/completions` endpoint on loopback or a fixed safepod host.
+Remote endpoints remain possible only with an explicit synthetic-data flag and
+must not be enabled for real safepod data.
+
 ## 2026-06-26 — round 1 (self red-team)
 
 | # | Finding | Sev | Status | Fix | Where |
@@ -39,7 +53,7 @@ off-pod audit anchoring, and network policy outside the process.
 | 9 | Supply chain: known-CVE detection only | Med | **Partial** | `pip-audit` + `bandit` in CI; deps pinned/hashed in `uv.lock` | CI |
 | 4 | Differencing auditor is shallow (tracks count totals, not measure/lineage) | Med | **Open** | needs query-lineage tracking / DP accountant | roadmap |
 | 4b | Only primary suppression — margins can reconstruct a suppressed cell | Med | **Open** | needs complementary (secondary) suppression | roadmap |
-| 10 | SSRF / research-question egress in `SAFETRE_LLM=real` remote mode | Med | **Open** | pin/validate `OPENAI_BASE_URL` to localhost; egress firewall; enforce local-in-prod | roadmap |
+| 10 | SSRF / research-question egress in `SAFETRE_LLM=real` remote mode | Med | **Fixed** | local-first `SAFETRE_LLM_BASE_URL`, host allowlist, explicit remote opt-in, no provider SDK dependency | `safetre/llm.py` |
 | 11 | Prompt-injection against the maintainer's AI coding agent | Low/novel | **Mitigated by process** | CODEOWNERS + human review of any boundary diff regardless of origin | process |
 
 ### Notes
@@ -63,5 +77,5 @@ query (engine memory/threads + `LIMIT`), and a bounded spec (`in` ≤ 50,
 group-by ≤ 3, filters ≤ 5). systemd `MemoryMax` is the final backstop.
 
 **Still open (roadmap):** #4/#4b (a proper SDC differencing model — lineage +
-secondary suppression, ultimately a DP accountant), #10 (lock down remote-LLM
-egress). These are tracked in [security.md](security.md#limitations-and-roadmap).
+secondary suppression, ultimately a DP accountant). These are tracked in
+[security.md](security.md#limitations-and-roadmap).

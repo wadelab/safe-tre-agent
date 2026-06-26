@@ -12,14 +12,18 @@ triangulate an individual, or can emit code that smuggles raw rows into an
 > Does putting an AI between the analyst and sensitive data break the disclosure
 > guarantee — and can a safe-outputs gateway plus human-in-the-loop restore it?
 
-It runs entirely on **synthetic** data and is **model-agnostic** (OpenAI-compatible
-client → OpenRouter, local vLLM/Ollama, or any compatible endpoint). A deterministic
+It runs entirely on **synthetic** data and is **model-agnostic** at the protocol
+boundary (local OpenAI-compatible `/v1/chat/completions` from vLLM, llama.cpp,
+Ollama-compatible proxies, or a site-specific adapter). The operating assumption
+is that local models will become strong enough for planning — roughly a good
+120B-class model — while still being treated as untrusted. A deterministic
 `MockLLM` lets the whole pipeline and the red-team run offline.
 
 > **📚 Documentation:** [`docs/`](docs/index.md) —
 > [Architecture](docs/architecture.md) ·
 > [Security model](docs/security.md) ·
 > [Safepod model](docs/safepod.md) ·
+> [Model runtime](docs/model-runtime.md) ·
 > [Deployment](docs/deployment.md) ·
 > [Usage](docs/usage.md) ·
 > [Development](docs/development.md) ·
@@ -38,7 +42,7 @@ data is synthetic.
 ```
 NL request
   → vetting          intent / blocked-purpose check, per-session budget
-  → agent (LLM)      writes pandas; model swappable via OpenAI-compatible config
+  → planner (LLM)    proposes QuerySpec JSON; local model runtime is swappable
   → static check     no imports / IO / network; must assign `result`
   → sandbox          restricted exec against copies of the synthetic tables
   → safe-outputs     ACRO-style: min cell size, suppression, identifier/free-text egress
@@ -68,8 +72,9 @@ uv run python redteam/run_redteam.py              # gateway OFF vs ON, leakage t
 uv run pytest -q
 ```
 
-Use a real model by setting the OpenAI-compatible env vars in `.env` (see
-`.env.example`) and `SAFETRE_LLM=real`.
+Use a real local model by setting the generic `SAFETRE_LLM_*` env vars in `.env`
+(see `.env.example`) and `SAFETRE_LLM=real`. Remote model endpoints require an
+explicit synthetic-data-only opt-in.
 
 ## Web interface (Phase 1 — security-first)
 

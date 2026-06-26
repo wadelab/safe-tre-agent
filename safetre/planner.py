@@ -11,14 +11,21 @@ from __future__ import annotations
 import json
 import re
 
-from .query import CATALOGUE
+from .manifest import manifest_sha256, public_manifest
 
 
-def _catalogue_text() -> str:
+def _manifest_text() -> str:
+    manifest = public_manifest()
     lines = []
-    for ds, info in CATALOGUE.items():
-        dims = ", ".join(sorted(info["dims"]))
-        meas = ", ".join(sorted(info["measures"]))
+    lines.append(f"manifest_sha256: {manifest_sha256()}")
+    for tool in manifest["tools"]:
+        lines.append(
+            f"- tool '{tool['id']}' v{tool['version']} ({tool['status']}): "
+            f"{tool['description']}"
+        )
+    for ds, info in manifest["datasets"].items():
+        dims = ", ".join(info["dimensions"])
+        meas = ", ".join(info["measures"])
         lines.append(f"- dataset '{ds}': dimensions [{dims}]; measures [{meas}]")
     return "\n".join(lines)
 
@@ -30,7 +37,7 @@ PLANNER_SYSTEM = (
     '{"dataset":"spend|wellbeing","measure":{"fn":"count|mean|sum","column":'
     '<measure column or null>},"group_by":[...],"filters":[{"column":...,'
     '"op":"==|!=|<|<=|>|>=|in","value":...}]}\n'
-    "Allowed catalogue (anything else is rejected):\n" + _catalogue_text() +
+    "Published tool manifest (anything else is rejected):\n" + _manifest_text() +
     "\nNever reference identifiers, names, timestamps or free text. JSON only."
 )
 

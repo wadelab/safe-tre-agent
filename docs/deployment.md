@@ -17,7 +17,7 @@ flowchart LR
         TS["tailscale serve<br/>HTTPS + identity header"] --> APP["uvicorn :8800<br/>127.0.0.1 only"]
         APP --> ENG["DuckDB (read-only)"]
         DATA[("row-level data")] -. load .- ENG
-        APP --> LLM["local model<br/>vLLM / Ollama"]
+        APP --> LLM["local model runtime<br/>120B-class target"]
         APP --> LOG[("audit log<br/>/var/lib/safetre")]
     end
     LOG -. anchor .-> ANCHOR["off-pod audit anchor"]
@@ -108,10 +108,14 @@ All configuration is via environment variables.
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `SAFETRE_LLM` | `mock` | `mock` (deterministic MockPlanner) or `real` (LLMPlanner) |
-| `OPENAI_BASE_URL` | `https://openrouter.ai/api/v1` | OpenAI-compatible endpoint (use a **local** URL in prod) |
-| `OPENAI_API_KEY` | – | key for the endpoint (`local` for vLLM/Ollama) |
-| `SAFETRE_MODEL` | `provider-d/model-mini` | model id (e.g. `provider-a/model-small`, `local-7b-instruct`) |
+| `SAFETRE_LLM` | `mock` | `mock` (deterministic MockPlanner) or `real` (local model planner) |
+| `SAFETRE_LLM_BASE_URL` | `http://127.0.0.1:8000/v1` | OpenAI-compatible local model endpoint |
+| `SAFETRE_LLM_API_KEY` | `local` | bearer token for the local endpoint, if required |
+| `SAFETRE_LLM_MODEL` | `local-120b` | runtime model id; default documents the 120B-class planning assumption |
+| `SAFETRE_LLM_TEMPERATURE` | `0` | deterministic planning |
+| `SAFETRE_LLM_TIMEOUT` | `60` | model request timeout in seconds |
+| `SAFETRE_ALLOWED_LLM_HOSTS` | `localhost,127.0.0.1,::1` | comma-separated model endpoint hosts allowed without remote opt-in |
+| `SAFETRE_ALLOW_REMOTE_LLM` | unset | set `1` only for synthetic-data remote endpoint experiments |
 | `SAFETRE_ALLOWLIST` | – (open) | comma-separated Safe People logins |
 | `SAFETRE_REQUIRE_IDENTITY` | unset | set `1` in production to deny requests without tailnet identity |
 | `SAFETRE_RESTRICTED_CHANNEL` | `1` | reject requests outside the approved channel unless set to `0` |
@@ -120,8 +124,10 @@ All configuration is via environment variables.
 | `SAFETRE_AUDIT_KEY` | generated dev key | HMAC key; provide from an off-box secret in production |
 | `PORT` | `8800` | used by `scripts/run_web.sh` |
 
-The model never sees secrets and never needs network beyond the local model
-endpoint. See [`.env.example`](../.env.example).
+Legacy `OPENAI_BASE_URL`, `OPENAI_API_KEY`, and `SAFETRE_MODEL` are still read
+as fallbacks, but new deployments should use the `SAFETRE_LLM_*` names. The
+model never sees secrets and never needs network beyond the local model
+endpoint. See [`.env.example`](../.env.example) and [Model runtime](model-runtime.md).
 
 ## Audit log operations
 

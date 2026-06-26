@@ -26,9 +26,10 @@ disclosure-control attack surface:
 This prototype makes that question concrete and measurable, on synthetic
 SDDS-style data (loot-box spend + psychometrics, modelled on a
 Lemanic Life Sciences Hackathon 2025 dataset). It is **model-agnostic**: the
-agent speaks to any OpenAI-compatible endpoint, so a remote model is used here
-for convenience while a **local** model is required in production — a remote API
-would itself be an egress channel.
+planner speaks to a local OpenAI-compatible endpoint by default, with the
+runtime replaceable behind a small completion interface. The planning assumption
+is a strong local model, roughly 120B-class, while a **local** model remains
+mandatory in production — a remote API would itself be an egress channel.
 
 ## How it works
 
@@ -41,11 +42,11 @@ flowchart LR
 
     subgraph TRE["🔒 Trusted Research Environment — no row-level egress"]
         direction TB
-        V["① Vetting<br/>intent · query budget"] --> AG["② AI analyst<br/>writes pandas"]
-        AG --> SC["③ Static check<br/>no imports / IO / network"]
-        SC --> SB["④ Sandbox<br/>restricted exec"]
-        DATA[("🗄️ Row-level<br/>synthetic data")] -. read-only .-> SB
-        SB --> GW["⑤ Safe-outputs gateway<br/>min cell size · suppression · egress block"]
+        V["① Vetting<br/>intent · query budget"] --> AG["② Planner<br/>proposes QuerySpec"]
+        AG --> QS["③ Validation<br/>strict allowlist"]
+        QS --> ENG["④ Read-only engine<br/>parameterised SQL"]
+        DATA[("🗄️ Row-level<br/>synthetic data")] -. read-only .-> ENG
+        ENG --> GW["⑤ Safe-outputs gateway<br/>min cell size · suppression · egress block"]
         GW --> AU["⑥ Session auditor<br/>differencing · query budget"]
         AU --> H{"⑦ Human-in-the-loop"}
     end
@@ -69,15 +70,15 @@ sequenceDiagram
     autonumber
     actor R as Researcher
     participant V as Vetting
-    participant A as AI analyst
-    participant S as Sandbox
+    participant A as Planner
+    participant S as QuerySpec + engine
     participant G as Safe-outputs gateway
     participant U as Session auditor
     participant H as Human-in-the-loop
     R->>V: NL request
     V->>A: vetted request
-    A->>S: pandas code (static-checked)
-    S-->>G: raw aggregate
+    A->>S: proposed QuerySpec JSON
+    S-->>G: aggregate
     G->>U: disclosure-checked output
     U->>H: residual findings
     alt safe

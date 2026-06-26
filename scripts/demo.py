@@ -1,8 +1,8 @@
 """Run a single natural-language request end-to-end through the guarded analyst.
 
-Offline (MockLLM):   python scripts/demo.py "mean spend by age band"
-Real model:          SAFETRE_LLM=real OPENAI_BASE_URL=... OPENAI_API_KEY=... \
-                     SAFETRE_MODEL=provider-a/model-small python scripts/demo.py "..."
+Offline (MockLLM):   uv run python scripts/demo.py "mean spend by age band"
+Real local model:    SAFETRE_LLM=real SAFETRE_LLM_BASE_URL=http://127.0.0.1:8000/v1 \
+                     SAFETRE_LLM_MODEL=local-120b uv run python scripts/demo.py "..."
 """
 
 import os

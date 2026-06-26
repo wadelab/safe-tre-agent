@@ -10,7 +10,7 @@ files, so substantive changes should ship as a reviewed PR (see item D).
 | # | Item | Type | Size | Priority |
 |---|---|---|---|---|
 | A0 | Safepod restricted-channel enforcement | code + docs + deploy | small | done |
-| A | Remote-LLM egress / SSRF lockdown | code + deploy | small | first (quick win) |
+| A | Remote-LLM egress / SSRF lockdown | code + docs | small | done |
 | B | Differencing via query lineage | code | medium | core security win |
 | C | Complementary (secondary) suppression | code | medium | partial; pairs with B |
 | D | Branch protection + signed commits | ops/GitHub | small | at go-public |
@@ -39,29 +39,30 @@ reach the app and bypass the intended safepod channel.
 
 ---
 
-## A. Remote-LLM egress / SSRF lockdown
+## A. Remote-LLM egress / SSRF lockdown — done
 
 **Threat.** With `SAFETRE_LLM=real` to a non-local endpoint, the *research
 questions* egress to a third party, and a tampered `OPENAI_BASE_URL` makes the
 app an SSRF pivot to internal services.
 
-**Approach.** Validate-and-allowlist the endpoint; enforce local-only in prod;
-firewall egress.
+**Shipped.** Validate-and-allowlist the endpoint; enforce local-first by default;
+make remote endpoints synthetic-data-only opt-in.
 
-- `safetre/llm.py` — in `LLMClient.__init__`, parse `OPENAI_BASE_URL`; require
-  host ∈ `SAFETRE_ALLOWED_LLM_HOSTS` (default `localhost,127.0.0.1,::1`); raise
-  on violation (fail fast → no SSRF).
-- Startup assertion: if `SAFETRE_LLM=real` and `SAFETRE_REQUIRE_LOCAL_LLM=1`,
-  reject a non-loopback base URL at boot.
-- `deploy/safetre-web.service` — add `IPAddressDeny=any` +
-  `IPAddressAllow=127.0.0.1 ::1 <model-host>`.
-- Update `.env.example` and `docs/deployment.md`.
+- `safetre/llm.py` — uses generic `SAFETRE_LLM_*` config, defaults to
+  `http://127.0.0.1:8000/v1`, requires host ∈ `SAFETRE_ALLOWED_LLM_HOSTS`
+  (default `localhost,127.0.0.1,::1`), and raises on violation.
+- The adapter uses stdlib HTTP against `/v1/chat/completions`; no provider SDK
+  dependency.
+- Remote endpoints require `SAFETRE_ALLOW_REMOTE_LLM=1` and remain
+  synthetic-data-only.
+- `.env.example`, deployment docs, security docs, and [Model runtime](model-runtime.md)
+  document the local 120B-class planning profile.
 
-**Tests.** `LLMClient` rejects a disallowed host, accepts localhost; boot
-assertion fires under the prod flag.
+**Tests.** `LLMConfig` rejects a disallowed host, accepts localhost and
+allowlisted safepod hosts, honors explicit remote opt-in, and `LLMClient` speaks
+the chat-completions protocol to a local test server.
 
-**Trade-off.** None meaningful — remote mode stays available for dev by widening
-the allowlist. **Effort:** ~1 sitting.
+**Trade-off.** Remote mode stays available for dev only by explicit opt-in.
 
 ---
 
@@ -150,7 +151,7 @@ disclosure + dominance) · container-isolated escalation path (gVisor/Firecracke
 
 ## Sequence & open decisions
 
-**Sequence:** A (quick, self-contained) → B (core) → C-light → D (at go-public).
+**Sequence:** B (core) → C-light → D (at go-public).
 
 Decisions to confirm before execution:
 

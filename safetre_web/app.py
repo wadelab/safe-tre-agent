@@ -23,6 +23,7 @@ from pydantic import BaseModel, Field
 
 from safetre import synth
 from safetre.audit import AuditLog
+from safetre.manifest import manifest_for_response
 from safetre.planner import LLMPlanner, MockPlanner
 from safetre.query import CATALOGUE
 from safetre.service import QueryService
@@ -115,6 +116,11 @@ def query(request: Request, body: QueryRequest):
 @app.get("/healthz")
 def healthz():
     return {"ok": True}
+
+
+@app.get("/api/manifest")
+def manifest():
+    return manifest_for_response()
 
 
 @app.get("/api/audit/verify")

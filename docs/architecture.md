@@ -8,6 +8,11 @@ SQL. Its only output is a **proposal** — a `QuerySpec` — which the rest of t
 system validates and executes deterministically. Every component after the model
 is auditable and testable in isolation.
 
+In the two-LLM deployment, the outside LLM uses a public tool manifest to plan,
+and the safepod independently validates the proposed tool call. An optional
+inside LLM may advise on statistical appropriateness or escalation, but it does
+not authorize execution. See [Tool manifest](tool-manifest.md).
+
 ## Components
 
 ```mermaid
@@ -48,6 +53,7 @@ covered by tests.
 | Session | `safetre_web/session.py` | per-user `SessionAuditor` + history |
 | Vetting | `safetre/analyst.py::vet_request` | block obviously hostile intent |
 | Planner | `safetre/planner.py` | untrusted LLM → `QuerySpec` (+ `MockPlanner`) |
+| Manifest | `safetre/manifest.py` | public capability contract for outside planners |
 | QuerySpec | `safetre/query.py` | the validated allowlist boundary |
 | Engine | `safetre/engine.py` | spec → parameterised DuckDB SQL |
 | Gateway | `safetre/disclosure.py` | min cell size, suppression, egress checks |
