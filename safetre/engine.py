@@ -14,6 +14,8 @@ Security properties:
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
+from typing import Any
 
 import duckdb
 import pandas as pd
@@ -70,6 +72,81 @@ def _ident(name: str) -> str:
     return f'"{name}"'
 
 
+@dataclass(frozen=True)
+class SQLPlan:
+    """Compiled SQL plus the metadata needed to check its safety boundary."""
+
+    sql: str
+    params: tuple[Any, ...]
+    output_columns: tuple[str, ...]
+    source_view: str
+
+
+def _where(spec: QuerySpec) -> tuple[str, tuple[Any, ...]]:
+    clauses, params = [], []
+    for f in spec.filters:
+        col = _ident(f.column)
+        if f.op == "in":
+            placeholders = ", ".join("?" for _ in f.value)
+            clauses.append(f"{col} IN ({placeholders})")
+            params.extend(f.value)
+        else:
+            # `op` is a Literal allowlist; the value is bound separately.
+            clauses.append(f"{col} {f.op} ?")
+            params.append(f.value)
+    where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
+    return where, tuple(params)
+
+
+def compile_query(spec: QuerySpec) -> SQLPlan:
+    """Compile a validated QuerySpec into the public read-only aggregate SQL."""
+    where, params = _where(spec)
+    select = [_ident(g) for g in spec.group_by]
+    if spec.measure.fn == "count":
+        select.append("COUNT(*) AS value")
+    else:
+        # fn is a Literal allowlist; column is allowlist- and regex-validated
+        select.append(f"{spec.measure.fn.upper()}({_ident(spec.measure.column)}) AS value")
+    select.append("COUNT(*) AS n")
+
+    sql = f"SELECT {', '.join(select)} FROM {_ident(spec.dataset)}{where}"  # nosec
+    if spec.group_by:
+        sql += " GROUP BY " + ", ".join(_ident(g) for g in spec.group_by)
+    sql += f" ORDER BY n DESC LIMIT {ROW_CAP}"
+    return SQLPlan(
+        sql=sql,
+        params=params,
+        output_columns=tuple(spec.group_by) + ("value", "n"),
+        source_view=spec.dataset,
+    )
+
+
+def compile_dominance_query(spec: QuerySpec) -> SQLPlan:
+    """Compile the internal donor-level dominance query for sum/mean specs."""
+    if spec.measure.fn not in ("mean", "sum"):
+        raise ValueError("dominance is only defined for mean/sum measures")
+
+    where, params = _where(spec)
+    col = _ident(spec.measure.column)
+    unit = _ident(f"_{spec.dataset}_u")
+    gsel = ", ".join(_ident(g) for g in spec.group_by)
+    gpre = (gsel + ", ") if spec.group_by else ""
+    inner = (
+        f"SELECT {gpre}donor_id, SUM({col}) AS c FROM {unit}{where} "  # nosec
+        f"GROUP BY {gpre}donor_id"
+    )
+    sql = (
+        f"SELECT {gpre}MAX(c) / NULLIF(SUM(c), 0) AS dominance "  # nosec
+        f"FROM ({inner}) t" + (f" GROUP BY {gsel}" if spec.group_by else "")
+    )
+    return SQLPlan(
+        sql=sql,
+        params=params,
+        output_columns=tuple(spec.group_by) + ("dominance",),
+        source_view=f"_{spec.dataset}_u",
+    )
+
+
 class QueryEngine:
     def __init__(self, tables: dict[str, pd.DataFrame]):
         self.con = duckdb.connect(database=":memory:")
@@ -80,53 +157,18 @@ class QueryEngine:
         for ddl in (*_VIEWS.values(), *_UNIT_VIEWS.values()):
             self.con.execute(ddl)
 
-    def _where(self, spec: QuerySpec):
-        clauses, params = [], []
-        for f in spec.filters:
-            col = _ident(f.column)
-            if f.op == "in":
-                placeholders = ", ".join("?" for _ in f.value)
-                clauses.append(f"{col} IN ({placeholders})")
-                params.extend(f.value)
-            else:
-                # `op` is a Literal allowlist; the value is bound separately.
-                clauses.append(f"{col} {f.op} ?")
-                params.append(f.value)
-        where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
-        return where, params
-
     def run(self, spec: QuerySpec) -> pd.DataFrame:
-        where, params = self._where(spec)
-        select = [_ident(g) for g in spec.group_by]
-        if spec.measure.fn == "count":
-            select.append("COUNT(*) AS value")
-        else:
-            # fn is a Literal allowlist; column is allowlist- and regex-validated
-            select.append(f"{spec.measure.fn.upper()}({_ident(spec.measure.column)}) AS value")
-        select.append("COUNT(*) AS n")
-
-        sql = f"SELECT {', '.join(select)} FROM {_ident(spec.dataset)}{where}"  # nosec
-        if spec.group_by:
-            sql += " GROUP BY " + ", ".join(_ident(g) for g in spec.group_by)
-        sql += f" ORDER BY n DESC LIMIT {ROW_CAP}"
-        result = self.con.execute(sql, params).df()
+        plan = compile_query(spec)
+        result = self.con.execute(plan.sql, plan.params).df()
 
         if spec.measure.fn in ("mean", "sum"):
             result["value"] = result["value"].round(2)
-            result = self._attach_dominance(spec, where, params, result)
+            result = self._attach_dominance(spec, compile_dominance_query(spec), result)
         return result
 
-    def _attach_dominance(self, spec, where, params, result):
+    def _attach_dominance(self, spec: QuerySpec, plan: SQLPlan, result: pd.DataFrame):
         """Largest single donor's contribution / cell total, per group."""
-        col = _ident(spec.measure.column)
-        unit = _ident(f"_{spec.dataset}_u")
-        gsel = ", ".join(_ident(g) for g in spec.group_by)
-        gpre = (gsel + ", ") if spec.group_by else ""
-        inner = (f"SELECT {gpre}donor_id, SUM({col}) AS c FROM {unit}{where} "  # nosec
-                 f"GROUP BY {gpre}donor_id")
-        outer = (f"SELECT {gpre}MAX(c) / NULLIF(SUM(c), 0) AS dominance "       # nosec
-                 f"FROM ({inner}) t" + (f" GROUP BY {gsel}" if spec.group_by else ""))
-        dom = self.con.execute(outer, params).df()
+        dom = self.con.execute(plan.sql, plan.params).df()
         if spec.group_by:
             result = result.merge(dom, on=spec.group_by, how="left")
         else:

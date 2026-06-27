@@ -10,7 +10,7 @@ from pydantic import ValidationError
 
 from safetre import synth
 from safetre.disclosure import COUNT_COLUMNS, ROUND_BASE, DisclosurePolicy, leak_detector
-from safetre.engine import QueryEngine
+from safetre.engine import ROW_CAP, QueryEngine, compile_dominance_query, compile_query
 from safetre.query import CATALOGUE, CAT_OPS, MAX_FILTERS, MAX_GROUP_BY, NUM_OPS, QuerySpec
 from safetre.schema import identifier_columns, sensitive_columns
 
@@ -121,6 +121,65 @@ def test_generated_valid_queryspecs_execute_without_unsafe_release(raw):
         if str(column).lower() in COUNT_COLUMNS:
             assert (released[column] >= DisclosurePolicy.DEFAULT_THRESHOLD).all()
             assert (released[column] % ROUND_BASE == 0).all()
+
+
+@given(valid_queryspec_dicts())
+@settings(max_examples=200, deadline=None)
+def test_compiled_public_sql_has_safe_shape(raw):
+    spec = QuerySpec(**raw)
+    plan = compile_query(spec)
+
+    assert plan.source_view == spec.dataset
+    assert plan.output_columns == tuple(spec.group_by) + ("value", "n")
+    assert plan.sql.startswith("SELECT ")
+    assert f' FROM "{spec.dataset}"' in plan.sql
+    assert plan.sql.endswith(f" ORDER BY n DESC LIMIT {ROW_CAP}")
+    assert plan.sql.count("?") == len(plan.params)
+    assert ";" not in plan.sql
+    assert "donor_id" not in plan.sql
+    assert "free_text" not in plan.sql
+    assert "_spend_u" not in plan.sql
+    assert "_wellbeing_u" not in plan.sql
+
+    forbidden_verbs = (" INSERT ", " UPDATE ", " DELETE ", " DROP ", " ALTER ", " CREATE ")
+    padded_sql = f" {plan.sql.upper()} "
+    assert not any(verb in padded_sql for verb in forbidden_verbs)
+
+
+@given(valid_queryspec_dicts())
+@settings(max_examples=200, deadline=None)
+def test_dominance_sql_is_internal_and_only_for_sum_or_mean(raw):
+    spec = QuerySpec(**raw)
+
+    if spec.measure.fn == "count":
+        with pytest.raises(ValueError):
+            compile_dominance_query(spec)
+        return
+
+    plan = compile_dominance_query(spec)
+    assert plan.source_view == f"_{spec.dataset}_u"
+    assert plan.output_columns == tuple(spec.group_by) + ("dominance",)
+    assert f'FROM "_{spec.dataset}_u"' in plan.sql
+    assert f'FROM "{spec.dataset}"' not in plan.sql
+    assert plan.sql.count("?") == len(plan.params)
+    assert ";" not in plan.sql
+    assert "free_text" not in plan.sql
+
+
+def test_filter_values_are_only_bound_parameters_in_compiled_sql():
+    evil = "x'; DROP TABLE events; --"
+    spec = QuerySpec(
+        dataset="spend",
+        measure={"fn": "count"},
+        group_by=["canton"],
+        filters=[{"column": "canton", "op": "==", "value": evil}],
+    )
+
+    plan = compile_query(spec)
+
+    assert evil not in plan.sql
+    assert plan.params == (evil,)
+    assert plan.sql.count("?") == 1
 
 
 @given(

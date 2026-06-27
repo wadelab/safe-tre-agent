@@ -76,6 +76,15 @@ theorem sql_is_readonly (spec : QuerySpec) :
 
 **What it rules out:** SQL injection, DDL/DML execution, cross-view joins, subquery nesting (beyond the predefined dominance query), and reference to internal unit views through the public path.
 
+**2026-06-27 update:** SQL compilation is now separated from execution. `safetre.engine.compile_query()` returns an immutable `SQLPlan` for the public aggregate query, and `compile_dominance_query()` returns the separate internal donor-level dominance plan used only for mean/sum disclosure checks. `tests/test_query_properties.py` asserts the public plan:
+
+- reads only from the public dataset view;
+- contains no internal unit-view names, identifiers, free-text fields, semicolons, or DDL/DML verbs;
+- uses bound placeholders for every filter value;
+- preserves the fixed `ORDER BY n DESC LIMIT ROW_CAP` shape.
+
+This is not a machine-checked grammar proof yet, but it makes the SQL safety contract directly inspectable in CI.
+
 ---
 
 ### C. Information-Flow Analysis: "No Identifier-Labeled Data Can Reach Release"
@@ -154,7 +163,7 @@ Prove noninterference: **Secret data cannot affect the Public/Sensitive output**
 
 ---
 
-## Implemented Phase 1 Executable Invariants
+## Implemented Executable Invariants
 
 **2026-06-27 update:** The first practical step is executable formalism rather than a theorem-prover artifact. `tests/test_query_properties.py` uses Hypothesis to generate valid `QuerySpec` instances over the finite catalogue and checks that:
 
@@ -162,6 +171,7 @@ Prove noninterference: **Secret data cannot affect the Public/Sensitive output**
 - valid specs execute through `QueryEngine` and `DisclosurePolicy` without releasing unsafe columns or unrounded/under-threshold counts;
 - forbidden columns are rejected in group-by, filter, and measure positions;
 - empty `in` filters and duplicate group-by dimensions are rejected at validation time.
+- compiled public SQL keeps the fixed safe aggregate-query shape and uses bound parameters for filter values.
 
 This does not replace Lean/Alloy, but it gives CI a broad executable approximation of the same invariants before investing in machine-checked proofs.
 
@@ -180,7 +190,8 @@ This does not replace Lean/Alloy, but it gives CI a broad executable approximati
 ### Phase 2 — Stronger Guarantees (1–2 months)
 
 - [ ] Model the disclosure policy in Alloy; search for differencing/triangulation counterexamples
-- [ ] Prove SQL generation correctness (engine produces only read-only SELECT from public views)
+- [x] Extract SQL compilation into inspectable plans and add property tests for the safe public SQL shape
+- [ ] Prove SQL generation correctness in a proof assistant (engine produces only read-only SELECT from public views)
 - [ ] Formalize information-flow labels and prove noninterference for the web query path
 - [ ] Prove that the composition of `QuerySpec` validation + engine + disclosure gateway maintains the identifier-free invariant end-to-end
 
