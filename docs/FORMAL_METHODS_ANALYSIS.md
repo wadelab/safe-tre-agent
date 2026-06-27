@@ -129,16 +129,16 @@ Prove noninterference: **Secret data cannot affect the Public/Sensitive output**
 
 **Current state:** The system uses cell suppression (n < 10), dominance suppression (p% > 50%), and rounding (base 5). These provide *ad hoc* privacy but not formally proven differential privacy (DP).
 
-**Observation:** Rounding to base 5 gives an "accidental" DP guarantee for count queries — an individual's presence can change the rounded count by at most 1 out of 5, giving ε ≈ ln(6/4) ≈ 0.41 per query. But this is not formally proven, not compositionally tracked, and does not account for mean/sum queries.
+**Correction:** Deterministic rounding to base 5 is **not** differential privacy. It reduces precision and can help statistical disclosure control, but because it is deterministic, neighbouring datasets can still produce different released values with probability 1 versus 0. In the usual DP definition, that means there is no finite ε guarantee from rounding alone. The same caveat applies even more strongly to mean/sum queries, where one person's value can change a released aggregate unless bounded sensitivity and calibrated random noise are part of the mechanism.
 
 **Approach:**
 
-1. Prove that each released aggregate satisfies ε-DP for a computable ε.
-2. Track the privacy budget compositionally across queries using the sequential composition theorem: 20 queries at ε = 0.41 each gives total ε ≈ 8.2.
-3. Compare this composed ε with the actual threat model requirements.
-4. Optionally integrate [OpenDP](https://github.com/opendp/opendp) for calibrated noise addition that provides provable ε-DP rather than relying on rounding as a side effect.
+1. Treat the current threshold/dominance/rounding controls as SDC controls, not DP controls.
+2. If DP becomes a requirement, define neighbouring datasets, contribution bounds, and sensitivity for each supported aggregate.
+3. Add calibrated random noise and track the privacy budget compositionally across the session query budget.
+4. Prefer integrating [OpenDP](https://github.com/opendp/opendp) or an equivalent vetted DP library over a bespoke proof of an ad hoc mechanism.
 
-**Caveats:** True DP requires adding calibrated noise to each query result. Your current approach of rounding is *not* the same as DP noise — it's a disclosure control that happens to provide some DP-like properties for count queries but not for mean/sum. A full DP integration would require modifying the disclosure gateway.
+**Caveats:** A full DP integration would change the disclosure gateway's semantics: released values would become randomized, reproducibility would need an auditable randomness policy, and budget accounting would become part of the session auditor.
 
 ---
 
@@ -154,6 +154,19 @@ Prove noninterference: **Secret data cannot affect the Public/Sensitive output**
 
 ---
 
+## Implemented Phase 1 Executable Invariants
+
+**2026-06-27 update:** The first practical step is executable formalism rather than a theorem-prover artifact. `tests/test_query_properties.py` uses Hypothesis to generate valid `QuerySpec` instances over the finite catalogue and checks that:
+
+- generated valid specs stay within the dataset catalogue and never touch identifier or free-text columns;
+- valid specs execute through `QueryEngine` and `DisclosurePolicy` without releasing unsafe columns or unrounded/under-threshold counts;
+- forbidden columns are rejected in group-by, filter, and measure positions;
+- empty `in` filters and duplicate group-by dimensions are rejected at validation time.
+
+This does not replace Lean/Alloy, but it gives CI a broad executable approximation of the same invariants before investing in machine-checked proofs.
+
+---
+
 ## 3. Recommended Roadmap
 
 ### Phase 1 — Quick Wins (1–2 weeks)
@@ -161,7 +174,7 @@ Prove noninterference: **Secret data cannot affect the Public/Sensitive output**
 - [ ] Formalize `CATALOGUE` and `QuerySpec` in Lean 4
 - [ ] Prove identifier non-membership (no valid query can reference `donor_id`, `free_text`, `ts`, or `age_years`)
 - [ ] Add CI step: `lean --check formal/QuerySpec.lean`
-- [ ] Extend `test_invariants.py` with Hypothesis property-based testing to fuzz-generate all valid `QuerySpec` instances and verify invariants hold over the full generated space
+- [x] Add Hypothesis property-based testing in `tests/test_query_properties.py` to fuzz-generate valid `QuerySpec` instances and verify executable boundary invariants
 - [ ] Add security labels (`DI`, `QI`, `S`, `R`) to `CATALOGUE` entries and prove label consistency at the type level
 
 ### Phase 2 — Stronger Guarantees (1–2 months)

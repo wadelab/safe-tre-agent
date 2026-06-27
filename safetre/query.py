@@ -68,6 +68,8 @@ class QuerySpec(BaseModel):
     def _limit_groupby(cls, v):
         if len(v) > MAX_GROUP_BY:
             raise ValueError(f"at most {MAX_GROUP_BY} group-by dimensions")
+        if len(v) != len(set(v)):
+            raise ValueError("group-by dimensions must be unique")
         return v
 
     @field_validator("filters")
@@ -113,6 +115,8 @@ class QuerySpec(BaseModel):
         vals = f.value if f.op == "in" else [f.value]
         if f.op == "in" and not isinstance(f.value, list):
             raise ValueError("`in` requires a list value")
+        if f.op == "in" and len(f.value) == 0:
+            raise ValueError("`in` list cannot be empty")
         if f.op == "in" and len(f.value) > MAX_IN_VALUES:
             raise ValueError(f"`in` list too long (max {MAX_IN_VALUES})")
         for v in vals:
