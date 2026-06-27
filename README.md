@@ -20,16 +20,20 @@ is that local models will become strong enough for planning — roughly a good
 `MockLLM` lets the whole pipeline and the red-team run offline.
 
 > **📚 Documentation:** [`docs/`](docs/index.md) —
-> [Install](docs/install.md) ·
+> [Beginner guide](docs/beginner.md) ·
+> [How to install](docs/install.md) ·
+> [Test deployment](docs/test-deployment.md) ·
 > [User guide](docs/userguide.md) ·
 > [Architecture](docs/architecture.md) ·
 > [Security model](docs/security.md) ·
 > [Safepod model](docs/safepod.md) ·
 > [Model runtime](docs/model-runtime.md) ·
 > [Tool manifest](docs/tool-manifest.md) ·
+> [Formal methods](docs/FORMAL_METHODS_ANALYSIS.md) ·
 > [Deployment](docs/deployment.md) ·
 > [Development](docs/development.md) ·
-> [Research write-up](docs/writeup.md).
+> [Research write-up](docs/writeup.md) ·
+> [Fellowship positioning](docs/fellowship.md).
 > Browse as a site with `uv run --group docs mkdocs serve`.
 
 ## Where it sits

@@ -12,7 +12,9 @@ every output; and every request is written to a tamper-evident audit log.
 
 | If you want to… | Read |
 |---|---|
-| Install or run the project | [Install](install.md) |
+| Understand the project from scratch | [Beginner guide](beginner.md) |
+| Install or run the project | [How to install](install.md) |
+| Rehearse a synthetic-data deployment | [Test deployment runbook](test-deployment.md) |
 | Use the interface as a researcher | [User guide](userguide.md) |
 | Understand how the system is built | [Architecture](architecture.md) |
 | Understand the threat model and controls | [Security model](security.md) |
@@ -23,6 +25,7 @@ every output; and every request is written to a tamper-evident audit log.
 | Run it on a host / tailnet | [Deployment](deployment.md) |
 | Work on the code | [Development](development.md) |
 | Read the research rationale | [Write-up](writeup.md) |
+| Position it for fellowship funding | [Fellowship positioning](fellowship.md) |
 
 ## The one-paragraph version
 
@@ -46,3 +49,5 @@ is and isn't production-ready, and the [roadmap](security.md#limitations-and-roa
 > **Built on:** OpenSAFELY (Bennett Institute, Oxford) for the code-to-data,
 > outputs-checked TRE model; ACRO/SACRO (DARE UK) for statistical disclosure
 > control; the Five Safes framework for governance.
+
+![safe-tre-agent web interface](figures/web-ui-home.png)

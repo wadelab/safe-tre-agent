@@ -1,7 +1,8 @@
-# Install
+# How to install
 
-This guide covers a local development install and the controlled safepod install
-path. Use `uv` for every Python command so the lockfile is the source of truth.
+This guide covers a local development install, a synthetic-data test install,
+and the controlled safepod install path. Use `uv` for every Python command so
+the lockfile is the source of truth.
 
 ## Requirements
 
@@ -9,8 +10,35 @@ path. Use `uv` for every Python command so the lockfile is the source of truth.
 - `uv`
 - Git
 - For the web UI: loopback access to port `8800`
+- Optional: Google Chrome or another browser for viewing the local UI
+- Optional: Tailscale for restricted-channel rehearsal
 - For production: a safepod or equivalent controlled host, no automatic updates,
   and an approved deployment process
+
+## Dependency groups
+
+The core app dependencies are intentionally small:
+
+| Dependency | Why it is used |
+|---|---|
+| `pydantic` | strict `QuerySpec` validation at the security boundary |
+| `duckdb` | read-only aggregate execution over synthetic/local tables |
+| `pandas` / `numpy` | synthetic data, table handling, and test fixtures |
+| `pyyaml` | red-team attack fixture loading |
+
+Optional groups:
+
+| Group | Includes | Purpose |
+|---|---|---|
+| `web` | FastAPI, Uvicorn, Jinja2, HTTPX | local web interface and API tests |
+| `dev` | pytest, Hypothesis, Bandit, pip-audit, matplotlib | tests, property checks, security linting, dependency audit, figures |
+| `docs` | MkDocs Material | documentation site |
+
+Research dependencies that are not yet runtime dependencies:
+
+- OpenSAFELY/Bennett Institute/Oxford: code-to-data, outputs-checked TRE model;
+- ACRO/SACRO: target production output-checking family;
+- OpenDP-style tooling: possible future differential privacy budget mode.
 
 ## Local development
 
@@ -18,6 +46,12 @@ path. Use `uv` for every Python command so the lockfile is the source of truth.
 git clone git@github.com:wadelab/safe-tre-agent.git
 cd safe-tre-agent
 uv sync --all-extras
+```
+
+For a repeatable test deployment use:
+
+```bash
+uv sync --all-extras --frozen
 ```
 
 Generate synthetic data and run the checks:
@@ -48,6 +82,9 @@ Build the documentation:
 uv run --group docs mkdocs build
 uv run --group docs mkdocs serve
 ```
+
+See [Test deployment runbook](test-deployment.md) for the full synthetic-data
+deployment rehearsal.
 
 ## Model runtime
 

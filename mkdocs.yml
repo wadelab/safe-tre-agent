@@ -30,15 +30,19 @@ markdown_extensions:
 
 nav:
   - Home: index.md
-  - Install: install.md
+  - Beginner guide: beginner.md
+  - How to install: install.md
+  - Test deployment: test-deployment.md
   - User guide: userguide.md
   - Architecture: architecture.md
   - Security model: security.md
   - Safepod model: safepod.md
   - Model runtime: model-runtime.md
   - Tool manifest: tool-manifest.md
+  - Formal methods: FORMAL_METHODS_ANALYSIS.md
   - Hardening log: hardening-log.md
   - Round 2 plan: round2-plan.md
   - Deployment: deployment.md
   - Development: development.md
   - Research write-up: writeup.md
+  - Fellowship positioning: fellowship.md
