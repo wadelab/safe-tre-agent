@@ -1,8 +1,8 @@
 # safe-tre-agent documentation
 
 A safe-outputs gateway that lets an **AI analyst** answer questions over
-sensitive, SDDS-style data held in a **Trusted Research Environment (TRE)** —
-without any row-level data leaving, and without trusting the model with code.
+sensitive behavioural data held in a **Trusted Research Environment (TRE)**,
+without any row-level data leaving and without trusting the model with code.
 
 The model is treated as adversarial. Its only power is to propose a validated,
 declarative query; a deterministic engine runs it; a disclosure gateway checks

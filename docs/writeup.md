@@ -24,12 +24,12 @@ disclosure-control attack surface:
 > human-in-the-loop restore it?
 
 This prototype makes that question concrete and measurable, on synthetic
-SDDS-style data (loot-box spend + psychometrics, modelled on a
-Lemanic Life Sciences Hackathon 2025 dataset). It is **model-agnostic**: the
-planner speaks to a local OpenAI-compatible endpoint by default, with the
-runtime replaceable behind a small completion interface. The planning assumption
-is a strong local model, roughly 120B-class, while a **local** model remains
-mandatory in production — a remote API would itself be an egress channel.
+behavioural data shaped like a loot-box spend + psychometrics study. It is
+**model-agnostic**: the planner speaks to a local OpenAI-compatible endpoint by
+default, with the runtime replaceable behind a small completion interface. The
+planning assumption is a strong local model, roughly 120B-class, while a
+**local** model remains mandatory in production — a remote API would itself be
+an egress channel.
 
 ## How it works
 

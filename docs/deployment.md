@@ -45,7 +45,7 @@ command.
 
 ## Production (systemd)
 
-A hardened unit ships in [`deploy/safetre-web.service`](../deploy/safetre-web.service).
+A hardened unit ships in `deploy/safetre-web.service`.
 
 ```bash
 # in the repo on d2-1
@@ -127,7 +127,7 @@ All configuration is via environment variables.
 Legacy `OPENAI_BASE_URL`, `OPENAI_API_KEY`, and `SAFETRE_MODEL` are still read
 as fallbacks, but new deployments should use the `SAFETRE_LLM_*` names. The
 model never sees secrets and never needs network beyond the local model
-endpoint. See [`.env.example`](../.env.example) and [Model runtime](model-runtime.md).
+endpoint. See `.env.example` and [Model runtime](model-runtime.md).
 
 ## Audit log operations
 

@@ -32,7 +32,7 @@ model runtime, access channel, audit-key handling, and physical controls.
 ## 1. Checkout and pin the environment
 
 ```bash
-git clone git@github.com:wadelab/safe-tre-agent.git
+git clone https://github.com/wadelab/safe-tre-agent.git
 cd safe-tre-agent
 git rev-parse HEAD
 uv sync --all-extras --frozen

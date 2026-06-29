@@ -7,8 +7,9 @@ secure research infrastructure calls.
 ## One-sentence project
 
 Build and evaluate a safe-outputs gateway for AI-assisted analysis inside
-Trusted Research Environments, where the model is useful for planning but never
-trusted with raw data, code execution, SQL execution, or release authority.
+Trusted Research Environments. The model helps with planning while raw data,
+code execution, SQL execution, and release authority stay behind deterministic
+controls.
 
 ## Why this matters
 
@@ -34,12 +35,9 @@ describes support for work on AI safety and alignment-relevant research. This
 project is a concrete systems-safety case study: how to deploy capable models in
 a high-stakes data setting while treating the model as untrusted infrastructure.
 
-The work is not "make the model safe by prompting." The research claim is
-stronger and more testable:
-
-> Safety should come from deterministic boundaries, typed tool contracts,
-> disclosure policy, auditability, and deployment controls, with the model
-> confined to proposing actions that the safepod can independently validate.
+The safety claim rests on deterministic boundaries, typed tool contracts,
+disclosure policy, auditability, and deployment controls. The model is confined
+to proposing actions that the safepod can independently validate.
 
 Relevant fellowship outputs could include:
 
@@ -151,23 +149,22 @@ Deliverables:
 
 ## What not to overclaim
 
-This prototype does not prove that LLMs are safe analysts. It proves something
-more modest and useful: an LLM can be placed behind a constrained, auditable,
-non-authoritative boundary where deterministic code decides what runs and what
-leaves.
+This prototype makes a bounded systems-safety claim: an LLM can be placed behind
+a constrained, auditable, non-authoritative boundary where deterministic code
+decides what runs and what leaves.
 
-It also does not yet provide differential privacy. Current controls are
-statistical disclosure controls. A true epsilon budget would require randomized
-mechanisms and a privacy accountant.
+It also keeps differential privacy outside the current claim. Current controls
+are statistical disclosure controls. A true epsilon budget would require
+randomized mechanisms and a privacy accountant.
 
 ## Application summary paragraph
 
 `safe-tre-agent` is an open-source research prototype for safely using AI agents
-inside Trusted Research Environments. It treats the model as untrusted: the model
-can only propose a typed aggregate query, while deterministic validation,
-read-only execution, disclosure control, session auditing, and HMAC-chained logs
-decide whether any output leaves the safepod. The fellowship work would turn
-this prototype into a stronger research artifact by adding lineage-aware
-multi-query disclosure auditing, formal verification of the query and SQL
-boundary, integration with ACRO/OpenSAFELY-inspired output-checking practice, and
-repeatable synthetic-data deployment evidence.
+inside Trusted Research Environments. The model can propose a typed aggregate
+query. Deterministic validation, read-only execution, disclosure control,
+session auditing, and HMAC-chained logs decide whether any output leaves the
+safepod. The fellowship work would turn this prototype into a stronger research
+artifact by adding lineage-aware multi-query disclosure auditing, formal
+verification of the query and SQL boundary, integration with
+ACRO/OpenSAFELY-inspired output-checking practice, and repeatable synthetic-data
+deployment evidence.

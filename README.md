@@ -72,7 +72,7 @@ NL request
 
 ```bash
 uv sync --all-extras                              # pinned env from uv.lock
-uv run python scripts/make_data.py                # synthetic SDDS-style data -> ./data
+uv run python scripts/make_data.py                # synthetic behavioural data -> ./data
 uv run python scripts/demo.py "mean spend by age band"
 uv run python redteam/run_redteam.py              # gateway OFF vs ON, leakage table
 uv run pytest -q
@@ -109,11 +109,10 @@ The web layer is built security-first (the model is treated as untrusted):
 
 ## The dataset (synthetic)
 
-Four linked tables modelled on loot-box / in-app-spend + psychometric data
-(the shape of the Lemanic Life Sciences Hackathon 2025 dataset — synthetic, not
-the real data): `donors` (quasi-identifiers), `apps` (reference), `events`
-(spend behaviour), `survey` (PGSI / wellbeing + free text). Column roles
-(DI/QI/S/R) drive the disclosure rules. See `safetre/schema.py`.
+Four linked synthetic tables model loot-box / in-app-spend + psychometric data:
+`donors` (quasi-identifiers), `apps` (reference), `events` (spend behaviour),
+and `survey` (PGSI / wellbeing + free text). Column roles (DI/QI/S/R) drive the
+disclosure rules. See `safetre/schema.py`.
 
 ## Threat model / red-team
 
@@ -151,5 +150,6 @@ scripts/      make_data.py, demo.py, make_figures.py, run_web.sh
 redteam/      attacks.yaml, run_redteam.py
 deploy/       safetre-web.service (hardened systemd unit)
 docs/         writeup.md + figures
-tests/        pytest (37): disclosure, pipeline, secure (QuerySpec/engine/audit), web
+tests/        pytest suite: disclosure, pipeline, secure QuerySpec/engine/audit,
+              web, local-model config, manifest, and query invariants
 ```

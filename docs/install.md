@@ -43,7 +43,7 @@ Research dependencies that are not yet runtime dependencies:
 ## Local development
 
 ```bash
-git clone git@github.com:wadelab/safe-tre-agent.git
+git clone https://github.com/wadelab/safe-tre-agent.git
 cd safe-tre-agent
 uv sync --all-extras
 ```

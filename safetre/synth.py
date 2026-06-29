@@ -1,4 +1,4 @@
-"""Synthetic SDDS-style data generator.
+"""Synthetic behavioural data generator.
 
 Generates four linked tables (donors, apps, events, survey) with realistic
 disclosure structure: rare quasi-identifier combinations, small subgroups,

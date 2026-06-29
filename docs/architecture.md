@@ -113,9 +113,8 @@ erDiagram
   (`age_band, sex, canton, income_band, device_os, wave`) and measures
   (`pgsi_score, igds_score, wemwbs_score, monthly_spend_selfreport`).
 
-See [`safetre/schema.py`](../safetre/schema.py) for column roles (DI / QI / S / R)
-and [`safetre/query.py`](../safetre/query.py) for the catalogue the validator
-enforces.
+See `safetre/schema.py` for column roles (DI / QI / S / R) and
+`safetre/query.py` for the catalogue the validator enforces.
 
 ## Two execution paths
 

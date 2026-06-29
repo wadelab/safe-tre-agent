@@ -1,4 +1,4 @@
-"""Schema for the synthetic SDDS-style dataset.
+"""Schema for the synthetic behavioural dataset.
 
 Roles drive the disclosure-control rules:
   DI = direct identifier      (pseudonymous; never released)
@@ -6,8 +6,8 @@ Roles drive the disclosure-control rules:
   S  = sensitive attribute    (what min-cell-size / suppression protects)
   R  = reference / non-disclosive
 
-Modelled on the loot-box / in-app-spend + psychometrics shape of the
-Lemanic Life Sciences Hackathon 2025 dataset (synthetic, not the real data).
+Modelled as a loot-box / in-app-spend + psychometrics study. All generated rows
+are synthetic and carry no real participant data.
 """
 
 # table -> {column: role}

@@ -1,4 +1,4 @@
-"""Generate the synthetic SDDS-style dataset into ./data."""
+"""Generate the synthetic behavioural dataset into ./data."""
 
 import argparse
 
