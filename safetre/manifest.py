@@ -15,7 +15,7 @@ from typing import Any
 
 from .query import CATALOGUE, MAX_FILTERS, MAX_GROUP_BY, MAX_IN_VALUES
 
-MANIFEST_VERSION = "2026-07-03.aggregate.v2"
+MANIFEST_VERSION = "2026-07-03.aggregate.v3"
 
 
 def _catalogue_for_manifest() -> dict[str, dict[str, Any]]:
@@ -43,7 +43,7 @@ def public_manifest() -> dict[str, Any]:
         "tools": [
             {
                 "id": "aggregate_query",
-                "version": "2",
+                "version": "3",
                 "status": "available",
                 "description": "Disclosure-checked count, mean, sum, or Pearson correlation over an allowlisted dataset.",
                 "request_schema": "QuerySpec",
@@ -59,6 +59,7 @@ def public_manifest() -> dict[str, Any]:
                     "identifiers_allowed": False,
                     "text_fields_allowed": False,
                     "raw_rows_allowed": False,
+                    "internal_analysis_variables_returnable": False,
                 },
                 "release": {
                     "minimum_cell_size": 10,

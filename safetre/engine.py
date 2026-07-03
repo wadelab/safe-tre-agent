@@ -3,7 +3,7 @@
 Security properties:
 - Identifiers come only from the validated allowlist and are regex-checked
   before quoting; filter *values* are always bound parameters (no injection).
-- The public views expose only allowlisted columns (no donor_id/free_text/ts).
+- The public views expose only allowlisted columns (no donor_id/free_text/ts/raw age).
 - For sum/mean the engine also computes a **dominance** share (largest single
   contributor / total) using INTERNAL unit views that include donor_id — which
   are never selectable via a QuerySpec and never returned. The gateway uses this
@@ -21,14 +21,14 @@ from typing import Any
 import duckdb
 import pandas as pd
 
-from .query import QuerySpec
+from .query import CATALOGUE, QuerySpec
 
 _IDENT = re.compile(r"^[a-z_][a-z0-9_]*$")
 ROW_CAP = 10_000          # backstop against pathological cross-products
 MEMORY_LIMIT = "512MB"
 THREADS = 2
 
-# Public views: ONLY allowlisted columns. donor_id/free_text/ts never appear.
+# Public views: ONLY public allowlisted columns. donor_id/free_text/ts/raw age never appear.
 _VIEWS = {
     "spend": """
         CREATE VIEW spend AS
@@ -37,6 +37,16 @@ _VIEWS = {
                e.event_type, e.amount_chf, e.ingame_currency
         FROM events e JOIN donors d ON e.donor_id = d.donor_id
                       JOIN apps a   ON e.app_id   = a.app_id
+    """,
+    "donor_spend": """
+        CREATE VIEW donor_spend AS
+        SELECT d.age_band, d.sex, d.canton, d.income_band, d.device_os,
+               SUM(CASE WHEN e.event_type IN ('purchase', 'lootbox_open')
+                        THEN e.amount_chf ELSE 0 END) AS total_spend_chf,
+               SUM(CASE WHEN e.event_type = 'purchase' THEN 1 ELSE 0 END) AS purchase_events,
+               SUM(CASE WHEN e.event_type = 'lootbox_open' THEN 1 ELSE 0 END) AS lootbox_events
+        FROM donors d LEFT JOIN events e ON e.donor_id = d.donor_id
+        GROUP BY d.donor_id, d.age_band, d.sex, d.canton, d.income_band, d.device_os
     """,
     "wellbeing": """
         CREATE VIEW wellbeing AS
@@ -47,19 +57,30 @@ _VIEWS = {
     """,
 }
 
-# Internal unit views: include donor_id, used ONLY for dominance. Not queryable.
+# Internal unit views: include donor_id and internal analysis variables, used
+# ONLY for fixed tools and disclosure machinery. Not directly queryable.
 _UNIT_VIEWS = {
     "spend": """
         CREATE VIEW _spend_u AS
-        SELECT e.donor_id, d.age_band, d.sex, d.canton, d.income_band, d.device_os,
+        SELECT e.donor_id, d.age_years, d.age_band, d.sex, d.canton, d.income_band, d.device_os,
                a.genre, a.contains_lootboxes, a.price_tier, a.age_rating,
                e.event_type, e.amount_chf, e.ingame_currency
         FROM events e JOIN donors d ON e.donor_id = d.donor_id
                       JOIN apps a   ON e.app_id   = a.app_id
     """,
+    "donor_spend": """
+        CREATE VIEW _donor_spend_u AS
+        SELECT d.donor_id, d.age_years, d.age_band, d.sex, d.canton, d.income_band, d.device_os,
+               SUM(CASE WHEN e.event_type IN ('purchase', 'lootbox_open')
+                        THEN e.amount_chf ELSE 0 END) AS total_spend_chf,
+               SUM(CASE WHEN e.event_type = 'purchase' THEN 1 ELSE 0 END) AS purchase_events,
+               SUM(CASE WHEN e.event_type = 'lootbox_open' THEN 1 ELSE 0 END) AS lootbox_events
+        FROM donors d LEFT JOIN events e ON e.donor_id = d.donor_id
+        GROUP BY d.donor_id, d.age_years, d.age_band, d.sex, d.canton, d.income_band, d.device_os
+    """,
     "wellbeing": """
         CREATE VIEW _wellbeing_u AS
-        SELECT s.donor_id, d.age_band, d.sex, d.canton, d.income_band, d.device_os,
+        SELECT s.donor_id, d.age_years, d.age_band, d.sex, d.canton, d.income_band, d.device_os,
                s.wave, s.pgsi_score, s.igds_score, s.wemwbs_score,
                s.monthly_spend_selfreport
         FROM survey s JOIN donors d ON s.donor_id = d.donor_id
@@ -179,6 +200,21 @@ def _where(spec: QuerySpec, extra_clauses: tuple[str, ...] = ()) -> tuple[str, t
     return where, params
 
 
+def _uses_internal_source(spec: QuerySpec) -> bool:
+    cat = CATALOGUE[spec.dataset]
+    internal_filters = set(cat.get("internal_filters", {}))
+    internal_measures = set(cat.get("internal_measures", set()))
+    if any(f.column in internal_filters for f in spec.filters):
+        return True
+    if spec.measure.fn == "corr":
+        return bool({spec.measure.x, spec.measure.y} & internal_measures)
+    return False
+
+
+def _source_view(spec: QuerySpec) -> str:
+    return f"_{spec.dataset}_u" if _uses_internal_source(spec) else spec.dataset
+
+
 def compile_query(spec: QuerySpec) -> SQLPlan:
     """Compile a validated QuerySpec into the public read-only aggregate SQL."""
     extra: tuple[str, ...] = ()
@@ -196,7 +232,8 @@ def compile_query(spec: QuerySpec) -> SQLPlan:
     select.append("COUNT(*) AS n")
 
     where, params = _where(spec, extra)
-    sql = f"SELECT {', '.join(select)} FROM {_ident(spec.dataset)}{where}"  # nosec
+    source = _source_view(spec)
+    sql = f"SELECT {', '.join(select)} FROM {_ident(source)}{where}"  # nosec
     if spec.group_by:
         sql += " GROUP BY " + ", ".join(_ident(g) for g in spec.group_by)
     sql += f" ORDER BY n DESC LIMIT {ROW_CAP}"
@@ -204,7 +241,7 @@ def compile_query(spec: QuerySpec) -> SQLPlan:
         sql=sql,
         params=params,
         output_columns=tuple(spec.group_by) + ("value", "n"),
-        source_view=spec.dataset,
+        source_view=source,
     )
 
 

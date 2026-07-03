@@ -80,8 +80,10 @@ The core security boundary is the `QuerySpec`:
 - datasets are a closed list;
 - dimensions and measures are allowlisted;
 - filter values are bound parameters;
-- direct identifiers, free text, raw timestamps, and high-granularity age fields
-  are absent from the public catalogue;
+- direct identifiers, free text, and raw timestamps are absent from the public
+  catalogue;
+- high-granularity age is internal-only for fixed tools and is never grouped or
+  returned;
 - generated SQL is compiled into inspectable fixed-shape plans before execution.
 
 ## What is not production-ready yet?

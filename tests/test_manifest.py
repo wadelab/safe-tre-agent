@@ -19,7 +19,9 @@ def test_public_manifest_has_stable_hash():
 
 
 def test_public_manifest_does_not_expose_forbidden_columns():
-    cols = _manifest_columns(public_manifest())
+    manifest = public_manifest()
+    cols = _manifest_columns(manifest)
+    assert "donor_spend" in manifest["datasets"]
     assert not (cols & identifier_columns())
     assert "free_text" not in cols
     assert "ts" not in cols
@@ -31,6 +33,7 @@ def test_only_available_tools_are_executable():
     available = {tool["id"] for tool in manifest["tools"] if tool["status"] == "available"}
     planned = {tool["id"] for tool in manifest["planned_tool_classes"]}
     assert available == {"aggregate_query"}
+    assert manifest["tools"][0]["version"] == "3"
     assert manifest["tools"][0]["measures"]["functions"] == ["count", "mean", "sum", "corr"]
     assert manifest["tools"][0]["release"]["corr_outputs"] == ["value", "p_value", "n"]
     assert not (available & planned)

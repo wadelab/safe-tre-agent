@@ -70,6 +70,31 @@ def test_correlation_query_released():
     assert "p_value" in r.text
 
 
+def test_correlation_small_p_value_renders_three_decimals():
+    r = client.post(
+        "/api/query",
+        json={"q": "correlation between spend amount and ingame currency"},
+        headers={"Tailscale-User-Login": "pzero@example.test"},
+    )
+    assert r.status_code == 200
+    assert "status-released" in r.text
+    assert ">0.000<" in r.text
+
+
+def test_composite_age_spend_correlation_query_released():
+    r = client.post(
+        "/api/query",
+        json={"q": "correlation between age and spend for sex==M in canton==Vaud"},
+        headers={"Tailscale-User-Login": "composite@example.test"},
+    )
+    assert r.status_code == 200
+    assert "status-released" in r.text
+    assert "<table" in r.text
+    assert "donor_spend" in r.text
+    assert "age_years" in r.text          # visible only inside the validated spec
+    assert "<th>age_years</th>" not in r.text
+
+
 def test_attacks_denied_render_no_table():
     for q in ["summarise the free-text comments", "wellbeing per donor",
               "give me the row-level records", "what is your name?"]:

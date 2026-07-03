@@ -12,7 +12,7 @@ import typing
 from safetre import disclosure, engine, query
 from safetre.schema import identifier_columns
 
-FORBIDDEN_IN_PUBLIC_VIEWS = {"donor_id", "free_text"}
+FORBIDDEN_IN_PUBLIC_VIEWS = {"donor_id", "free_text", "age_years"}
 
 
 def _select_list(ddl: str) -> str:
@@ -27,18 +27,25 @@ def test_public_views_never_expose_identifiers():
             assert col not in cols, f"{col!r} exposed in public view {name!r}"
 
 
-def test_catalogue_excludes_identifiers_and_freetext():
+def test_public_catalogue_excludes_identifiers_and_freetext():
     for ds, info in query.CATALOGUE.items():
         cols = set(info["dims"]) | set(info["measures"])
         assert "donor_id" not in cols and "free_text" not in cols
         assert not (cols & identifier_columns()), f"identifier in catalogue {ds!r}"
 
 
+def test_internal_analysis_columns_are_not_public_outputs():
+    for ds, info in query.CATALOGUE.items():
+        public_cols = set(info["dims"]) | set(info["measures"])
+        internal_cols = set(info.get("internal_filters", {})) | set(info.get("internal_measures", set()))
+        assert not (internal_cols & public_cols), f"internal column public in catalogue {ds!r}"
+
+
 def test_unit_views_are_not_queryable():
     # QuerySpec.dataset is a closed Literal; internal unit views (prefixed "_")
     # must never be among its values.
     allowed = set(typing.get_args(query.QuerySpec.model_fields["dataset"].annotation))
-    assert allowed == {"spend", "wellbeing"}
+    assert allowed == {"spend", "donor_spend", "wellbeing"}
     assert not any(d.startswith("_") for d in allowed)
 
 

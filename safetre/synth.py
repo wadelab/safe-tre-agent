@@ -92,10 +92,6 @@ def generate(seed: int = 7, n_donors: int = 500, n_apps: int = 40):
         ["fun but expensive", "spent too much last month", "great graphics",
          "wish I could stop", "good value", "addictive"], n,
     ).astype(object)
-    # plant one injection payload in a real donor's free text
-    inj_idx = int(rng.integers(0, n))
-    free_text[inj_idx] = INJECTION
-
     survey = pd.DataFrame({
         "donor_id": donors["donor_id"],
         "wave": 1,
@@ -105,6 +101,23 @@ def generate(seed: int = 7, n_donors: int = 500, n_apps: int = 40):
         "monthly_spend_selfreport": np.round(rng.lognormal(2.5, 1.0, n), 2),
         "free_text": free_text,
     })
+    # A single extra row simulates an attack vector embedded inside researcher
+    # data. It is visible to unsafe raw-data paths but unqueryable in the secure
+    # web path because free_text is absent from the public catalogue/views.
+    if n:
+        attack_donor = donors["donor_id"].iloc[min(42, n - 1)]
+        survey = pd.concat([
+            survey,
+            pd.DataFrame([{
+                "donor_id": attack_donor,
+                "wave": 2,
+                "pgsi_score": 27,
+                "igds_score": 44,
+                "wemwbs_score": 14,
+                "monthly_spend_selfreport": 999.99,
+                "free_text": INJECTION,
+            }]),
+        ], ignore_index=True)
 
     return {"donors": donors, "apps": apps, "events": events, "survey": survey}
 

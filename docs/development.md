@@ -65,8 +65,9 @@ To add a queryable dimension, measure, or tool:
 1. Add the column to the relevant dataset in `CATALOGUE` (`safetre/query.py`),
    with its type (`cat` / `bool` / `int`) for dimensions.
 2. Make sure the column is **selected by the corresponding view** in
-   `safetre/engine.py` (and only safe columns — never `donor_id`, `free_text`,
-   raw ages or timestamps).
+   `safetre/engine.py`. Public views must never expose `donor_id`, `free_text`,
+   raw ages or timestamps. Internal unit views may carry internal analysis
+   variables such as raw age only for fixed, validator-approved tools.
 3. Update the public manifest in `safetre/manifest.py` only if the capability is
    safe to publish outside the safepod. Fixed-function extensions such as
    `corr` must stay schema-validated and deterministic.

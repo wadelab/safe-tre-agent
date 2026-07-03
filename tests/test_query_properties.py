@@ -21,7 +21,6 @@ _FORBIDDEN_COLUMNS = sorted(
     | {
         "free_text",
         "ts",
-        "age_years",
         "enrolment_date",
         "event_id",
         "app_id",
@@ -44,7 +43,7 @@ def _scalar_for(kind: str) -> st.SearchStrategy:
 
 @st.composite
 def _filter_for(draw, dataset: str) -> dict:
-    dims = CATALOGUE[dataset]["dims"]
+    dims = CATALOGUE[dataset]["dims"] | CATALOGUE[dataset].get("internal_filters", {})
     column = draw(st.sampled_from(sorted(dims)))
     kind = dims[column]
     ops = CAT_OPS if kind in ("cat", "bool") else NUM_OPS
@@ -59,11 +58,12 @@ def valid_queryspec_dicts(draw) -> dict:
     dataset = draw(st.sampled_from(sorted(CATALOGUE)))
     dims = sorted(CATALOGUE[dataset]["dims"])
     measures = sorted(CATALOGUE[dataset]["measures"])
+    corr_measures = sorted(CATALOGUE[dataset]["measures"] | CATALOGUE[dataset].get("internal_measures", set()))
     fn = draw(st.sampled_from(["count", "mean", "sum", "corr"]))
     if fn == "count":
         measure = {"fn": fn}
     elif fn == "corr":
-        x, y = draw(st.lists(st.sampled_from(measures), min_size=2, max_size=2, unique=True))
+        x, y = draw(st.lists(st.sampled_from(corr_measures), min_size=2, max_size=2, unique=True))
         measure = {"fn": fn, "x": x, "y": y}
     else:
         measure = {"fn": fn, "column": draw(st.sampled_from(measures))}
@@ -96,7 +96,12 @@ def _touched_columns(spec: QuerySpec) -> set[str]:
 def test_generated_valid_queryspecs_stay_inside_catalogue(raw):
     spec = QuerySpec(**raw)
     touched = _touched_columns(spec)
-    allowed = set(CATALOGUE[spec.dataset]["dims"]) | set(CATALOGUE[spec.dataset]["measures"])
+    allowed = (
+        set(CATALOGUE[spec.dataset]["dims"])
+        | set(CATALOGUE[spec.dataset]["measures"])
+        | set(CATALOGUE[spec.dataset].get("internal_filters", {}))
+        | set(CATALOGUE[spec.dataset].get("internal_measures", set()))
+    )
 
     assert touched <= allowed
     assert not (touched & identifier_columns())
@@ -139,17 +144,22 @@ def test_compiled_public_sql_has_safe_shape(raw):
     spec = QuerySpec(**raw)
     plan = compile_query(spec)
 
-    assert plan.source_view == spec.dataset
+    assert plan.source_view in {spec.dataset, f"_{spec.dataset}_u"}
     assert plan.output_columns == tuple(spec.group_by) + ("value", "n")
     assert plan.sql.startswith("SELECT ")
-    assert f' FROM "{spec.dataset}"' in plan.sql
+    assert f' FROM "{plan.source_view}"' in plan.sql
     assert plan.sql.endswith(f" ORDER BY n DESC LIMIT {ROW_CAP}")
     assert plan.sql.count("?") == len(plan.params)
     assert ";" not in plan.sql
     assert "donor_id" not in plan.sql
     assert "free_text" not in plan.sql
-    assert "_spend_u" not in plan.sql
-    assert "_wellbeing_u" not in plan.sql
+    if "age_years" in plan.sql:
+        assert plan.source_view == f"_{spec.dataset}_u"
+        assert "age_years" not in plan.output_columns
+    if plan.source_view == spec.dataset:
+        assert "_spend_u" not in plan.sql
+        assert "_donor_spend_u" not in plan.sql
+        assert "_wellbeing_u" not in plan.sql
 
     forbidden_verbs = (" INSERT ", " UPDATE ", " DELETE ", " DROP ", " ALTER ", " CREATE ")
     padded_sql = f" {plan.sql.upper()} "
@@ -215,6 +225,28 @@ def test_forbidden_columns_are_rejected_everywhere(dataset, forbidden):
             dataset=dataset,
             measure={"fn": "corr", "x": forbidden, "y": sorted(CATALOGUE[dataset]["measures"])[0]},
         )
+
+
+@given(dataset=st.sampled_from(sorted(CATALOGUE)))
+def test_internal_age_is_only_for_filters_and_fixed_corr(dataset):
+    if "age_years" not in CATALOGUE[dataset].get("internal_filters", {}):
+        return
+
+    with pytest.raises(ValidationError):
+        QuerySpec(dataset=dataset, measure={"fn": "count"}, group_by=["age_years"])
+
+    with pytest.raises(ValidationError):
+        QuerySpec(dataset=dataset, measure={"fn": "mean", "column": "age_years"})
+
+    QuerySpec(
+        dataset=dataset,
+        measure={"fn": "count"},
+        filters=[{"column": "age_years", "op": ">=", "value": 18}],
+    )
+
+    if "age_years" in CATALOGUE[dataset].get("internal_measures", set()):
+        public_measure = sorted(CATALOGUE[dataset]["measures"])[0]
+        QuerySpec(dataset=dataset, measure={"fn": "corr", "x": "age_years", "y": public_measure})
 
 
 @given(dataset=st.sampled_from(sorted(CATALOGUE)))

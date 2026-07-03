@@ -11,6 +11,7 @@ from safetre.disclosure import DisclosurePolicy, SessionAuditor
 from safetre.guards import run_in_sandbox, static_check
 from safetre.llm import MockLLM
 from safetre import synth
+from safetre.synth import INJECTION
 
 
 @pytest.fixture(scope="module")
@@ -20,6 +21,14 @@ def tables():
 
 def fresh(tables):
     return Analyst(MockLLM(), tables, DisclosurePolicy(), SessionAuditor())
+
+
+def test_synthetic_data_contains_single_prompt_injection_row(tables):
+    survey = tables["survey"]
+    injected = survey[survey["free_text"].eq(INJECTION)]
+    assert len(injected) == 1
+    assert injected["donor_id"].iloc[0] in set(tables["donors"]["donor_id"])
+    assert int(injected["wave"].iloc[0]) == 2
 
 
 # --- happy path ---------------------------------------------------------------

@@ -6,9 +6,10 @@ it; anything off-allowlist is rejected before any execution. This makes the
 entire query space enumerable and auditable, and removes the code/SQL-injection
 surface by construction.
 
-Deliberately absent from every allowlist: direct identifiers (donor_id),
-free text, and high-granularity fields (raw age, timestamps) — they cannot be
-named in a query at all.
+Direct identifiers (donor_id), free text, and raw timestamps are deliberately
+absent from every allowlist. Some high-granularity variables, such as raw age,
+may appear only in internal analysis allowlists for fixed tools. They cannot be
+grouped, selected, or returned.
 """
 
 from __future__ import annotations
@@ -18,6 +19,10 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 # Fixed catalogue of pre-joined, read-only datasets. dim type -> allowed ops.
+# - dims: public dimensions; may be filtered, grouped, and returned as group keys
+# - measures: public numeric measures; may be aggregated and used in corr
+# - internal_filters: internal-only predicates; may filter but never group/output
+# - internal_measures: internal-only numeric variables for fixed tools such as corr
 CATALOGUE: dict[str, dict[str, Any]] = {
     "spend": {
         "dims": {
@@ -26,6 +31,17 @@ CATALOGUE: dict[str, dict[str, Any]] = {
             "price_tier": "cat", "event_type": "cat", "age_rating": "int",
         },
         "measures": {"amount_chf", "ingame_currency"},
+        "internal_filters": {"age_years": "int"},
+        "internal_measures": set(),
+    },
+    "donor_spend": {
+        "dims": {
+            "age_band": "cat", "sex": "cat", "canton": "cat", "income_band": "cat",
+            "device_os": "cat",
+        },
+        "measures": {"total_spend_chf", "purchase_events", "lootbox_events"},
+        "internal_filters": {"age_years": "int"},
+        "internal_measures": {"age_years"},
     },
     "wellbeing": {
         "dims": {
@@ -33,6 +49,8 @@ CATALOGUE: dict[str, dict[str, Any]] = {
             "device_os": "cat", "wave": "int",
         },
         "measures": {"pgsi_score", "igds_score", "wemwbs_score", "monthly_spend_selfreport"},
+        "internal_filters": {"age_years": "int"},
+        "internal_measures": set(),
     },
 }
 
@@ -60,7 +78,7 @@ class Filter(BaseModel):
 
 class QuerySpec(BaseModel):
     model_config = ConfigDict(extra="forbid")   # reject unknown fields from the model
-    dataset: Literal["spend", "wellbeing"]
+    dataset: Literal["spend", "donor_spend", "wellbeing"]
     measure: Measure
     group_by: list[str] = []
     filters: list[Filter] = []
@@ -84,7 +102,11 @@ class QuerySpec(BaseModel):
     @model_validator(mode="after")
     def _check_allowlist(self):
         cat = CATALOGUE[self.dataset]
-        dims, measures = cat["dims"], cat["measures"]
+        dims = cat["dims"]
+        measures = cat["measures"]
+        internal_filters = cat.get("internal_filters", {})
+        internal_measures = cat.get("internal_measures", set())
+        corr_measures = measures | internal_measures
 
         # measure
         if self.measure.fn == "count":
@@ -100,10 +122,10 @@ class QuerySpec(BaseModel):
         elif self.measure.fn == "corr":
             if self.measure.column is not None:
                 raise ValueError("corr takes x and y, not column")
-            if self.measure.x not in measures or self.measure.y not in measures:
+            if self.measure.x not in corr_measures or self.measure.y not in corr_measures:
                 raise ValueError(
-                    f"corr x/y must be measure columns for dataset {self.dataset!r} "
-                    f"(allowed: {sorted(measures)})")
+                    f"corr x/y must be approved analysis measure columns for dataset "
+                    f"{self.dataset!r} (allowed: {sorted(corr_measures)})")
             if self.measure.x == self.measure.y:
                 raise ValueError("corr requires two distinct measure columns")
 
@@ -114,9 +136,10 @@ class QuerySpec(BaseModel):
 
         # filters: allowlisted dims, op valid for type, value type-checked
         for f in self.filters:
-            if f.column not in dims:
+            filter_columns = dims | internal_filters
+            if f.column not in filter_columns:
                 raise ValueError(f"filter column {f.column!r} is not a permitted dimension")
-            kind = dims[f.column]
+            kind = filter_columns[f.column]
             allowed = CAT_OPS if kind in ("cat", "bool") else NUM_OPS
             if f.op not in allowed:
                 raise ValueError(f"operator {f.op!r} not allowed on {f.column!r}")

@@ -89,9 +89,10 @@ sequenceDiagram
 
 ## Data model
 
-Four synthetic source tables; two read-only views are the only query surface.
-Identifiers, free text and timestamps are **absent from the views by
-construction**.
+Four synthetic source tables feed read-only analysis views. Public views exclude
+identifiers, free text, timestamps and raw age. Internal unit views may carry
+donor IDs or raw age only for fixed disclosure machinery such as dominance,
+lineage checks, or donor-level correlation; those fields are never released.
 
 ```mermaid
 erDiagram
@@ -109,6 +110,10 @@ erDiagram
   (`age_band, sex, canton, income_band, device_os, genre, contains_lootboxes,
   price_tier, event_type, age_rating`) and measures (`amount_chf,
   ingame_currency`).
+- **view `donor_spend`** — one row per donor, exposing safe dimensions and
+  donor-level spend measures (`total_spend_chf`, `purchase_events`,
+  `lootbox_events`). Raw age is available only in the internal unit view for
+  fixed tools such as age/spend correlation.
 - **view `wellbeing`** — `survey ⨝ donors`, exposing dimensions
   (`age_band, sex, canton, income_band, device_os, wave`) and measures
   (`pgsi_score, igds_score, wemwbs_score, monthly_spend_selfreport`).

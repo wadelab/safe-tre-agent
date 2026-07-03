@@ -24,6 +24,14 @@ def test_valid_spec_accepted():
               group_by=["age_band"])
     QuerySpec(dataset="wellbeing",
               measure=Measure(fn="corr", x="monthly_spend_selfreport", y="wemwbs_score"))
+    QuerySpec(
+        dataset="donor_spend",
+        measure=Measure(fn="corr", x="age_years", y="total_spend_chf"),
+        filters=[
+            Filter(column="sex", op="==", value="M"),
+            Filter(column="canton", op="==", value="Vaud"),
+        ],
+    )
 
 
 @pytest.mark.parametrize("bad", [
@@ -44,6 +52,8 @@ def test_valid_spec_accepted():
     {"dataset": "wellbeing",
      "measure": {"fn": "corr", "column": "wemwbs_score",
                  "x": "monthly_spend_selfreport", "y": "wemwbs_score"}},            # wrong shape
+    {"dataset": "donor_spend", "measure": {"fn": "count"}, "group_by": ["age_years"]},  # raw age output
+    {"dataset": "donor_spend", "measure": {"fn": "mean", "column": "age_years"}},        # raw age aggregate
 ])
 def test_offallowlist_specs_rejected(bad):
     with pytest.raises(ValidationError):
@@ -82,6 +92,25 @@ def test_engine_returns_correlation(tables):
     assert df["p_value"].between(0, 1).all()
     assert (df["p_value"] * 1000).round().eq(df["p_value"] * 1000).all()
     assert int(df["n"].iloc[0]) > 10
+
+
+def test_engine_returns_donor_level_age_spend_correlation_with_composite_filters(tables):
+    eng = QueryEngine(tables)
+    spec = QuerySpec(
+        dataset="donor_spend",
+        measure=Measure(fn="corr", x="age_years", y="total_spend_chf"),
+        filters=[
+            Filter(column="sex", op="==", value="M"),
+            Filter(column="canton", op="==", value="Vaud"),
+        ],
+    )
+    df = eng.run(spec)
+    assert list(df.columns) == ["value", "p_value", "n"]
+    assert len(df) == 1
+    assert df["value"].between(-1, 1).all()
+    assert int(df["n"].iloc[0]) >= 10
+    assert "age_years" not in df.columns
+    assert "donor_id" not in df.columns
 
 
 def test_pearson_p_value_bounds():
@@ -136,6 +165,25 @@ def test_service_correlation_released(tables):
     assert r.output is not None
     assert list(r.output.columns) == ["value", "p_value", "n"]
     assert r.spec["measure"]["fn"] == "corr"
+
+
+def test_service_composite_age_spend_correlation_released(tables):
+    r = QueryService(tables).handle(
+        "correlation between age and spend for sex==M in canton==Vaud",
+        MockPlanner(),
+    )
+    assert r.status == "released"
+    assert r.output is not None
+    assert list(r.output.columns) == ["value", "p_value", "n"]
+    assert r.spec == {
+        "dataset": "donor_spend",
+        "measure": {"fn": "corr", "column": None, "x": "age_years", "y": "total_spend_chf"},
+        "group_by": [],
+        "filters": [
+            {"column": "sex", "op": "==", "value": "M"},
+            {"column": "canton", "op": "==", "value": "Vaud"},
+        ],
+    }
 
 
 @pytest.mark.parametrize("req", [

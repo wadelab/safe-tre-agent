@@ -81,8 +81,8 @@ than inventing a new TRE model from scratch.
 The prototype already demonstrates:
 
 - strict `QuerySpec` validation with no extra fields;
-- a finite public catalogue that omits direct identifiers, free text, raw
-  timestamps, and high-granularity age fields;
+- a finite public catalogue that omits direct identifiers, free text, and raw
+  timestamps, with high-granularity age restricted to internal fixed-tool use;
 - inspectable SQL plans over read-only DuckDB views;
 - bound parameters for filter values;
 - small-cell, dominance, count-rounding, and egress checks;

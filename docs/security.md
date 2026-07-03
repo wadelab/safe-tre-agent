@@ -74,7 +74,7 @@ See [Safepod model](safepod.md) for the physical controls and failure modes.
 |---|---|---|---|---|
 | 1 | Arbitrary code / RCE | model writes hostile code | model writes **no code**; only a QuerySpec | `query.py` |
 | 2 | SQL injection | crafted filter value | values are **bound parameters**; identifiers allowlisted + regex-checked | `engine.py` |
-| 3 | Identifier / free-text egress | query selects `donor_id` / `free_text` | not in any view, not in the catalogue, and re-checked at the gateway | `engine.py`, `disclosure.py` |
+| 3 | Identifier / free-text egress | query selects `donor_id` / `free_text` | not in public views/catalogue, and re-checked at the gateway | `engine.py`, `disclosure.py` |
 | 4 | Small-cell / dominance disclosure | over-granular grouping; one donor dominating a cell | minimum cell size (10); **p%-dominance** suppression; counts rounded to 5 | `disclosure.py`, `engine.py` |
 | 5 | Differencing / triangulation | many "safe" queries combined | per-session auditor flags near-equal totals; query budget *(shallow — see roadmap)* | `disclosure.py` |
 | 6 | Prompt injection via data | planted `free_text` tells model to exfiltrate | model can only emit a QuerySpec; `free_text` is unqueryable | `query.py` |
@@ -86,6 +86,10 @@ See [Safepod model](safepod.md) for the physical controls and failure modes.
 | 12 | Bypass the safepod channel | accidental public bind, direct LAN access, spoofed proxy headers | restricted-channel middleware checks real peer address; uvicorn binds localhost; systemd/network firewall deny non-channel traffic | `safetre_web/channel.py`, deployment |
 | 13 | LLM endpoint egress / SSRF | real planner configured to external or internal service URL | local-first default; allowlisted model endpoint hosts; remote endpoints require explicit synthetic-data opt-in | `safetre/llm.py` |
 | 14 | Tool-manifest drift | outside planner proposes unavailable or outdated tools | manifest hash, deterministic safepod validation, planned tools are non-executable until implemented and reviewed | `safetre/manifest.py`, `query.py` |
+
+Raw age is treated as an internal analysis variable, not a public column. Fixed
+tools may use it inside the safepod, for example donor-level age/spend
+correlation, but it cannot be grouped, selected, rendered, or returned.
 
 The red-team (`redteam/run_redteam.py`) and the test suite exercise these
 directly (see `tests/test_secure.py`, `test_invariants.py`, `test_disclosure.py`).

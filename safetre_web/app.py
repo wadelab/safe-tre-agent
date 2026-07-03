@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import os
 import pathlib
+import math
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -52,6 +53,16 @@ def make_planner():
         from safetre.llm import LLMClient
         return LLMPlanner(LLMClient())
     return MockPlanner()
+
+
+def _format_p_value(value) -> str:
+    try:
+        p = float(value)
+    except (TypeError, ValueError):
+        return ""
+    if not math.isfinite(p):
+        return ""
+    return f"{p:.3f}"
 
 
 class QueryRequest(BaseModel):
@@ -107,8 +118,10 @@ def query(request: Request, body: QueryRequest):
 
     table_html = None
     if result.output is not None:
+        formatters = {"p_value": _format_p_value} if "p_value" in result.output.columns else None
         table_html = result.output.to_html(index=False, border=0,
-                                            classes="agg", escape=True)
+                                            classes="agg", escape=True,
+                                            formatters=formatters)
         table_html = table_html.replace(' style="text-align: right;"', "")
     spent = getattr(sess.auditor, "_spent", 0)
     return templates.TemplateResponse(request, "_result.html", {

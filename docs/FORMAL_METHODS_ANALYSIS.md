@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-**This system is unusually well-suited for formal verification.** The query space is finite and enumerable — 2 datasets, ~16 dimensions, ~8 measures, 3 aggregate functions, 7 operators, and bounded group-by/filter counts — making security properties decidable in ways that would not work for arbitrary SQL systems.
+**This system is unusually well-suited for formal verification.** The query space is finite and enumerable — a small set of datasets, dimensions, measures, fixed aggregate functions, operators, and bounded group-by/filter counts — making security properties decidable in ways that would not work for arbitrary SQL systems.
 
 This document catalogues the existing lightweight formal guarantees, identifies six concrete opportunities for stronger formal methods, proposes a phased roadmap, and notes the inherent limits of what formal methods can achieve in this context.
 
@@ -15,10 +15,10 @@ The system already employs several techniques that border on formal guarantees:
 | Layer | File(s) | Technique | Guarantee |
 |-------|---------|-----------|-----------|
 | Query schema | `safetre/query.py` | Pydantic `extra="forbid"` + `Literal` types | The LLM cannot invent new JSON fields — any extra keys are rejected at parse time |
-| Catalogue allowlist | `safetre/query.py` (`CATALOGUE`) | Finite dictionary of permitted columns | Direct identifiers (`donor_id`), free text (`free_text`), timestamps (`ts`), and high-granularity fields (`age_years`) are **absent by construction**, not filtered out at runtime |
+| Catalogue allowlist | `safetre/query.py` (`CATALOGUE`) | Finite dictionary of permitted public and internal-only columns | Direct identifiers (`donor_id`), free text (`free_text`), and timestamps (`ts`) are **absent by construction**; high-granularity variables such as `age_years` are internal-only and cannot be grouped or returned |
 | Identifier validation | `safetre/engine.py` (`_ident()`) | Regex `^[a-z_][a-z0-9_]*$` on all column names | SQL injection through identifiers is impossible — only valid bare names pass |
 | Filter value binding | `safetre/engine.py` (`_where()`) | Bound `?` parameters in DuckDB | SQL injection through filter values is impossible |
-| View separation | `safetre/engine.py` (`_VIEWS` / `_UNIT_VIEWS`) | Public views exclude `donor_id`; internal unit views exist only for dominance computation and are never selectable via `QuerySpec` | Identifiers cannot be reached through the public query path |
+| View separation | `safetre/engine.py` (`_VIEWS` / `_UNIT_VIEWS`) | Public views exclude `donor_id`, `free_text`, and raw age; internal unit views exist only for fixed tools and disclosure machinery | Identifiers cannot be reached through the public query path |
 | Static regression guards | `tests/test_invariants.py` | Static code inspection at test time | Catches regressions if someone adds identifiers to the catalogue or weakens disclosure thresholds |
 | Pydantic value typing | `safetre/query.py` (`_check_value()`) | Per-column type checking (str for `cat`, bool for `bool`, int for `int`) | Filter values match the expected column type, preventing type-confusion attacks |
 
@@ -42,7 +42,7 @@ theorem no_identifier_leakage (q : QuerySpec) :
     col ∉ identifierColumns
 ```
 
-**Why it's tractable:** The catalogue has ~24 entries (16 dimensions + 8 measures across 2 datasets) and the identifier set has 4 members (`donor_id`, `free_text`, `ts`, `age_years`). The proof is essentially a set-membership check over a small finite domain — Lean 4's `decide` or `simp` tactic handles it automatically.
+**Why it's tractable:** The catalogue has a small finite number of public and internal-only entries, and the forbidden identifier/text/timestamp set is explicit. The proof is essentially a set-membership check over a small finite domain — Lean 4's `decide` or `simp` tactic handles it automatically.
 
 **CI integration:** Install `elan` (the Lean toolchain manager) and run `lean --check formal/QuerySpec.lean` as a CI step. If the proof fails, the build fails.
 
@@ -97,7 +97,8 @@ This is not a machine-checked grammar proof yet, but it makes the SQL safety con
 
 | Label | Columns | Policy |
 |-------|---------|--------|
-| **Secret** | `donor_id`, `free_text`, `ts`, `age_years` | Never released in any form |
+| **Secret** | `donor_id`, `free_text`, `ts` | Never released in any form |
+| **Internal-only** | `age_years` | Usable only inside fixed validator-approved tools; never grouped or returned |
 | **Sensitive** | `amount_chf`, `ingame_currency`, `pgsi_score`, `igds_score`, `wemwbs_score`, `monthly_spend_selfreport` | Released only as aggregates (count/mean/sum/correlation) with suppression and rounding |
 | **Public** | `age_band`, `sex`, `canton`, `income_band`, `device_os`, `genre`, `contains_lootboxes`, `price_tier`, `event_type`, `age_rating`, `wave` | Releasable as grouping dimensions (with cell-size thresholds) |
 
@@ -182,7 +183,7 @@ This does not replace Lean/Alloy, but it gives CI a broad executable approximati
 ### Phase 1 — Quick Wins (1–2 weeks)
 
 - [ ] Formalize `CATALOGUE` and `QuerySpec` in Lean 4
-- [ ] Prove identifier non-membership (no valid query can reference `donor_id`, `free_text`, `ts`, or `age_years`)
+- [ ] Prove identifier non-membership (no valid query can reference `donor_id`, `free_text`, or `ts`) and internal-only non-release (`age_years` can affect only approved fixed-tool outputs)
 - [ ] Add CI step: `lean --check formal/QuerySpec.lean`
 - [x] Add Hypothesis property-based testing in `tests/test_query_properties.py` to fuzz-generate valid `QuerySpec` instances and verify executable boundary invariants
 - [ ] Add security labels (`DI`, `QI`, `S`, `R`) to `CATALOGUE` entries and prove label consistency at the type level
