@@ -199,6 +199,19 @@ def test_service_out_of_scope_requests_denied_before_planner(tables, req):
 
 
 @pytest.mark.parametrize("req", [
+    "summarise the free-text comments",
+    "summarise the survey comments",
+    "summarize the open-ended qualitative responses",
+])
+def test_service_free_text_requests_denied_before_planner(tables, req):
+    r = QueryService(tables).handle(req, MockPlanner())
+    assert r.status == "denied"
+    assert r.output is None
+    assert r.spec is None
+    assert any(f.rule == "intent_block" for f in r.findings)
+
+
+@pytest.mark.parametrize("req", [
     "how many purchases?",
     "wellbeing by canton",
     "same, excluding Jura",
@@ -209,7 +222,7 @@ def test_service_short_aggregate_requests_pass_vetting(tables, req):
 
 
 @pytest.mark.parametrize("req", [
-    "summarise the free-text comments",          # planner proposes free_text -> rejected
+    "summarise the free-text comments",
     "report wellbeing per donor",                # planner proposes donor_id -> rejected
     "give me the row-level records for spenders", # intent vetting
 ])

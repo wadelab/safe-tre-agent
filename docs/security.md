@@ -114,10 +114,12 @@ escalation path, not the live agent.
 
 ## Defence in depth (the same fact checked twice)
 
-Identifiers and free text are blocked in **three** independent places: they are
-absent from the catalogue (validation rejects them), absent from the DuckDB
-views (the engine cannot select them), and re-checked by the gateway's
-`leak_detector` before release. A bug in any one layer does not leak data.
+Identifiers and free text are blocked in **four** independent places: explicit
+requests for raw rows, identifiers, or free text are stopped by intent vetting;
+those fields are absent from the catalogue (validation rejects them), absent
+from the DuckDB views (the engine cannot select them), and re-checked by the
+gateway's `leak_detector` before release. A bug in any one layer does not leak
+data.
 
 ## Deployment hardening
 

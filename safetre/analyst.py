@@ -37,6 +37,11 @@ Return ONLY the Python code.
 # requests we will not even send to the model
 BLOCKED_INTENT = ["row-level", "row level", "individual record", "raw rows",
                   "deanonymise", "deanonymize", "re-identify", "reidentify"]
+BLOCKED_TEXT_INTENT = [
+    "free-text", "free text", "raw text", "verbatim",
+    "open-ended", "open ended", "qualitative response",
+    "qualitative responses", "comments", "comment field",
+]
 ANALYSIS_CUES = [
     "aggregate", "summary", "summarise", "summarize", "report", "mean",
     "average", "sum", "sums", "total", "count", "counts", "number",
@@ -69,6 +74,9 @@ def vet_request(request: str) -> tuple[bool, str]:
     for bad in BLOCKED_INTENT:
         if bad in low:
             return False, f"request intent blocked ({bad!r})"
+    for bad in BLOCKED_TEXT_INTENT:
+        if bad in low:
+            return False, f"free-text request blocked ({bad!r})"
     has_analysis_cue = any(cue in low for cue in ANALYSIS_CUES)
     has_domain_cue = any(cue in low for cue in DOMAIN_CUES)
     if not (has_analysis_cue and has_domain_cue):
