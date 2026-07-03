@@ -108,7 +108,8 @@ All configuration is via environment variables.
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `SAFETRE_LLM` | `mock` | `mock` (deterministic MockPlanner) or `real` (local model planner) |
+| `SAFETRE_LLM` | `mock` | `mock` (deterministic MockPlanner), `real` (generic model planner), or `exampleprovider` (synthetic-data remote demo only) |
+| `SAFETRE_LLM_PROVIDER` | `generic` | optional provider profile; `exampleprovider` selects the ExampleProvider API defaults |
 | `SAFETRE_LLM_BASE_URL` | `http://127.0.0.1:8000/v1` | OpenAI-compatible local model endpoint |
 | `SAFETRE_LLM_API_KEY` | `local` | bearer token for the local endpoint, if required |
 | `SAFETRE_LLM_MODEL` | `local-120b` | runtime model id; default documents the 120B-class planning assumption |
@@ -116,6 +117,7 @@ All configuration is via environment variables.
 | `SAFETRE_LLM_TIMEOUT` | `60` | model request timeout in seconds |
 | `SAFETRE_ALLOWED_LLM_HOSTS` | `localhost,127.0.0.1,::1` | comma-separated model endpoint hosts allowed without remote opt-in |
 | `SAFETRE_ALLOW_REMOTE_LLM` | unset | set `1` only for synthetic-data remote endpoint experiments |
+| `PROVIDER_API_KEY` | unset | ExampleProvider API key fallback when `SAFETRE_LLM=exampleprovider` and `SAFETRE_LLM_API_KEY` is unset |
 | `SAFETRE_ALLOWLIST` | – (open) | comma-separated Safe People logins |
 | `SAFETRE_REQUIRE_IDENTITY` | unset | set `1` in production to deny requests without tailnet identity |
 | `SAFETRE_RESTRICTED_CHANNEL` | `1` | reject requests outside the approved channel unless set to `0` |

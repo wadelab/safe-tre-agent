@@ -99,6 +99,49 @@ class DisclosurePolicy:
             out[c] = (out[c] / self.round_base).round().astype(int) * self.round_base
         return out
 
+    def _secondary_suppress(self, original: pd.DataFrame,
+                            released: pd.DataFrame) -> tuple[pd.DataFrame, int]:
+        """Complementary suppression: a margin with exactly one suppressed cell
+        leaks it (margin total minus the released cells recovers the value), so
+        also suppress the smallest remaining cell in that margin.
+
+        Exact for one group-by dimension (margin = the grand total, obtainable
+        as a coarser query). For >=2 dimensions it conservatively applies the
+        same rule per dimension level; complete multi-dimensional suppression
+        is an LP problem whose proper home is ACRO (round 3). Cross-query
+        margin attacks are the lineage auditor's job, not this one's.
+        """
+        count_cols = _count_cols(original)
+        # group dims are categorical/int; float columns are measures, not margins
+        group_cols = [c for c in original.columns
+                      if str(c).lower() not in COUNT_COLUMNS | {"value", "dominance"}
+                      and not pd.api.types.is_float_dtype(original[c])]
+        if not count_cols or not group_cols or len(released) == len(original):
+            return released, 0
+        size = count_cols[0]
+
+        # each margin = a slice that has its own recoverable total
+        if len(group_cols) == 1:
+            margins = [[]]                              # the grand total
+        else:
+            margins = [[(dim, lvl)] for dim in group_cols
+                       for lvl in original[dim].unique()]
+
+        extra = 0
+        changed = True
+        while changed and len(released):                # each pass drops >=1 row
+            changed = False
+            for margin in margins:
+                orig_slice, rel_slice = original, released
+                for dim, lvl in margin:
+                    orig_slice = orig_slice[orig_slice[dim] == lvl]
+                    rel_slice = rel_slice[rel_slice[dim] == lvl]
+                if len(orig_slice) - len(rel_slice) == 1 and len(rel_slice) > 0:
+                    released = released.drop(index=rel_slice[size].idxmin())
+                    extra += 1
+                    changed = True
+        return released, extra
+
     def apply(self, df: pd.DataFrame | None):
         """Return (released_df_or_None, action, findings).
 
@@ -119,6 +162,11 @@ class DisclosurePolicy:
                 redacted = redacted[redacted[c] >= self.threshold]
             if "dominance" in redacted.columns:
                 redacted = redacted[redacted["dominance"] <= self.dom_threshold]
+            redacted, extra = self._secondary_suppress(df, redacted)
+            if extra:
+                findings.append(Finding(
+                    "low", "secondary_suppression",
+                    f"{extra} complementary cell(s) suppressed to protect margins"))
             return self._finalize(redacted), "redacted", findings
 
         return self._finalize(df), "release", findings
@@ -126,10 +174,24 @@ class DisclosurePolicy:
 
 @dataclass
 class SessionAuditor:
-    """Tracks released aggregates to catch differencing/triangulation."""
+    """Tracks released aggregates to catch differencing/triangulation.
+
+    Two layers:
+    - `observe` — cheap first pass comparing released totals per measure.
+    - `observe_cohort` / `record_cohort` — query lineage: each released
+      query's cohort (its normalized filter predicate) is remembered, and a new
+      cohort whose symmetric difference with a prior one is a small set of
+      individuals is flagged, whatever the totals look like. This catches
+      sum/mean differencing across overlapping cohorts that the total-delta
+      check cannot see.
+
+    Deterministic and explainable by design; does not defend across sessions or
+    colluding users (that needs global accounting — DP, round 3).
+    """
     threshold: int = 10
     budget: int = 20
     _history: list[tuple[str, float]] = field(default_factory=list)
+    _cohorts: list[tuple[str, tuple]] = field(default_factory=list)
     _spent: int = 0
 
     def observe(self, measure: str, total_n: float) -> list[Finding]:
@@ -146,6 +208,31 @@ class SessionAuditor:
                                         "possible differencing attack"))
         self._history.append((measure, total_n))
         return findings
+
+    def observe_cohort(self, dataset: str, filters: tuple, symdiff) -> list[Finding]:
+        """Flag a cohort nearly identical to one already released this session.
+
+        `filters` is QuerySpec.normalized_filters(); `symdiff(a, b) -> int`
+        counts distinct units in exactly one of the two cohorts (the engine
+        computes it on internal unit views; the count itself is never released).
+        Cost is bounded by the session budget: at most `budget` prior cohorts.
+        """
+        for prev_dataset, prev_filters in self._cohorts:
+            if prev_dataset != dataset or prev_filters == filters:
+                continue
+            d = symdiff(prev_filters, filters)
+            if 0 < d < self.threshold:
+                return [Finding(
+                    "high", "differencing",
+                    f"cohort differs from a previously released cohort by "
+                    f"{d} individual(s) (<{self.threshold}): "
+                    "possible differencing attack")]
+        return []
+
+    def record_cohort(self, dataset: str, filters: tuple) -> None:
+        """Remember a cohort once its result has actually been released."""
+        if (dataset, filters) not in self._cohorts:
+            self._cohorts.append((dataset, filters))
 
 
 def hitl_decision(findings: list[Finding]) -> str:

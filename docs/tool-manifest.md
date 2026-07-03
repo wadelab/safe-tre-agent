@@ -54,10 +54,14 @@ The current endpoint is:
 GET /api/manifest
 ```
 
-It currently publishes only one executable tool: `aggregate_query`. Planned
-stats families such as `glm`, `anova`, and `regression` are listed as planned
-only. A proposed tool call is executable only if it appears in `tools[]` with
-`status: "available"`.
+It currently publishes only one executable tool: `aggregate_query`. That tool
+supports fixed count, mean, sum, and Pearson correlation requests. Correlation
+uses two validated measure columns from one dataset and returns only aggregate
+`value`, `p_value`, and `n`.
+
+Planned stats families such as `glm`, `anova`, and `regression` are listed as
+planned only. A proposed tool call is executable only if it appears in `tools[]`
+with `status: "available"`.
 
 ## Inside vetting
 

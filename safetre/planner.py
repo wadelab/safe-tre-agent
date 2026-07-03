@@ -34,9 +34,12 @@ PLANNER_SYSTEM = (
     "You translate a researcher's request into a QuerySpec JSON for a Trusted "
     "Research Environment. You CANNOT write code or SQL and CANNOT access "
     "individuals. Output ONLY JSON of the form:\n"
-    '{"dataset":"spend|wellbeing","measure":{"fn":"count|mean|sum","column":'
-    '<measure column or null>},"group_by":[...],"filters":[{"column":...,'
+    '{"dataset":"spend|wellbeing","measure":{"fn":"count|mean|sum|corr",'
+    '"column":<measure column or null>,"x":<corr measure column or null>,'
+    '"y":<corr measure column or null>},"group_by":[...],"filters":[{"column":...,'
     '"op":"==|!=|<|<=|>|>=|in","value":...}]}\n'
+    "For correlation requests, use fn='corr' with x and y set to two allowed "
+    "measure columns from the same dataset, and column null. "
     "Published tool manifest (anything else is rejected):\n" + _manifest_text() +
     "\nNever reference identifiers, names, timestamps or free text. JSON only."
 )
@@ -80,6 +83,20 @@ class MockPlanner:
             return {"dataset": "wellbeing",
                     "measure": {"fn": "mean", "column": "wemwbs_score"},
                     "group_by": ["donor_id"]}
+
+        if "correlat" in u or "relationship" in u or "association" in u:
+            if "wellbeing" in u or "wemwbs" in u:
+                return {"dataset": "wellbeing",
+                        "measure": {"fn": "corr",
+                                    "x": "monthly_spend_selfreport",
+                                    "y": "wemwbs_score"}}
+            if "pgsi" in u or "gambling" in u:
+                return {"dataset": "wellbeing",
+                        "measure": {"fn": "corr",
+                                    "x": "monthly_spend_selfreport",
+                                    "y": "pgsi_score"}}
+            return {"dataset": "spend",
+                    "measure": {"fn": "corr", "x": "amount_chf", "y": "ingame_currency"}}
 
         if "wellbeing" in u:
             return {"dataset": "wellbeing",

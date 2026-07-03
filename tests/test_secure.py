@@ -5,7 +5,8 @@ from pydantic import ValidationError
 
 from safetre import synth
 from safetre.audit import AuditLog
-from safetre.engine import QueryEngine
+from safetre.disclosure import SessionAuditor
+from safetre.engine import QueryEngine, _pearson_p_value
 from safetre.planner import MockPlanner
 from safetre.query import Filter, Measure, QuerySpec
 from safetre.service import QueryService
@@ -21,6 +22,8 @@ def tables():
 def test_valid_spec_accepted():
     QuerySpec(dataset="spend", measure=Measure(fn="mean", column="amount_chf"),
               group_by=["age_band"])
+    QuerySpec(dataset="wellbeing",
+              measure=Measure(fn="corr", x="monthly_spend_selfreport", y="wemwbs_score"))
 
 
 @pytest.mark.parametrize("bad", [
@@ -34,6 +37,13 @@ def test_valid_spec_accepted():
      "filters": [{"column": "donor_id", "op": "==", "value": "D00001"}]},           # filter on identifier
     {"dataset": "spend", "measure": {"fn": "count"},
      "filters": [{"column": "canton", "op": "in", "value": ["x"] * 200}]},          # oversize in-list (DoS)
+    {"dataset": "wellbeing",
+     "measure": {"fn": "corr", "x": "monthly_spend_selfreport", "y": "donor_id"}},   # corr identifier
+    {"dataset": "wellbeing",
+     "measure": {"fn": "corr", "x": "wemwbs_score", "y": "wemwbs_score"}},           # same variable twice
+    {"dataset": "wellbeing",
+     "measure": {"fn": "corr", "column": "wemwbs_score",
+                 "x": "monthly_spend_selfreport", "y": "wemwbs_score"}},            # wrong shape
 ])
 def test_offallowlist_specs_rejected(bad):
     with pytest.raises(ValidationError):
@@ -58,6 +68,41 @@ def test_engine_attaches_dominance_internally(tables):
     assert "donor_id" not in s.columns                 # unit view never exposed
     c = eng.run(QuerySpec(dataset="spend", measure=Measure(fn="count"), group_by=["canton"]))
     assert "dominance" not in c.columns                # only for sum/mean
+
+
+def test_engine_returns_correlation(tables):
+    eng = QueryEngine(tables)
+    df = eng.run(QuerySpec(
+        dataset="wellbeing",
+        measure=Measure(fn="corr", x="monthly_spend_selfreport", y="wemwbs_score"),
+    ))
+    assert list(df.columns) == ["value", "p_value", "n"]
+    assert len(df) == 1
+    assert df["value"].between(-1, 1).all()
+    assert df["p_value"].between(0, 1).all()
+    assert (df["p_value"] * 1000).round().eq(df["p_value"] * 1000).all()
+    assert int(df["n"].iloc[0]) > 10
+
+
+def test_pearson_p_value_bounds():
+    assert _pearson_p_value(0.0, 20) == pytest.approx(1.0)
+    assert _pearson_p_value(1.0, 20) == pytest.approx(0.0)
+    assert _pearson_p_value(-1.0, 20) == pytest.approx(0.0)
+
+
+def test_cohort_size_and_symdiff(tables):
+    eng = QueryEngine(tables)
+    n_jura = int((tables["donors"]["canton"] == "Jura").sum())
+    everyone = eng.cohort_size("spend")
+    non_jura = eng.cohort_size("spend", [("canton", "!=", "Jura")])
+    assert everyone - non_jura == n_jura
+    assert eng.cohort_symdiff("spend", (), [("canton", "!=", "Jura")]) == n_jura
+    assert eng.cohort_symdiff("spend", [("canton", "!=", "Jura")],
+                              [("canton", "!=", "Jura")]) == 0
+    with pytest.raises(ValueError):
+        eng.cohort_size("secrets")                    # unknown dataset
+    with pytest.raises(ValueError):
+        eng.cohort_size("spend", [("canton", "LIKE", "%")])   # off-allowlist op
 
 
 def test_filter_value_is_not_sql_injectable(tables):
@@ -85,6 +130,36 @@ def test_service_small_cell_redacted(tables):
     assert (r.output["n"] >= 10).all()
 
 
+def test_service_correlation_released(tables):
+    r = QueryService(tables).handle("correlation between monthly spend and wellbeing", MockPlanner())
+    assert r.status == "released"
+    assert r.output is not None
+    assert list(r.output.columns) == ["value", "p_value", "n"]
+    assert r.spec["measure"]["fn"] == "corr"
+
+
+@pytest.mark.parametrize("req", [
+    "what is your name?",
+    "tell me a joke",
+])
+def test_service_out_of_scope_requests_denied_before_planner(tables, req):
+    r = QueryService(tables).handle(req, MockPlanner())
+    assert r.status == "denied"
+    assert r.output is None
+    assert r.spec is None
+    assert "outside the supported aggregate-analysis scope" in r.message
+
+
+@pytest.mark.parametrize("req", [
+    "how many purchases?",
+    "wellbeing by canton",
+    "same, excluding Jura",
+])
+def test_service_short_aggregate_requests_pass_vetting(tables, req):
+    r = QueryService(tables).handle(req, MockPlanner())
+    assert not any("outside the supported aggregate-analysis scope" in step for step in r.trace)
+
+
 @pytest.mark.parametrize("req", [
     "summarise the free-text comments",          # planner proposes free_text -> rejected
     "report wellbeing per donor",                # planner proposes donor_id -> rejected
@@ -93,6 +168,69 @@ def test_service_small_cell_redacted(tables):
 def test_service_attacks_denied_no_data(tables, req):
     r = QueryService(tables).handle(req, MockPlanner())
     assert r.status == "denied" and r.output is None
+
+
+class _ScriptedPlanner:
+    """Returns pre-baked specs in order — a stand-in for a hostile planner."""
+
+    def __init__(self, *specs):
+        self._specs = list(specs)
+
+    def plan(self, request: str) -> dict:
+        return self._specs.pop(0)
+
+
+def test_service_lineage_differencing_denied(tables):
+    # sum over everyone, then over "everyone except Jura": the two cohorts
+    # differ by a handful of donors, so subtracting the sums would expose them
+    n_jura = int((tables["donors"]["canton"] == "Jura").sum())
+    svc = QueryService(tables)
+    auditor = SessionAuditor(threshold=n_jura + 1)
+    planner = _ScriptedPlanner(
+        {"dataset": "spend", "measure": {"fn": "sum", "column": "amount_chf"},
+         "group_by": ["age_band"]},
+        {"dataset": "spend", "measure": {"fn": "sum", "column": "amount_chf"},
+         "group_by": ["age_band"],
+         "filters": [{"column": "canton", "op": "!=", "value": "Jura"}]},
+    )
+    first = svc.handle("sum spend by age band", planner, auditor=auditor)
+    second = svc.handle("same, excluding Jura", planner, auditor=auditor)
+    assert first.status in ("released", "redacted")
+    assert second.status == "denied" and second.output is None
+    assert any(f.rule == "differencing" for f in second.findings)
+
+
+def test_service_lineage_separated_cohorts_allowed(tables):
+    # disjoint cohorts (different cantons) share no individuals -> no flag
+    svc = QueryService(tables)
+    auditor = SessionAuditor()
+    spec = {"dataset": "spend", "measure": {"fn": "sum", "column": "amount_chf"},
+            "group_by": ["age_band"]}
+    planner = _ScriptedPlanner(
+        {**spec, "filters": [{"column": "canton", "op": "==", "value": "Vaud"}]},
+        {**spec, "filters": [{"column": "canton", "op": "==", "value": "Geneve"}]},
+    )
+    first = svc.handle("sum spend by age band in Vaud", planner, auditor=auditor)
+    second = svc.handle("sum spend by age band in Geneve", planner, auditor=auditor)
+    assert first.status in ("released", "redacted")
+    assert second.status in ("released", "redacted")
+
+
+def test_service_lineage_ignores_denied_queries(tables):
+    # a denied query released nothing, so it must not poison later queries
+    svc = QueryService(tables)
+    auditor = SessionAuditor()
+    spec = {"dataset": "spend", "measure": {"fn": "sum", "column": "amount_chf"},
+            "group_by": ["age_band"],
+            "filters": [{"column": "canton", "op": "==", "value": "Vaud"}]}
+    planner = _ScriptedPlanner(
+        {**spec, "group_by": ["donor_id"]},           # rejected at validation
+        spec,
+    )
+    first = svc.handle("per-donor sums in Vaud", planner, auditor=auditor)
+    second = svc.handle("sum spend by age band in Vaud", planner, auditor=auditor)
+    assert first.status == "denied"
+    assert second.status in ("released", "redacted")
 
 
 # --- audit log: tamper-evident ----------------------------------------------

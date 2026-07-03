@@ -36,10 +36,14 @@ Good requests are specific about the outcome, grouping, and filters:
 - `mean wellbeing by canton`
 - `total spend by device os for purchases`
 - `count by sex and age band`
+- `correlation between monthly spend self report and wellbeing score`
 
-The current executable tool is `aggregate_query`: count, mean, and sum over
-allowlisted datasets. Future tools such as GLM, regression, and ANOVA will appear
-in the manifest only after they have fixed schemas and disclosure checks.
+The current executable tool is `aggregate_query`: count, mean, sum, and Pearson
+correlation over allowlisted datasets. Correlation is fixed-function: it can only
+use two allowlisted measure columns from the same dataset and returns `value`,
+`p_value`, and `n` after the normal disclosure and session checks. Future tools
+such as GLM, regression, and ANOVA will appear in the manifest only after they
+have fixed schemas and disclosure checks.
 
 ## Results
 

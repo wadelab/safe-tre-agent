@@ -13,6 +13,7 @@ Security properties:
 
 from __future__ import annotations
 
+import math
 import re
 from dataclasses import dataclass
 from typing import Any
@@ -82,33 +83,119 @@ class SQLPlan:
     source_view: str
 
 
-def _where(spec: QuerySpec) -> tuple[str, tuple[Any, ...]]:
+_FILTER_OPS = {"==", "!=", "<", "<=", ">", ">=", "in"}
+_BETA_EPS = 3e-14
+_BETA_FPMIN = 1e-300
+_BETA_MAX_ITER = 200
+
+
+def _betacf(a: float, b: float, x: float) -> float:
+    """Continued fraction for the incomplete beta function."""
+    qab = a + b
+    qap = a + 1.0
+    qam = a - 1.0
+    c = 1.0
+    d = 1.0 - qab * x / qap
+    if abs(d) < _BETA_FPMIN:
+        d = _BETA_FPMIN
+    d = 1.0 / d
+    h = d
+    for m in range(1, _BETA_MAX_ITER + 1):
+        m2 = 2 * m
+        aa = m * (b - m) * x / ((qam + m2) * (a + m2))
+        d = 1.0 + aa * d
+        if abs(d) < _BETA_FPMIN:
+            d = _BETA_FPMIN
+        c = 1.0 + aa / c
+        if abs(c) < _BETA_FPMIN:
+            c = _BETA_FPMIN
+        d = 1.0 / d
+        h *= d * c
+        aa = -(a + m) * (qab + m) * x / ((a + m2) * (qap + m2))
+        d = 1.0 + aa * d
+        if abs(d) < _BETA_FPMIN:
+            d = _BETA_FPMIN
+        c = 1.0 + aa / c
+        if abs(c) < _BETA_FPMIN:
+            c = _BETA_FPMIN
+        d = 1.0 / d
+        delta = d * c
+        h *= delta
+        if abs(delta - 1.0) < _BETA_EPS:
+            break
+    return h
+
+
+def _regularized_beta(x: float, a: float, b: float) -> float:
+    if x <= 0.0:
+        return 0.0
+    if x >= 1.0:
+        return 1.0
+    bt = math.exp(
+        math.lgamma(a + b) - math.lgamma(a) - math.lgamma(b)
+        + a * math.log(x) + b * math.log1p(-x)
+    )
+    if x < (a + 1.0) / (a + b + 2.0):
+        return bt * _betacf(a, b, x) / a
+    return 1.0 - bt * _betacf(b, a, 1.0 - x) / b
+
+
+def _pearson_p_value(r: float, n: int) -> float:
+    """Two-sided p-value for Pearson r using Student's t distribution."""
+    if n < 3 or not math.isfinite(r):
+        return float("nan")
+    abs_r = min(abs(r), 1.0)
+    if abs_r >= 1.0:
+        return 0.0
+    df = n - 2
+    p = _regularized_beta(1.0 - abs_r * abs_r, df / 2.0, 0.5)
+    return max(0.0, min(1.0, p))
+
+
+def _where_triples(filters) -> tuple[str, tuple[Any, ...]]:
+    """WHERE clause from (column, op, value) triples; values stay bound params."""
     clauses, params = [], []
-    for f in spec.filters:
-        col = _ident(f.column)
-        if f.op == "in":
-            placeholders = ", ".join("?" for _ in f.value)
+    for column, op, value in filters:
+        col = _ident(column)
+        if op == "in":
+            values = list(value)
+            placeholders = ", ".join("?" for _ in values)
             clauses.append(f"{col} IN ({placeholders})")
-            params.extend(f.value)
+            params.extend(values)
+        elif op in _FILTER_OPS:
+            clauses.append(f"{col} {op} ?")
+            params.append(value)
         else:
-            # `op` is a Literal allowlist; the value is bound separately.
-            clauses.append(f"{col} {f.op} ?")
-            params.append(f.value)
+            raise ValueError(f"illegal filter operator {op!r}")
     where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
     return where, tuple(params)
 
 
+def _where(spec: QuerySpec, extra_clauses: tuple[str, ...] = ()) -> tuple[str, tuple[Any, ...]]:
+    where, params = _where_triples((f.column, f.op, f.value) for f in spec.filters)
+    if extra_clauses:
+        prefix = " AND " if where else " WHERE "
+        where += prefix + " AND ".join(extra_clauses)
+    return where, params
+
+
 def compile_query(spec: QuerySpec) -> SQLPlan:
     """Compile a validated QuerySpec into the public read-only aggregate SQL."""
-    where, params = _where(spec)
+    extra: tuple[str, ...] = ()
     select = [_ident(g) for g in spec.group_by]
     if spec.measure.fn == "count":
         select.append("COUNT(*) AS value")
-    else:
+    elif spec.measure.fn in ("mean", "sum"):
         # fn is a Literal allowlist; column is allowlist- and regex-validated
         select.append(f"{spec.measure.fn.upper()}({_ident(spec.measure.column)}) AS value")
+    else:
+        x = _ident(spec.measure.x)
+        y = _ident(spec.measure.y)
+        extra = (f"{x} IS NOT NULL", f"{y} IS NOT NULL")
+        select.append(f"CORR({x}, {y}) AS value")
     select.append("COUNT(*) AS n")
 
+    where, params = _where(spec, extra)
     sql = f"SELECT {', '.join(select)} FROM {_ident(spec.dataset)}{where}"  # nosec
     if spec.group_by:
         sql += " GROUP BY " + ", ".join(_ident(g) for g in spec.group_by)
@@ -164,6 +251,14 @@ class QueryEngine:
         if spec.measure.fn in ("mean", "sum"):
             result["value"] = result["value"].round(2)
             result = self._attach_dominance(spec, compile_dominance_query(spec), result)
+        elif spec.measure.fn == "corr":
+            result["value"] = result["value"].round(4)
+            p_values = [
+                _pearson_p_value(float(r), int(n))
+                for r, n in zip(result["value"], result["n"], strict=True)
+            ]
+            result.insert(result.columns.get_loc("value") + 1, "p_value", p_values)
+            result["p_value"] = result["p_value"].round(3)
         return result
 
     def _attach_dominance(self, spec: QuerySpec, plan: SQLPlan, result: pd.DataFrame):
@@ -175,3 +270,35 @@ class QueryEngine:
             result = result.assign(dominance=(dom["dominance"].iloc[0] if len(dom) else 0.0))
         result["dominance"] = result["dominance"].fillna(0.0)
         return result
+
+    def _unit_view(self, dataset: str) -> str:
+        if dataset not in _UNIT_VIEWS:
+            raise ValueError(f"unknown dataset {dataset!r}")
+        return _ident(f"_{dataset}_u")
+
+    def cohort_size(self, dataset: str, filters=()) -> int:
+        """Distinct-donor count of a cohort, on the INTERNAL unit view.
+
+        `filters` are normalized (column, op, value) triples from a *validated*
+        QuerySpec. The count is used only by the session auditor and is never
+        released.
+        """
+        where, params = _where_triples(filters)
+        sql = f"SELECT COUNT(DISTINCT donor_id) FROM {self._unit_view(dataset)}{where}"  # nosec
+        return int(self.con.execute(sql, params).fetchone()[0])
+
+    def cohort_symdiff(self, dataset: str, filters_a, filters_b) -> int:
+        """|A △ B|: distinct donors in exactly one of two cohorts.
+
+        A small symmetric difference means the pair of released aggregates
+        differs by only a few individuals — the signature of a differencing
+        attack. Computed on the internal unit views; never released.
+        """
+        unit = self._unit_view(dataset)
+        wa, pa = _where_triples(filters_a)
+        wb, pb = _where_triples(filters_b)
+        a = f"SELECT DISTINCT donor_id FROM {unit}{wa}"  # nosec
+        b = f"SELECT DISTINCT donor_id FROM {unit}{wb}"  # nosec
+        # EXCEPT halves are distinct and disjoint, so UNION ALL is exact.
+        sql = f"SELECT COUNT(*) FROM (({a} EXCEPT {b}) UNION ALL ({b} EXCEPT {a})) t"  # nosec
+        return int(self.con.execute(sql, pa + pb + pb + pa).fetchone()[0])

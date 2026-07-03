@@ -104,6 +104,16 @@ The endpoint must implement OpenAI-compatible `/v1/chat/completions`. Remote
 model endpoints require `SAFETRE_ALLOW_REMOTE_LLM=1` and are for synthetic-data
 development only.
 
+For the ExampleProvider synthetic-data web demo:
+
+```bash
+export SAFETRE_LLM=exampleprovider
+export SAFETRE_ALLOW_REMOTE_LLM=1
+export PROVIDER_API_KEY=...
+export SAFETRE_LLM_MODEL=provider-pass/hosted-max
+scripts/run_web.sh
+```
+
 ## Safepod install
 
 The safepod host should not pull arbitrary updates at runtime. Do not run

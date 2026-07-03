@@ -31,6 +31,8 @@ def test_only_available_tools_are_executable():
     available = {tool["id"] for tool in manifest["tools"] if tool["status"] == "available"}
     planned = {tool["id"] for tool in manifest["planned_tool_classes"]}
     assert available == {"aggregate_query"}
+    assert manifest["tools"][0]["measures"]["functions"] == ["count", "mean", "sum", "corr"]
+    assert manifest["tools"][0]["release"]["corr_outputs"] == ["value", "p_value", "n"]
     assert not (available & planned)
     assert all(tool["status"] == "planned" for tool in manifest["planned_tool_classes"])
 

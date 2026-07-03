@@ -52,3 +52,5 @@ uv run --group docs mkdocs build
 ```
 
 `mkdocs build --strict` currently fails on known links from docs to source files outside `docs/`; do not treat that as a new regression unless those warnings change.
+
+On each new build, update a version tag visible in the webpage so that we can see which version of the code produced the interface we are using and also which verison goes with which docs.

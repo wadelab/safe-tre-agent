@@ -62,9 +62,17 @@ def test_small_cell_redacted():
     assert "status-redacted" in r.text
 
 
+def test_correlation_query_released():
+    r = client.post("/api/query", json={"q": "correlation between monthly spend and wellbeing"})
+    assert r.status_code == 200
+    assert "status-released" in r.text
+    assert "<table" in r.text
+    assert "p_value" in r.text
+
+
 def test_attacks_denied_render_no_table():
     for q in ["summarise the free-text comments", "wellbeing per donor",
-              "give me the row-level records"]:
+              "give me the row-level records", "what is your name?"]:
         r = client.post("/api/query", json={"q": q})
         assert "status-denied" in r.text
         assert "<table" not in r.text          # never render data on a denial
@@ -81,6 +89,8 @@ def test_manifest_endpoint_is_public_contract():
     manifest = r.json()
     assert manifest["manifest_sha256"]
     assert {tool["id"] for tool in manifest["tools"]} == {"aggregate_query"}
+    assert "corr" in manifest["tools"][0]["measures"]["functions"]
+    assert manifest["tools"][0]["release"]["corr_outputs"] == ["value", "p_value", "n"]
     assert "free_text" not in r.text
     assert "donor_id" not in r.text
 

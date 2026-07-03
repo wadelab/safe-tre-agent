@@ -8,9 +8,11 @@ Real local model:    SAFETRE_LLM=real SAFETRE_LLM_BASE_URL=http://127.0.0.1:8000
 import os
 import sys
 
-from safetre import synth
-from safetre.analyst import Analyst
-from safetre.llm import LLMClient, MockLLM
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from safetre import synth                     # noqa: E402
+from safetre.analyst import Analyst           # noqa: E402
+from safetre.llm import LLMClient, MockLLM    # noqa: E402
 
 
 def make_llm():

@@ -45,8 +45,10 @@ MAX_IN_VALUES = 50      # cap `in` lists to bound query cost (DoS)
 
 class Measure(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    fn: Literal["count", "mean", "sum"]
+    fn: Literal["count", "mean", "sum", "corr"]
     column: str | None = None
+    x: str | None = None
+    y: str | None = None
 
 
 class Filter(BaseModel):
@@ -86,13 +88,24 @@ class QuerySpec(BaseModel):
 
         # measure
         if self.measure.fn == "count":
-            if self.measure.column is not None:
+            if self.measure.column is not None or self.measure.x is not None or self.measure.y is not None:
                 raise ValueError("count takes no column")
-        else:
+        elif self.measure.fn in ("mean", "sum"):
+            if self.measure.x is not None or self.measure.y is not None:
+                raise ValueError(f"{self.measure.fn} takes one column, not x/y")
             if self.measure.column not in measures:
                 raise ValueError(
                     f"measure column {self.measure.column!r} not allowed for "
                     f"dataset {self.dataset!r} (allowed: {sorted(measures)})")
+        elif self.measure.fn == "corr":
+            if self.measure.column is not None:
+                raise ValueError("corr takes x and y, not column")
+            if self.measure.x not in measures or self.measure.y not in measures:
+                raise ValueError(
+                    f"corr x/y must be measure columns for dataset {self.dataset!r} "
+                    f"(allowed: {sorted(measures)})")
+            if self.measure.x == self.measure.y:
+                raise ValueError("corr requires two distinct measure columns")
 
         # group-by must be allowlisted dimensions
         for g in self.group_by:
@@ -128,4 +141,26 @@ class QuerySpec(BaseModel):
                 raise ValueError(f"{f.column!r} expects integer value(s)")
 
     def measure_key(self) -> str:
+        if self.measure.fn == "corr":
+            x, y = sorted((self.measure.x or "", self.measure.y or ""))
+            return f"{self.dataset}:corr:{x}:{y}"
         return f"{self.dataset}:{self.measure.fn}:{self.measure.column or '*'}"
+
+    def normalized_filters(self) -> tuple:
+        """Canonical, order-independent form of the filter set — the query's
+        *cohort* identity for session lineage auditing.
+
+        Filters are deduplicated and sorted; single-element `in` lists collapse
+        to `==` so semantically identical cohorts compare equal.
+        """
+        norm = set()
+        for f in self.filters:
+            if f.op == "in":
+                vals = tuple(sorted(set(f.value), key=repr))
+                if len(vals) == 1:
+                    norm.add((f.column, "==", vals[0]))
+                else:
+                    norm.add((f.column, "in", vals))
+            else:
+                norm.add((f.column, f.op, f.value))
+        return tuple(sorted(norm, key=repr))

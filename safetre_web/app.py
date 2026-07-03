@@ -23,6 +23,7 @@ from pydantic import BaseModel, Field
 
 from safetre import synth
 from safetre.audit import AuditLog
+from safetre.llm import real_llm_enabled
 from safetre.manifest import manifest_for_response
 from safetre.planner import LLMPlanner, MockPlanner
 from safetre.query import CATALOGUE
@@ -47,7 +48,7 @@ limiter = RateLimiter(int(os.environ.get("SAFETRE_RATE_LIMIT", "120")))
 
 
 def make_planner():
-    if os.environ.get("SAFETRE_LLM", "mock").lower() == "real":
+    if real_llm_enabled():
         from safetre.llm import LLMClient
         return LLMPlanner(LLMClient())
     return MockPlanner()

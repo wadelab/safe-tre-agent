@@ -70,6 +70,11 @@ class QueryService:
 
         total = float(df["n"].sum()) if "n" in df.columns else float(len(df))
         audit_findings = auditor.observe(spec.measure_key(), total)
+        # lineage: is this cohort a near-duplicate of one already released?
+        cohort = spec.normalized_filters()
+        audit_findings += auditor.observe_cohort(
+            spec.dataset, cohort,
+            lambda a, b: self.engine.cohort_symdiff(spec.dataset, a, b))
         trace.append(f"auditor: {[f.rule for f in audit_findings]}")
 
         released, action, findings = self.policy.apply(df)
@@ -81,6 +86,7 @@ class QueryService:
             return Result("denied", message="blocked by safe-outputs gateway",
                           spec=spec.model_dump(), findings=findings, trace=trace)
 
+        auditor.record_cohort(spec.dataset, cohort)
         status = "redacted" if action == "redacted" else "released"
         record(status, spec.model_dump(), findings, released)
         return Result(status, output=released, spec=spec.model_dump(),

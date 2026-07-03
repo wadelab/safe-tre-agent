@@ -37,6 +37,22 @@ Return ONLY the Python code.
 # requests we will not even send to the model
 BLOCKED_INTENT = ["row-level", "row level", "individual record", "raw rows",
                   "deanonymise", "deanonymize", "re-identify", "reidentify"]
+ANALYSIS_CUES = [
+    "aggregate", "summary", "summarise", "summarize", "report", "mean",
+    "average", "sum", "sums", "total", "count", "counts", "number",
+    "how many", "population", "distribution", "rate", "percent", "percentage",
+    "group", "grouped", " by ", " per ", "per-", "excluding", "exclude",
+    "filter", "where", "compare", "comparison", "breakdown", "outlier", "top",
+    "correlat", "relationship", "association",
+]
+DOMAIN_CUES = [
+    "spend", "spender", "spenders", "purchase", "purchases", "lootbox",
+    "lootboxes", "wellbeing", "survey", "pgsi", "igds", "wemwbs", "mental",
+    "age", "age band", "sex", "canton", "income", "device", "os", "genre",
+    "price", "event", "wave", "currency", "chf", "amount", "donor", "app",
+    "vaud", "geneve", "valais", "fribourg", "neuchatel", "jura", "free-text",
+    "free text", "comments",
+]
 
 
 @dataclass
@@ -49,10 +65,14 @@ class Response:
 
 
 def vet_request(request: str) -> tuple[bool, str]:
-    low = request.lower()
+    low = f" {request.lower()} "
     for bad in BLOCKED_INTENT:
         if bad in low:
             return False, f"request intent blocked ({bad!r})"
+    has_analysis_cue = any(cue in low for cue in ANALYSIS_CUES)
+    has_domain_cue = any(cue in low for cue in DOMAIN_CUES)
+    if not (has_analysis_cue and has_domain_cue):
+        return False, "request is outside the supported aggregate-analysis scope"
     return True, "ok"
 
 

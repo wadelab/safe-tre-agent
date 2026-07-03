@@ -59,8 +59,14 @@ def valid_queryspec_dicts(draw) -> dict:
     dataset = draw(st.sampled_from(sorted(CATALOGUE)))
     dims = sorted(CATALOGUE[dataset]["dims"])
     measures = sorted(CATALOGUE[dataset]["measures"])
-    fn = draw(st.sampled_from(["count", "mean", "sum"]))
-    measure = {"fn": fn, "column": None if fn == "count" else draw(st.sampled_from(measures))}
+    fn = draw(st.sampled_from(["count", "mean", "sum", "corr"]))
+    if fn == "count":
+        measure = {"fn": fn}
+    elif fn == "corr":
+        x, y = draw(st.lists(st.sampled_from(measures), min_size=2, max_size=2, unique=True))
+        measure = {"fn": fn, "x": x, "y": y}
+    else:
+        measure = {"fn": fn, "column": draw(st.sampled_from(measures))}
     group_by = draw(
         st.lists(
             st.sampled_from(dims),
@@ -78,6 +84,10 @@ def _touched_columns(spec: QuerySpec) -> set[str]:
     cols.update(f.column for f in spec.filters)
     if spec.measure.column is not None:
         cols.add(spec.measure.column)
+    if spec.measure.x is not None:
+        cols.add(spec.measure.x)
+    if spec.measure.y is not None:
+        cols.add(spec.measure.y)
     return cols
 
 
@@ -151,7 +161,7 @@ def test_compiled_public_sql_has_safe_shape(raw):
 def test_dominance_sql_is_internal_and_only_for_sum_or_mean(raw):
     spec = QuerySpec(**raw)
 
-    if spec.measure.fn == "count":
+    if spec.measure.fn not in ("mean", "sum"):
         with pytest.raises(ValueError):
             compile_dominance_query(spec)
         return
@@ -199,6 +209,12 @@ def test_forbidden_columns_are_rejected_everywhere(dataset, forbidden):
 
     with pytest.raises(ValidationError):
         QuerySpec(dataset=dataset, measure={"fn": "mean", "column": forbidden})
+
+    with pytest.raises(ValidationError):
+        QuerySpec(
+            dataset=dataset,
+            measure={"fn": "corr", "x": forbidden, "y": sorted(CATALOGUE[dataset]["measures"])[0]},
+        )
 
 
 @given(dataset=st.sampled_from(sorted(CATALOGUE)))

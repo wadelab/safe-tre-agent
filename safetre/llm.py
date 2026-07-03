@@ -20,9 +20,13 @@ from urllib import error, parse, request
 
 DEFAULT_LLM_BASE_URL = "http://127.0.0.1:8000/v1"
 DEFAULT_LLM_MODEL = "local-120b"
+PROVIDER_BASE_URL = "https://llm.example.net/api/v1"
+PROVIDER_DEFAULT_MODEL = "provider-pass/hosted-max"
 DEFAULT_ALLOWED_HOSTS = "localhost,127.0.0.1,::1"
 FALSEY = {"0", "false", "no", "off"}
 TRUTHY = {"1", "true", "yes", "on"}
+PROVIDER_PROVIDERS = {"provider", "exampleprovider", "provider-pass"}
+REAL_LLM_MODES = {"real", *PROVIDER_PROVIDERS}
 
 
 def _strip_code_fences(text: str) -> str:
@@ -35,6 +39,25 @@ def _env(name: str, fallback: str | None = None) -> str | None:
     if value not in (None, ""):
         return value
     return fallback
+
+
+def _normalize(value: str | None) -> str:
+    return (value or "").strip().lower()
+
+
+def real_llm_enabled(mode: str | None = None) -> bool:
+    """Return whether the configured planner mode should use a real LLM."""
+    return _normalize(mode or os.environ.get("SAFETRE_LLM", "mock")) in REAL_LLM_MODES
+
+
+def _llm_provider() -> str:
+    provider = _normalize(os.environ.get("SAFETRE_LLM_PROVIDER"))
+    if provider:
+        return provider
+    mode = _normalize(os.environ.get("SAFETRE_LLM"))
+    if mode in PROVIDER_PROVIDERS:
+        return "exampleprovider"
+    return "generic"
 
 
 def _bool_env(name: str, default: bool = False) -> bool:
@@ -63,24 +86,39 @@ class LLMConfig:
     api_key: str = "local"
     temperature: float = 0.0
     timeout: float = 60.0
+    provider: str = "generic"
 
     @classmethod
     def from_env(cls, *, model: str | None = None, base_url: str | None = None,
                  api_key: str | None = None, temperature: float | None = None):
+        provider = _llm_provider()
+        is_exampleprovider = provider in PROVIDER_PROVIDERS
+        default_base_url = PROVIDER_BASE_URL if is_exampleprovider else DEFAULT_LLM_BASE_URL
+        default_model = PROVIDER_DEFAULT_MODEL if is_exampleprovider else DEFAULT_LLM_MODEL
+        resolved_api_key = api_key
+        if resolved_api_key is None:
+            fallback_key = (
+                _env("PROVIDER_API_KEY", _env("OPENAI_API_KEY"))
+                if is_exampleprovider else _env("OPENAI_API_KEY", "local")
+            )
+            resolved_api_key = _env("SAFETRE_LLM_API_KEY", fallback_key)
         resolved = cls(
-            base_url=base_url or _env("SAFETRE_LLM_BASE_URL", _env("OPENAI_BASE_URL", DEFAULT_LLM_BASE_URL)),
-            model=model or _env("SAFETRE_LLM_MODEL", _env("SAFETRE_MODEL", DEFAULT_LLM_MODEL)),
-            api_key=api_key or _env("SAFETRE_LLM_API_KEY", _env("OPENAI_API_KEY", "local")),
+            base_url=base_url or _env("SAFETRE_LLM_BASE_URL", _env("OPENAI_BASE_URL", default_base_url)),
+            model=model or _env("SAFETRE_LLM_MODEL", _env("SAFETRE_MODEL", default_model)),
+            api_key=resolved_api_key or "",
             temperature=(
                 temperature if temperature is not None
                 else float(os.environ.get("SAFETRE_LLM_TEMPERATURE", "0"))
             ),
             timeout=float(os.environ.get("SAFETRE_LLM_TIMEOUT", "60")),
+            provider=provider,
         )
         resolved.validate()
         return resolved
 
     def validate(self) -> None:
+        if self.provider in PROVIDER_PROVIDERS and not self.api_key:
+            raise ValueError("ExampleProvider requires SAFETRE_LLM_API_KEY or PROVIDER_API_KEY")
         parsed = parse.urlparse(self.base_url)
         if parsed.scheme not in ("http", "https") or not parsed.hostname:
             raise ValueError("SAFETRE_LLM_BASE_URL must be an http(s) URL with a host")
@@ -112,6 +150,7 @@ class LLMClient:
         payload = {
             "model": self.config.model,
             "temperature": self.config.temperature,
+            "stream": False,
             "messages": [{"role": "system", "content": system},
                          {"role": "user", "content": user}],
         }
@@ -127,6 +166,8 @@ class LLMClient:
                 data = json.loads(resp.read().decode())
         except error.URLError as exc:
             raise RuntimeError(f"LLM request failed: {exc}") from exc
+        if "choices" not in data and isinstance(data.get("data"), dict):
+            data = data["data"]
         try:
             content = data["choices"][0]["message"]["content"]
         except (KeyError, IndexError, TypeError) as exc:

@@ -45,7 +45,8 @@ loot-box, demographic, and wellbeing tables. It includes:
 - an optional local OpenAI-compatible model adapter;
 - disclosure controls for small cells, dominance, count rounding, and identifier
   egress;
-- a session auditor for simple differencing and query budgets;
+- a session auditor for query budgets and differencing, including query-lineage
+  tracking of released cohorts and complementary (secondary) suppression;
 - a red-team script showing what leaks with the gateway off and what is blocked
   with the gateway on.
 
@@ -89,7 +90,7 @@ This is still a research prototype. Before real data, the project needs at
 least:
 
 - ACRO/SACRO-grade output checking instead of the lightweight built-in gateway;
-- stronger lineage-aware differencing controls;
+- cross-session differencing controls (the lineage auditor is per-session);
 - a real human review workflow;
 - off-pod audit anchoring and operational runbooks;
 - site-specific safepod hardening, identity, and physical controls;

@@ -68,7 +68,8 @@ To add a queryable dimension, measure, or tool:
    `safetre/engine.py` (and only safe columns — never `donor_id`, `free_text`,
    raw ages or timestamps).
 3. Update the public manifest in `safetre/manifest.py` only if the capability is
-   safe to publish outside the safepod.
+   safe to publish outside the safepod. Fixed-function extensions such as
+   `corr` must stay schema-validated and deterministic.
 4. Add a validation test in `tests/test_secure.py` (accept the new valid spec;
    confirm anything off-allowlist is still rejected).
 

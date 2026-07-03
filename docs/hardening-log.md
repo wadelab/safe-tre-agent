@@ -3,6 +3,27 @@
 A dated record of self-red-team findings and the fixes applied. New findings get
 appended; the table is the quick index, the notes below give detail.
 
+## 2026-07-03 — round 2c (query lineage + secondary suppression)
+
+| # | Finding | Sev | Status | Fix | Where |
+|---|---|---|---|---|---|
+| 4 | Differencing auditor was shallow: it compared only released totals per measure, so sum/mean differencing across overlapping cohorts (e.g. "sum spend in Vaud", then "…excluding 50+") evaded it | Med | **Fixed** | query lineage: each released query's normalized filter predicate (its *cohort*) is remembered per session; a new cohort whose symmetric difference with a prior released cohort is fewer than `threshold` individuals is denied. The symdiff is computed on the internal unit views (`cohort_symdiff`) and never released | `safetre/engine.py`, `safetre/disclosure.py`, `safetre/service.py`, `safetre/query.py` |
+| 4b | Only primary suppression: a margin with exactly one suppressed cell lets an attacker recover it by subtraction (the margin total is obtainable as a coarser query) | Med | **Fixed (single-dim exact; multi-dim conservative)** | complementary suppression: if a margin has exactly one suppressed cell, the smallest remaining cell in that margin is suppressed too, iterated to a fixpoint. Exact for one group-by dimension; conservative per-dimension for ≥2 (minimal patterns are an LP problem → ACRO, round 3) | `safetre/disclosure.py` |
+
+### Notes
+
+**#4 lineage.** Deterministic and explainable by design: the auditor can say
+*which* prior cohort a denied query nearly duplicates. Identical cohorts are not
+flagged (a repeated query reveals nothing new) and denied queries are not
+recorded (nothing was released). Limits stated honestly: conservative → some
+false positives; per-session only — it does **not** defend across sessions or
+colluding users (that needs global accounting → the DP accountant, round 3).
+
+**#4b suppression.** Over-suppresses rather than risk a recoverable cell: in a
+2×2 table with one sensitive cell, everything goes (any three released cells
+plus margins solve for the fourth). Cross-*query* margin attacks — a coarser
+query reconstructing a finer suppressed cell — are #4's job, not this one's.
+
 ## 2026-06-26 — round 2a (safepod / restricted channel)
 
 | # | Finding | Sev | Status | Fix | Where |
@@ -51,8 +72,8 @@ must not be enabled for real safepod data.
 | 7 | Boundary files had no integrity controls (no CODEOWNERS / required review / invariant tests) | High | **Fixed** | CODEOWNERS on the 4 boundary files; invariant tests; CI gate | `.github/CODEOWNERS`, `tests/test_invariants.py`, `.github/workflows/ci.yml` |
 | 8 | CI could become an RCE/secret-exfil surface | Med | **Fixed (preventively)** | `pull_request` (not `_target`), `permissions: contents: read`, actions pinned by SHA | `.github/workflows/ci.yml` |
 | 9 | Supply chain: known-CVE detection only | Med | **Partial** | `pip-audit` + `bandit` in CI; deps pinned/hashed in `uv.lock` | CI |
-| 4 | Differencing auditor is shallow (tracks count totals, not measure/lineage) | Med | **Open** | needs query-lineage tracking / DP accountant | roadmap |
-| 4b | Only primary suppression — margins can reconstruct a suppressed cell | Med | **Open** | needs complementary (secondary) suppression | roadmap |
+| 4 | Differencing auditor is shallow (tracks count totals, not measure/lineage) | Med | **Fixed in round 2c** | query-lineage cohort tracking (see 2026-07-03 entry); DP accountant remains round 3 | `safetre/disclosure.py`, `engine.py` |
+| 4b | Only primary suppression — margins can reconstruct a suppressed cell | Med | **Fixed in round 2c** | complementary suppression (see 2026-07-03 entry); full multi-dim via ACRO remains round 3 | `safetre/disclosure.py` |
 | 10 | SSRF / research-question egress in `SAFETRE_LLM=real` remote mode | Med | **Fixed** | local-first `SAFETRE_LLM_BASE_URL`, host allowlist, explicit remote opt-in, no provider SDK dependency | `safetre/llm.py` |
 | 11 | Prompt-injection against the maintainer's AI coding agent | Low/novel | **Mitigated by process** | CODEOWNERS + human review of any boundary diff regardless of origin | process |
 
@@ -76,6 +97,6 @@ release. Counts are rounded only at release; suppression decisions use true `n`.
 query (engine memory/threads + `LIMIT`), and a bounded spec (`in` ≤ 50,
 group-by ≤ 3, filters ≤ 5). systemd `MemoryMax` is the final backstop.
 
-**Still open (roadmap):** #4/#4b (a proper SDC differencing model — lineage +
-secondary suppression, ultimately a DP accountant). These are tracked in
+**Still open (roadmap):** the DP accountant and ACRO-proper integration that
+subsume #4/#4b (both got deterministic fixes in round 2c). Tracked in
 [security.md](security.md#limitations-and-roadmap).

@@ -16,5 +16,6 @@ htmlcov/
 *.db
 *.db-wal
 *.db-shm
+*.db.key
 site/
 .DS_Store

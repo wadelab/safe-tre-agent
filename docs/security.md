@@ -160,12 +160,17 @@ boundary files.
 This is **Phase 1 on synthetic data**. It is honest about what it is not. After
 the [first hardening round](hardening-log.md), what remains:
 
-- **Differencing control is shallow.** The session auditor tracks count totals,
-  not query *lineage* or the measure values — differencing on sums across
-  overlapping cohorts can still evade it. Needs lineage tracking and, ultimately,
-  a **differential-privacy accountant**.
-- **Only primary suppression.** A suppressed small/dominated cell can sometimes
-  be reconstructed from released margins; needs **complementary suppression**.
+- **Differencing control is per-session only.** The auditor now tracks query
+  *lineage*: each released cohort (normalized filter predicate) is remembered,
+  and a query whose cohort differs from a prior released one by fewer than the
+  threshold's worth of individuals is denied — deterministic and explainable.
+  It does **not** defend across sessions or colluding users; that needs global
+  accounting, ultimately a **differential-privacy accountant**.
+- **Secondary suppression is heuristic beyond one dimension.** A margin left
+  with exactly one suppressed cell now triggers complementary suppression of
+  the next-smallest cell (iterated to a fixpoint). This is exact for one
+  group-by dimension and conservative (over-suppressing) for more; minimal
+  multi-dimensional suppression patterns are an LP problem → **ACRO** proper.
 - The disclosure engine is an ACRO-*inspired* stand-in (it now does threshold +
   dominance + rounding); production should wrap **ACRO** proper.
 - The audit log is HMAC-keyed but should be **mirrored off-box** and its key held

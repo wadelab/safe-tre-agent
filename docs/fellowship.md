@@ -99,9 +99,13 @@ The prototype already demonstrates:
 
 ### Work package 1: Lineage-aware disclosure auditing
 
-Replace shallow total-based differencing with internal contributor-set lineage.
-Each released aggregate gets an internal donor-set signature. The auditor blocks
-small differences, intersections, and reconstructable suppressed cells.
+A first per-session version is now in the prototype: released cohorts are
+tracked by normalized filter predicate, near-duplicate cohorts (small
+symmetric difference of contributors) are denied, and complementary
+suppression protects margins. The work package extends this to cross-session
+and cross-user lineage: each released aggregate gets a persistent internal
+donor-set signature, and the auditor blocks small differences, intersections,
+and reconstructable suppressed cells globally.
 
 Deliverables:
 

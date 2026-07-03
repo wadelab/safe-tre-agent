@@ -1,6 +1,8 @@
 # Round 2 hardening — plan
 
-**Status: started.** Follow-on to [hardening round 1](hardening-log.md).
+**Status: code items done (A0, A, B, C shipped; see the
+[hardening log](hardening-log.md) round 2c entry). D remains a go-public
+decision.** Follow-on to [hardening round 1](hardening-log.md).
 Round 2 covers the remaining "Open" items from that log plus the safepod /
 restricted-channel hardening added after the first review. It touches boundary
 files, so substantive changes should ship as a reviewed PR (see item D).
@@ -11,8 +13,8 @@ files, so substantive changes should ship as a reviewed PR (see item D).
 |---|---|---|---|---|
 | A0 | Safepod restricted-channel enforcement | code + docs + deploy | small | done |
 | A | Remote-LLM egress / SSRF lockdown | code + docs | small | done |
-| B | Differencing via query lineage | code | medium | core security win |
-| C | Complementary (secondary) suppression | code | medium | partial; pairs with B |
+| B | Differencing via query lineage | code | medium | done |
+| C | Complementary (secondary) suppression | code | medium | done (single-dim exact, multi-dim conservative) |
 | D | Branch protection + signed commits | ops/GitHub | small | at go-public |
 
 ---
@@ -66,7 +68,14 @@ the chat-completions protocol to a local test server.
 
 ---
 
-## B. Differencing via query lineage (core)
+## B. Differencing via query lineage (core) — done
+
+Shipped as planned (see the [hardening log](hardening-log.md) 2026-07-03
+entry): `QuerySpec.normalized_filters()`, `QueryEngine.cohort_size` /
+`cohort_symdiff` on the internal unit views, and
+`SessionAuditor.observe_cohort` / `record_cohort` wired through
+`QueryService.handle`. Denied queries are not recorded; identical cohorts are
+not flagged. Original plan below.
 
 **Threat.** `SessionAuditor` compares only count totals for the same
 `measure_key` and ignores filters — so sum-differencing across overlapping
@@ -103,7 +112,12 @@ accounting → DP). **Effort:** ~1–2 sittings.
 
 ---
 
-## C. Complementary (secondary) suppression
+## C. Complementary (secondary) suppression — done
+
+Shipped as planned: `DisclosurePolicy._secondary_suppress` iterates margins to
+a fixpoint — exact for one group-by dimension, conservative per-dimension for
+more. Full multi-dim minimal patterns stay with ACRO (round 3). Original plan
+below.
 
 **Threat.** Suppressing only the primary small/dominated cell can leak it via
 margins; the margin is obtainable as a coarser query, so this overlaps with B.
