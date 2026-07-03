@@ -145,7 +145,50 @@ via `gh api` on request.
 
 DP accountant · **ACRO proper** (subsumes full secondary suppression + class
 disclosure + dominance) · container-isolated escalation path (gVisor/Firecracker)
-· off-box audit-log mirroring + off-box HMAC key.
+· off-box audit-log mirroring + off-box HMAC key · experimental FHE-backed fixed
+analysis tools.
+
+### Experimental FHE fixed-analysis backend
+
+There may be research value in combining this project with the Rust FHE toolbox
+from `/raid/toolbox/fhe`, but it should enter as a **fixed-analysis backend**,
+not as a new trust boundary or general encrypted query engine.
+
+Candidate shape:
+
+```text
+researcher request
+  -> manifest/tool validation
+  -> fixed FHE statistic over approved encrypted features
+  -> decrypt aggregate/model summary only
+  -> safe-output gateway
+  -> session audit
+```
+
+Good first tools would be narrow statistics already represented in the FHE
+workspace, such as encrypted correlation, encrypted linear regression, and
+encrypted derived-feature-store analysis. These would map naturally to future
+`regression`/`correlation` manifest tools once those tools are deterministic,
+schema-validated, and disclosure-checked like `aggregate_query`.
+
+Non-goals:
+
+- no LLM access to encryption primitives;
+- no arbitrary encrypted SQL;
+- no bypass of QuerySpec/tool validation, release checks, lineage auditing, or
+  human review;
+- no claim that FHE replaces safe-output controls.
+
+Important caveat: the current Rust FHE implementation is a research-compatible
+port using `f64` component-wise polynomial arithmetic. It is useful for
+prototyping, benchmarking, and demonstrating an encrypted feature-store
+boundary, but should not be presented as production cryptographic protection
+until replaced or backed by a production FHE scheme such as CKKS/BFV/BGV.
+
+Research framing: safe-tre controls what an untrusted LLM-powered analyst may
+ask and release; FHE could reduce trust in selected computation/storage steps
+for approved numeric analyses. That makes it a promising round 3+ experiment,
+not a blocker for the current hardening work.
 
 ---
 
