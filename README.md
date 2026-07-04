@@ -30,6 +30,8 @@ is that local models will become strong enough for planning — roughly a good
 > [Model runtime](docs/model-runtime.md) ·
 > [Tool manifest](docs/tool-manifest.md) ·
 > [Formal methods](docs/FORMAL_METHODS_ANALYSIS.md) ·
+> [Verifiable extensions](docs/verifiable-extensions.md) ·
+> [Best-practice review](docs/best-practice-review.md) ·
 > [Deployment](docs/deployment.md) ·
 > [Development](docs/development.md) ·
 > [Research write-up](docs/writeup.md) ·

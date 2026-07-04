@@ -271,6 +271,175 @@ def compile_dominance_query(spec: QuerySpec) -> SQLPlan:
     )
 
 
+def compile_influence_query(spec: QuerySpec) -> SQLPlan:
+    """Compile the internal leave-one-donor-out influence query for corr specs.
+
+    A correlation has no natural analogue of the sum/mean p%-dominance rule, yet
+    a single high-leverage donor can drive it — so a released r on a small group
+    can disclose that individual. This computes, per group, the largest change
+    in Pearson r that removing any single *donor* produces (their whole set of
+    rows, so it is correct even for event-level correlations where one donor has
+    many events). The gateway suppresses cells whose influence exceeds the
+    policy threshold. Runs on the internal unit view; only the max |Δr| per
+    group is used, and it is never released.
+    """
+    if spec.measure.fn != "corr":
+        raise ValueError("influence is only defined for corr measures")
+
+    x = _ident(spec.measure.x)
+    y = _ident(spec.measure.y)
+    where, params = _where(spec, (f"{x} IS NOT NULL", f"{y} IS NOT NULL"))
+    unit = _ident(f"_{spec.dataset}_u")
+    gsel = ", ".join(_ident(g) for g in spec.group_by)
+    gpre = (gsel + ", ") if spec.group_by else ""
+
+    # per-donor partial sums (d*), then per-group totals (t*), then drop-one
+    # recomputation. Note: DuckDB identifiers are case-INSENSITIVE, so the
+    # per-donor and group column names must be textually distinct (not just
+    # differ in case) or they silently alias each other.
+    per_donor = (
+        f"SELECT {gpre}donor_id, "  # nosec
+        f"SUM({x}) AS dx, SUM({y}) AS dy, SUM({x}*{x}) AS dxx, "
+        f"SUM({y}*{y}) AS dyy, SUM({x}*{y}) AS dxy, COUNT(*) AS dm "
+        f"FROM {unit}{where} GROUP BY {gpre}donor_id"
+    )
+    grp = (
+        f"SELECT {gpre}SUM(dx) AS tx, SUM(dy) AS ty, SUM(dxx) AS txx, "  # nosec
+        f"SUM(dyy) AS tyy, SUM(dxy) AS txy, SUM(dm) AS tn "
+        f"FROM per_donor" + (f" GROUP BY {gsel}" if spec.group_by else "")
+    )
+    join = (f"per_donor p JOIN grp g USING ({gsel})" if spec.group_by
+            else "per_donor p, grp g")
+    gcols_j = ("g." + ", g.".join(_ident(g) for g in spec.group_by) + ", ") if spec.group_by else ""
+    r_full = ("(tn*txy - tx*ty) / "
+              "sqrt(NULLIF((tn*txx - tx*tx) * (tn*tyy - ty*ty), 0))")
+    # sums with this donor removed (subtract their partials)
+    r_drop = ("((tn-dm)*(txy-dxy) - (tx-dx)*(ty-dy)) / "
+              "sqrt(NULLIF(((tn-dm)*(txx-dxx) - (tx-dx)*(tx-dx)) * "
+              "((tn-dm)*(tyy-dyy) - (ty-dy)*(ty-dy)), 0))")
+    sql = (
+        f"WITH per_donor AS ({per_donor}), grp AS ({grp}), "  # nosec
+        f"j AS (SELECT {gcols_j}"
+        f"p.dx, p.dy, p.dxx, p.dyy, p.dxy, p.dm, "
+        f"g.tx, g.ty, g.txx, g.tyy, g.txy, g.tn FROM {join}), "
+        f"d AS (SELECT {gpre}"
+        f"CASE WHEN (tn-dm) >= 3 THEN abs(({r_full}) - ({r_drop})) END AS delta FROM j) "
+        f"SELECT {gpre}MAX(delta) AS influence FROM d"
+        + (f" GROUP BY {gsel}" if spec.group_by else "")
+    )
+    return SQLPlan(
+        sql=sql,
+        params=params,
+        output_columns=tuple(spec.group_by) + ("influence",),
+        source_view=f"_{spec.dataset}_u",
+    )
+
+
+def _corr_not_null(spec: QuerySpec) -> tuple[str, ...]:
+    if spec.measure.fn != "corr":
+        return ()
+    return (f"{_ident(spec.measure.x)} IS NOT NULL", f"{_ident(spec.measure.y)} IS NOT NULL")
+
+
+def compile_donor_count_query(spec: QuerySpec) -> SQLPlan:
+    """Compile the internal per-cell distinct-donor count.
+
+    The frequency threshold rule protects *individuals* ("respondents"), not
+    rows. On event-level datasets a cell can have many rows from few donors, so
+    the public `n` (= COUNT(*)) is not a safe individual count. This counts
+    distinct donors per cell on the internal unit view, mirroring the public
+    query's filters (including the corr NOT-NULL predicates), so the gateway can
+    enforce the threshold on donors. The count is a disclosure helper and is
+    dropped before release.
+    """
+    where, params = _where(spec, _corr_not_null(spec))
+    unit = _ident(f"_{spec.dataset}_u")
+    gsel = ", ".join(_ident(g) for g in spec.group_by)
+    gpre = (gsel + ", ") if spec.group_by else ""
+    sql = (
+        f"SELECT {gpre}COUNT(DISTINCT donor_id) AS n_donors "  # nosec
+        f"FROM {unit}{where}" + (f" GROUP BY {gsel}" if spec.group_by else "")
+    )
+    return SQLPlan(
+        sql=sql,
+        params=params,
+        output_columns=tuple(spec.group_by) + ("n_donors",),
+        source_view=f"_{spec.dataset}_u",
+    )
+
+
+def _dim_value_set(universe: set, predicates: list) -> set:
+    """The set of a dimension's values selected by a list of (op, value) predicates."""
+    s = set(universe)
+    for op, value in predicates:
+        if op == "==":
+            s &= {value}
+        elif op == "!=":
+            s -= {value}
+        elif op == "in":
+            s &= set(value)
+        elif op == "<":
+            s = {u for u in s if u < value}
+        elif op == "<=":
+            s = {u for u in s if u <= value}
+        elif op == ">":
+            s = {u for u in s if u > value}
+        elif op == ">=":
+            s = {u for u in s if u >= value}
+    return s
+
+
+ALLOW_SENTINEL = 10 ** 9
+
+
+def simulatable_cohort_bound(marginals: dict, dataset: str,
+                             filters_a: tuple, filters_b: tuple) -> int:
+    """A simulatable upper bound on |A △ B|, from published donor marginals only.
+
+    The session auditor must not decide releases from the live donor sets, or the
+    refusal itself leaks (Kenthapadi–Mishra–Nissim, *simulatable auditing*, 2005).
+    This decides from `marginals` — a donor-frequency table per (dataset, dim,
+    value) that is itself disclosure-safe metadata — so an analyst holding the
+    same public marginals could reproduce every decision, and a refusal reveals
+    nothing new.
+
+    For two cohorts that differ on exactly one dimension, the whole-population
+    donor marginal of the differing values is an *upper* bound on the symmetric
+    difference. So a denial (bound < threshold) is always sound, and this catches
+    the canonical attack: isolating a globally-rare category by adding or
+    removing one predicate ("exclude age 69", "exclude sex X").
+
+    Being an upper bound, it does NOT catch differencing that isolates a small
+    group through the *interaction* of a common category with an otherwise-narrow
+    cohort (e.g. the over-50s within one small canton): the marginal is then
+    large even though the real symmetric difference is small. That residual is
+    the price of simulatability; it is largely covered by the per-cell donor
+    threshold (a narrow cohort's cells are suppressed anyway) and fully by a DP
+    accountant. Cohorts differing on more than one dimension return a sentinel
+    that never denies and rely on the query-budget and total-delta checks.
+    """
+    dmap = marginals.get(dataset, {})
+
+    def by_dim(filters: tuple) -> dict:
+        grouped: dict = {}
+        for column, op, value in filters:
+            grouped.setdefault(column, []).append((op, value))
+        return grouped
+
+    a, b = by_dim(filters_a), by_dim(filters_b)
+    differing = []
+    for dim in set(a) | set(b):
+        universe = set(dmap.get(dim, {}))
+        sa = _dim_value_set(universe, a.get(dim, []))
+        sb = _dim_value_set(universe, b.get(dim, []))
+        if sa != sb:
+            differing.append((dim, sa ^ sb))
+    if len(differing) != 1:
+        return ALLOW_SENTINEL
+    dim, symdiff_values = differing[0]
+    return sum(dmap[dim].get(v, 0) for v in symdiff_values)
+
+
 class QueryEngine:
     def __init__(self, tables: dict[str, pd.DataFrame]):
         self.con = duckdb.connect(database=":memory:")
@@ -280,6 +449,7 @@ class QueryEngine:
             self.con.register(name, df)
         for ddl in (*_VIEWS.values(), *_UNIT_VIEWS.values()):
             self.con.execute(ddl)
+        self._marginals: dict | None = None
 
     def run(self, spec: QuerySpec) -> pd.DataFrame:
         plan = compile_query(spec)
@@ -296,6 +466,11 @@ class QueryEngine:
             ]
             result.insert(result.columns.get_loc("value") + 1, "p_value", p_values)
             result["p_value"] = result["p_value"].round(3)
+            result = self._attach_influence(spec, compile_influence_query(spec), result)
+
+        # every result carries an internal distinct-donor count so the gateway
+        # enforces the frequency threshold on individuals, not rows.
+        result = self._attach_donor_count(spec, compile_donor_count_query(spec), result)
         return result
 
     def _attach_dominance(self, spec: QuerySpec, plan: SQLPlan, result: pd.DataFrame):
@@ -307,6 +482,56 @@ class QueryEngine:
             result = result.assign(dominance=(dom["dominance"].iloc[0] if len(dom) else 0.0))
         result["dominance"] = result["dominance"].fillna(0.0)
         return result
+
+    def _attach_influence(self, spec: QuerySpec, plan: SQLPlan, result: pd.DataFrame):
+        """Max single-donor leave-one-out |Δr| per group (for corr cells)."""
+        inf = self.con.execute(plan.sql, plan.params).df()
+        if spec.group_by:
+            result = result.merge(inf, on=spec.group_by, how="left")
+        else:
+            result = result.assign(influence=(inf["influence"].iloc[0] if len(inf) else 0.0))
+        result["influence"] = result["influence"].fillna(0.0)
+        return result
+
+    def _attach_donor_count(self, spec: QuerySpec, plan: SQLPlan, result: pd.DataFrame):
+        """Distinct donors per cell (internal); a missing cell means zero donors."""
+        nd = self.con.execute(plan.sql, plan.params).df()
+        if spec.group_by:
+            result = result.merge(nd, on=spec.group_by, how="left")
+        else:
+            result = result.assign(n_donors=(nd["n_donors"].iloc[0] if len(nd) else 0))
+        result["n_donors"] = result["n_donors"].fillna(0).astype(int)
+        return result
+
+    def marginal_donor_counts(self) -> dict:
+        """Published donor-frequency metadata: `{dataset: {dim: {value: n_donors}}}`.
+
+        The distinct-donor count of every single filterable predicate value, on
+        the internal unit views. This is a donor-frequency table — itself
+        releasable under the threshold rule — and it is the only data the session
+        auditor's differencing decision depends on, which is what makes that
+        decision *simulatable* (see `simulatable_cohort_bound`). Computed once
+        and cached. Only the < threshold comparison is used downstream, so a
+        production build can publish the sparse-flagged, rounded version.
+        """
+        if self._marginals is not None:
+            return self._marginals
+        out: dict = {}
+        for dataset in _UNIT_VIEWS:
+            cat = CATALOGUE[dataset]
+            dims = list(cat["dims"]) + list(cat.get("internal_filters", {}))
+            unit = self._unit_view(dataset)
+            per_dim: dict = {}
+            for dim in dims:
+                col = _ident(dim)
+                rows = self.con.execute(
+                    f"SELECT {col} AS v, COUNT(DISTINCT donor_id) AS c "  # nosec
+                    f"FROM {unit} GROUP BY {col}"
+                ).fetchall()
+                per_dim[dim] = {v: int(c) for v, c in rows}
+            out[dataset] = per_dim
+        self._marginals = out
+        return out
 
     def _unit_view(self, dataset: str) -> str:
         if dataset not in _UNIT_VIEWS:

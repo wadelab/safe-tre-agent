@@ -75,7 +75,7 @@ See [Safepod model](safepod.md) for the physical controls and failure modes.
 | 1 | Arbitrary code / RCE | model writes hostile code | model writes **no code**; only a QuerySpec | `query.py` |
 | 2 | SQL injection | crafted filter value | values are **bound parameters**; identifiers allowlisted + regex-checked | `engine.py` |
 | 3 | Identifier / free-text egress | query selects `donor_id` / `free_text` | not in public views/catalogue, and re-checked at the gateway | `engine.py`, `disclosure.py` |
-| 4 | Small-cell / dominance disclosure | over-granular grouping; one donor dominating a cell | minimum cell size (10); **p%-dominance** suppression; counts rounded to 5 | `disclosure.py`, `engine.py` |
+| 4 | Small-cell / dominance disclosure | over-granular grouping; one donor dominating a cell or a correlation | minimum cell size (10); **p%-dominance** suppression (sum/mean); **leave-one-donor-out influence** suppression (corr); counts rounded to 5 | `disclosure.py`, `engine.py` |
 | 5 | Differencing / triangulation | many "safe" queries combined | per-session auditor flags near-equal totals; query budget *(shallow — see roadmap)* | `disclosure.py` |
 | 6 | Prompt injection via data | planted `free_text` tells model to exfiltrate | model can only emit a QuerySpec; `free_text` is unqueryable | `query.py` |
 | 7 | Hostile intent | "give me row-level records…" | intent vetting rejects pre-planning *(defence in depth only — the allowlist is the real boundary)* | `analyst.py` |
@@ -163,15 +163,29 @@ boundary files.
 
 ## Limitations and roadmap
 
-This is **Phase 1 on synthetic data**. It is honest about what it is not. After
-the [first hardening round](hardening-log.md), what remains:
+This is **Phase 1 on synthetic data**. It is honest about what it is not. The
+[best-practice review](best-practice-review.md) benchmarks these limits against
+ACRO/SACRO, OpenSAFELY, OWASP, and the auditing/DP literature (deviations
+D1–D7). After the [first hardening round](hardening-log.md), what remains:
 
-- **Differencing control is per-session only.** The auditor now tracks query
-  *lineage*: each released cohort (normalized filter predicate) is remembered,
-  and a query whose cohort differs from a prior released one by fewer than the
-  threshold's worth of individuals is denied — deterministic and explainable.
-  It does **not** defend across sessions or colluding users; that needs global
-  accounting, ultimately a **differential-privacy accountant**.
+- **Human review, not replacement.** On real data the automated gateway is a
+  **pre-filter** that reduces output-checker load, not a substitute for the
+  two-trained-checker standard used by OpenSAFELY and SACRO. Keep two-human
+  review on any real release; the agent layer buys throughput, which is the
+  documented bottleneck for scaling TREs.
+- **The frequency threshold counts individuals, not rows.** Every result carries
+  an internal distinct-donor count (`n_donors`), and the gateway suppresses any
+  cell with fewer than the threshold's donors even if it has many rows — so an
+  event-level cell dominated by one active donor cannot pass.
+- **Differencing control is per-session and simulatable.** The auditor tracks
+  query *lineage* — each released cohort (normalized filter predicate) is
+  remembered — and denies a near-duplicate cohort. The deny/allow decision is
+  computed from **published donor marginals**, not the live donor sets, so a
+  refusal leaks nothing an analyst could not already compute (simulatable
+  auditing). It catches isolating a globally-rare category by one predicate; it
+  does **not** catch differencing confined to an otherwise-narrow cohort (helped
+  by the per-cell donor threshold), nor defend across sessions or colluding
+  users. Global accounting needs a **differential-privacy accountant**.
 - **Secondary suppression is heuristic beyond one dimension.** A margin left
   with exactly one suppressed cell now triggers complementary suppression of
   the next-smallest cell (iterated to a fixpoint). This is exact for one

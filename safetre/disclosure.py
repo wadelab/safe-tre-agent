@@ -2,8 +2,8 @@
 
 Lightweight, ACRO-inspired statistical disclosure control. In production this
 would wrap the ACRO package (github AI-SDC) rather than reimplement it; the
-rules here mirror its core checks (threshold, dominance) so the demo runs with
-no extra dependency.
+rules here mirror its core checks (threshold, dominance, and — for correlation —
+single-donor influence) so the demo runs with no extra dependency.
 """
 
 from __future__ import annotations
@@ -16,6 +16,7 @@ from .schema import identifier_columns, sensitive_columns
 
 COUNT_COLUMNS = {"n", "count", "size", "freq", "n_donors"}
 DOM_THRESHOLD = 0.5      # suppress a cell if one contributor exceeds this share
+INFLUENCE_THRESHOLD = 0.5  # suppress a corr cell if removing one donor moves r by more than this
 ROUND_BASE = 5           # released counts are rounded to this base
 
 
@@ -72,6 +73,14 @@ def leak_detector(df: pd.DataFrame | None) -> list[Finding]:
                                     f"{len(dominated)} cell(s) where one contributor "
                                     f"exceeds {DOM_THRESHOLD:.0%} of the total"))
 
+    # influence (corr analogue of the p%-rule): one donor drives a correlation
+    if "influence" in cols:
+        influential = df[df["influence"] > INFLUENCE_THRESHOLD]
+        if len(influential) > 0:
+            findings.append(Finding("high", "influence",
+                                    f"{len(influential)} correlation cell(s) where removing "
+                                    f"one donor shifts r by more than {INFLUENCE_THRESHOLD}"))
+
     # excessive granularity (looks like a row dump)
     if len(df) > DisclosurePolicy.DEFAULT_MAX_ROWS and not _count_cols(df):
         findings.append(Finding("medium", "too_granular",
@@ -80,7 +89,7 @@ def leak_detector(df: pd.DataFrame | None) -> list[Finding]:
 
 
 # findings that are resolved by suppressing the offending rows rather than denying
-SUPPRESSABLE = {"small_cell", "dominance"}
+SUPPRESSABLE = {"small_cell", "dominance", "influence"}
 
 
 @dataclass
@@ -90,11 +99,17 @@ class DisclosurePolicy:
     threshold: int = 10
     max_rows: int = 100
     dom_threshold: float = DOM_THRESHOLD
+    influence_threshold: float = INFLUENCE_THRESHOLD
     round_base: int = ROUND_BASE
 
     def _finalize(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Drop the internal dominance helper and round released counts."""
-        out = df.drop(columns=["dominance"], errors="ignore").copy()
+        """Drop internal helper columns and round released counts.
+
+        `n_donors` is an internal distinct-donor count used to enforce the
+        frequency threshold on individuals; it is dropped here (before the count
+        columns are rounded) so it is never released.
+        """
+        out = df.drop(columns=["dominance", "influence", "n_donors"], errors="ignore").copy()
         for c in _count_cols(out):
             out[c] = (out[c] / self.round_base).round().astype(int) * self.round_base
         return out
@@ -114,7 +129,8 @@ class DisclosurePolicy:
         count_cols = _count_cols(original)
         # group dims are categorical/int; float columns are measures, not margins
         group_cols = [c for c in original.columns
-                      if str(c).lower() not in COUNT_COLUMNS | {"value", "dominance"}
+                      if str(c).lower() not in COUNT_COLUMNS | {"value", "p_value",
+                                                                "dominance", "influence"}
                       and not pd.api.types.is_float_dtype(original[c])]
         if not count_cols or not group_cols or len(released) == len(original):
             return released, 0
@@ -162,6 +178,8 @@ class DisclosurePolicy:
                 redacted = redacted[redacted[c] >= self.threshold]
             if "dominance" in redacted.columns:
                 redacted = redacted[redacted["dominance"] <= self.dom_threshold]
+            if "influence" in redacted.columns:
+                redacted = redacted[redacted["influence"] <= self.influence_threshold]
             redacted, extra = self._secondary_suppress(df, redacted)
             if extra:
                 findings.append(Finding(
@@ -209,22 +227,24 @@ class SessionAuditor:
         self._history.append((measure, total_n))
         return findings
 
-    def observe_cohort(self, dataset: str, filters: tuple, symdiff) -> list[Finding]:
+    def observe_cohort(self, dataset: str, filters: tuple, bound) -> list[Finding]:
         """Flag a cohort nearly identical to one already released this session.
 
-        `filters` is QuerySpec.normalized_filters(); `symdiff(a, b) -> int`
-        counts distinct units in exactly one of the two cohorts (the engine
-        computes it on internal unit views; the count itself is never released).
+        `filters` is QuerySpec.normalized_filters(); `bound(a, b) -> int` returns
+        an upper bound on the number of individuals in exactly one of the two
+        cohorts. The caller injects a *simulatable* bound computed from published
+        donor marginals, not the live donor sets, so a refusal leaks nothing an
+        analyst could not already compute (see engine.simulatable_cohort_bound).
         Cost is bounded by the session budget: at most `budget` prior cohorts.
         """
         for prev_dataset, prev_filters in self._cohorts:
             if prev_dataset != dataset or prev_filters == filters:
                 continue
-            d = symdiff(prev_filters, filters)
+            d = bound(prev_filters, filters)
             if 0 < d < self.threshold:
                 return [Finding(
                     "high", "differencing",
-                    f"cohort differs from a previously released cohort by "
+                    f"cohort differs from a previously released cohort by at most "
                     f"{d} individual(s) (<{self.threshold}): "
                     "possible differencing attack")]
         return []

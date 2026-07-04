@@ -20,7 +20,7 @@ Guidance for coding agents working in this repository.
 - Future stats tools such as GLMs, regression, and ANOVA must be fixed-function schemas with deterministic validators and disclosure checks, not arbitrary generated code.
 - Keep direct identifiers, free text, raw timestamps, and high-granularity fields out of the public catalogue and public DuckDB views.
 - All filter values must remain bound parameters. Identifiers must come only from allowlists and pass identifier validation.
-- Do not lower disclosure thresholds, dominance controls, count rounding, query-budget checks, or differencing checks without explicit security review.
+- Do not lower disclosure thresholds, dominance controls, correlation influence controls, count rounding, query-budget checks, or differencing checks without explicit security review.
 - Denied requests must never render or return data.
 - Audit logs must remain HMAC chained. Production guidance must keep the audit key and audit-head anchor off the data host.
 

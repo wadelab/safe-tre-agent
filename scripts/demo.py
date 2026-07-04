@@ -10,13 +10,14 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from safetre import synth                     # noqa: E402
-from safetre.analyst import Analyst           # noqa: E402
-from safetre.llm import LLMClient, MockLLM    # noqa: E402
+from safetre import synth                            # noqa: E402
+from safetre.analyst import Analyst                  # noqa: E402
+from safetre.llm import LLMClient, MockLLM, real_llm_enabled  # noqa: E402
 
 
 def make_llm():
-    if os.environ.get("SAFETRE_LLM", "mock").lower() == "real":
+    # honours SAFETRE_LLM in {real, exampleprovider, ...}; anything else -> offline mock
+    if real_llm_enabled():
         return LLMClient()
     return MockLLM()
 

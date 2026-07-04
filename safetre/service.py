@@ -13,7 +13,7 @@ from pydantic import ValidationError
 
 from . import disclosure as D
 from .analyst import vet_request
-from .engine import QueryEngine
+from .engine import QueryEngine, simulatable_cohort_bound
 from .query import QuerySpec
 
 
@@ -71,10 +71,15 @@ class QueryService:
         total = float(df["n"].sum()) if "n" in df.columns else float(len(df))
         audit_findings = auditor.observe(spec.measure_key(), total)
         # lineage: is this cohort a near-duplicate of one already released?
+        # The bound is computed from PUBLISHED donor marginals, not the live
+        # donor sets, so the deny/allow decision is simulatable — an analyst with
+        # the same public marginals could reproduce it, and a refusal leaks
+        # nothing (see engine.simulatable_cohort_bound).
         cohort = spec.normalized_filters()
+        marginals = self.engine.marginal_donor_counts()
         audit_findings += auditor.observe_cohort(
             spec.dataset, cohort,
-            lambda a, b: self.engine.cohort_symdiff(spec.dataset, a, b))
+            lambda a, b: simulatable_cohort_bound(marginals, spec.dataset, a, b))
         trace.append(f"auditor: {[f.rule for f in audit_findings]}")
 
         released, action, findings = self.policy.apply(df)

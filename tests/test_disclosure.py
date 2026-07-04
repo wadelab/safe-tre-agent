@@ -27,11 +27,49 @@ def test_lone_dominance_cell_triggers_secondary_suppression():
     assert len(released) == 0        # B alone would let the margin recover A
 
 
+def test_influence_cell_suppressed():
+    # a correlation cell one donor can move by > influence_threshold is dropped;
+    # the well-behaved cell (with a benign neighbour to protect the margin) stays
+    df = pd.DataFrame({"canton": ["A", "B", "C"],
+                       "value": [0.9, 0.1, 0.2], "p_value": [0.01, 0.7, 0.5],
+                       "n": [12, 40, 45], "influence": [0.8, 0.05, 0.03]})
+    released, action, findings = DisclosurePolicy().apply(df)
+    assert action == "redacted"
+    assert any(f.rule == "influence" for f in findings)
+    assert "influence" not in released.columns          # internal helper never released
+    assert "A" not in set(released["canton"])           # the donor-dominated corr is gone
+
+
+def test_influence_below_threshold_released():
+    df = pd.DataFrame({"canton": ["A", "B"],
+                       "value": [0.3, 0.2], "p_value": [0.02, 0.1],
+                       "n": [50, 60], "influence": [0.1, 0.05]})
+    released, action, findings = DisclosurePolicy().apply(df)
+    assert action == "release"
+    assert not any(f.rule == "influence" for f in findings)
+    assert "influence" not in released.columns
+    assert list(released["canton"]) == ["A", "B"]
+
+
+def test_threshold_counts_donors_not_rows():
+    # the frequency threshold protects individuals: a cell with many rows but
+    # few distinct donors is disclosive and must be suppressed
+    df = pd.DataFrame({"canton": ["A", "B", "C"], "value": [1.0, 2.0, 3.0],
+                       "n": [40, 50, 60], "n_donors": [3, 4, 50]})
+    released, action, findings = DisclosurePolicy().apply(df)
+    assert action == "redacted"
+    assert any(f.rule == "small_cell" for f in findings)
+    assert "n_donors" not in released.columns           # internal helper never released
+    assert set(released["canton"]) == {"C"}             # A,B have <10 donors despite 40-50 rows
+
+
 def test_counts_rounded_on_release():
-    df = pd.DataFrame({"canton": ["A", "B"], "value": [1.0, 2.0], "n": [123, 47]})
+    df = pd.DataFrame({"canton": ["A", "B"], "value": [1.0, 2.0],
+                       "n": [123, 47], "n_donors": [123, 47]})
     released, action, _ = DisclosurePolicy().apply(df)
     assert action == "release"
     assert list(released["n"]) == [125, 45]             # rounded to nearest 5
+    assert "n_donors" not in released.columns
 
 
 def test_small_cells_redacted():
@@ -70,7 +108,8 @@ def test_auditor_cohort_lineage_flags_near_cohort():
     vaud = (("canton", "==", "Vaud"),)
     vaud_minus_elderly = (("age_band", "!=", "50+"), ("canton", "==", "Vaud"))
     a.record_cohort("spend", vaud)
-    flags = a.observe_cohort("spend", vaud_minus_elderly, symdiff=lambda a_, b_: 3)
+    # the injected bound is small (< threshold) -> flagged
+    flags = a.observe_cohort("spend", vaud_minus_elderly, bound=lambda a_, b_: 3)
     assert any(f.rule == "differencing" for f in flags)
 
 
@@ -78,16 +117,16 @@ def test_auditor_cohort_lineage_allows_separated_and_identical():
     a = SessionAuditor()
     vaud = (("canton", "==", "Vaud"),)
     a.record_cohort("spend", vaud)
-    # well-separated cohort: symmetric difference is large -> fine
+    # well-separated cohort: bound is large -> fine
     assert a.observe_cohort("spend", (("canton", "==", "Geneve"),),
-                            symdiff=lambda a_, b_: 200) == []
+                            bound=lambda a_, b_: 200) == []
     # identical cohort: same query repeated reveals nothing new -> fine,
-    # and the (possibly costly) symdiff is never even computed
+    # and the (possibly costly) bound is never even computed
     assert a.observe_cohort("spend", vaud,
-                            symdiff=lambda a_, b_: 1 / 0) == []
+                            bound=lambda a_, b_: 1 / 0) == []
     # other dataset: cohorts do not cross datasets
     assert a.observe_cohort("wellbeing", (("canton", "==", "Vaud"),),
-                            symdiff=lambda a_, b_: 1 / 0) == []
+                            bound=lambda a_, b_: 1 / 0) == []
 
 
 def test_secondary_suppression_single_dim():

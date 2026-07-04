@@ -34,8 +34,14 @@ Schema (role tags: DI=identifier, QI=quasi-identifier, S=sensitive, R=reference)
 Return ONLY the Python code.
 """
 
-# requests we will not even send to the model
-BLOCKED_INTENT = ["row-level", "row level", "individual record", "raw rows",
+# Requests we will not even send to the model. This is a cheap defence-in-depth
+# pre-filter, NOT the security boundary — the QuerySpec allowlist is. Cues are
+# broad paraphrases of "give me the microdata"; the real guarantee is that
+# identifiers/free-text/raw-age are not expressible in a QuerySpec at all.
+BLOCKED_INTENT = ["row-level", "row level", "line level", "line-level",
+                  "individual record", "individual-level", "unit record",
+                  "microdata", "micro-data", "raw row", "raw record",
+                  "raw event", "raw data row", "record-level", "record level",
                   "deanonymise", "deanonymize", "re-identify", "reidentify"]
 BLOCKED_TEXT_INTENT = [
     "free-text", "free text", "raw text", "verbatim",

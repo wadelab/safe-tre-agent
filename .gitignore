@@ -5,6 +5,7 @@ __pycache__/
 !.env.example
 data/*.csv
 redteam/results.csv
+redteam/realmodel_results.txt
 .venv/
 .pytest_cache/
 .hypothesis/

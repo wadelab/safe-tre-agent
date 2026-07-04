@@ -1,11 +1,12 @@
 """Security tests for the QuerySpec boundary, read-only engine and audit chain."""
 
+import pandas as pd
 import pytest
 from pydantic import ValidationError
 
 from safetre import synth
 from safetre.audit import AuditLog
-from safetre.disclosure import SessionAuditor
+from safetre.disclosure import DisclosurePolicy, SessionAuditor
 from safetre.engine import QueryEngine, _pearson_p_value
 from safetre.planner import MockPlanner
 from safetre.query import Filter, Measure, QuerySpec
@@ -86,12 +87,15 @@ def test_engine_returns_correlation(tables):
         dataset="wellbeing",
         measure=Measure(fn="corr", x="monthly_spend_selfreport", y="wemwbs_score"),
     ))
-    assert list(df.columns) == ["value", "p_value", "n"]
+    # influence and n_donors are internal helpers (like dominance): present in
+    # engine output, dropped by the gateway before release
+    assert list(df.columns) == ["value", "p_value", "n", "influence", "n_donors"]
     assert len(df) == 1
     assert df["value"].between(-1, 1).all()
     assert df["p_value"].between(0, 1).all()
     assert (df["p_value"] * 1000).round().eq(df["p_value"] * 1000).all()
     assert int(df["n"].iloc[0]) > 10
+    assert df["influence"].ge(0).all()          # max single-donor |Δr|, non-negative
 
 
 def test_engine_returns_donor_level_age_spend_correlation_with_composite_filters(tables):
@@ -105,12 +109,81 @@ def test_engine_returns_donor_level_age_spend_correlation_with_composite_filters
         ],
     )
     df = eng.run(spec)
-    assert list(df.columns) == ["value", "p_value", "n"]
+    assert list(df.columns) == ["value", "p_value", "n", "influence", "n_donors"]
     assert len(df) == 1
     assert df["value"].between(-1, 1).all()
     assert int(df["n"].iloc[0]) >= 10
     assert "age_years" not in df.columns
     assert "donor_id" not in df.columns
+
+
+def test_corr_influence_detects_dominating_donor(tables):
+    # whole-population corr: no single donor can move r much -> low influence.
+    # a group with a planted high-leverage donor -> influence must be large.
+    # (regression guard: the leave-one-out SQL must not alias per-donor and
+    # group sums, or influence collapses to 0/NaN and the control is disabled.)
+    eng = QueryEngine(tables)
+    spec = QuerySpec(dataset="donor_spend",
+                     measure=Measure(fn="corr", x="age_years", y="total_spend_chf"))
+    whole = eng.run(spec)
+    assert float(whole["influence"].iloc[0]) < 0.5     # 500 donors: no single one dominates
+
+    t2 = {k: v.copy() for k, v in tables.items()}
+    d, e = t2["donors"], t2["events"]
+    whale = "DWHALECORR"
+    d.loc[len(d)] = {"donor_id": whale, "enrolment_date": d["enrolment_date"].iloc[0],
+                     "age_years": 69, "age_band": "50+", "sex": "M", "canton": "Jura",
+                     "income_band": ">150k", "device_os": "iOS"}
+    e2 = pd.DataFrame([{**e.iloc[0].to_dict(), "event_id": f"EWC{i}", "donor_id": whale,
+                        "event_type": "purchase", "amount_chf": 250000.0} for i in range(4)])
+    t2["events"] = pd.concat([e, e2], ignore_index=True)
+    small = QueryEngine(t2).run(QuerySpec(
+        dataset="donor_spend",
+        measure=Measure(fn="corr", x="age_years", y="total_spend_chf"),
+        filters=[Filter(column="canton", op="==", value="Jura"),
+                 Filter(column="sex", op="==", value="M")]))
+    assert float(small["influence"].iloc[0]) > 0.5     # the whale dominates the correlation
+
+
+def test_engine_attaches_distinct_donor_count(tables):
+    # the frequency threshold must count individuals, not rows. On an
+    # event-level dataset rows exceed donors; on the per-donor view they match.
+    eng = QueryEngine(tables)
+    ev = eng.run(QuerySpec(dataset="spend", measure=Measure(fn="count"), group_by=["canton"]))
+    assert "n_donors" in ev.columns
+    assert (ev["n"] >= ev["n_donors"]).all()            # rows >= distinct donors
+    assert (ev["n"] > ev["n_donors"]).any()             # event-level: strictly more rows somewhere
+    per_donor = eng.run(QuerySpec(dataset="donor_spend", measure=Measure(fn="count"),
+                                  group_by=["canton"]))
+    assert (per_donor["n"] == per_donor["n_donors"]).all()   # one row per donor
+    released, _, _ = DisclosurePolicy().apply(ev)
+    assert "n_donors" not in released.columns           # helper dropped before release
+
+
+def test_service_suppresses_cell_with_many_rows_but_few_donors(tables):
+    # one hyperactive donor gives a cell >=10 rows but <10 donors: the old
+    # row-count rule would release it; the donor-count rule must suppress it.
+    t2 = {k: v.copy() for k, v in tables.items()}
+    d, e = t2["donors"], t2["events"]
+    heavy = "DHEAVYROWS"
+    d.loc[len(d)] = {"donor_id": heavy, "enrolment_date": d["enrolment_date"].iloc[0],
+                     "age_years": 16, "age_band": "16-17", "sex": "X", "canton": "Jura",
+                     "income_band": ">150k", "device_os": "iOS"}
+    e2 = pd.DataFrame([{**e.iloc[0].to_dict(), "event_id": f"EHR{i}", "donor_id": heavy,
+                        "event_type": "purchase", "amount_chf": 5.0} for i in range(14)])
+    t2["events"] = pd.concat([e, e2], ignore_index=True)
+
+    class Fixed:
+        def plan(self, request):
+            return {"dataset": "spend", "measure": {"fn": "count"},
+                    "group_by": ["device_os"],
+                    "filters": [{"column": "canton", "op": "==", "value": "Jura"},
+                                {"column": "age_band", "op": "==", "value": "16-17"}]}
+
+    r = QueryService(t2).handle("count events by device for young Jura players", Fixed())
+    ios = r.output[r.output["device_os"] == "iOS"] if r.output is not None else None
+    # the iOS cell has ~14 rows (>=10) but only ~1 donor -> must not be released
+    assert ios is None or len(ios) == 0
 
 
 def test_pearson_p_value_bounds():
@@ -239,6 +312,33 @@ class _ScriptedPlanner:
 
     def plan(self, request: str) -> dict:
         return self._specs.pop(0)
+
+
+def test_simulatable_cohort_bound(tables):
+    from safetre.engine import ALLOW_SENTINEL, simulatable_cohort_bound
+    marg = QueryEngine(tables).marginal_donor_counts()
+    n_jura = int((tables["donors"]["canton"] == "Jura").sum())
+
+    # everyone vs everyone-except-Jura: differ on canton by {Jura};
+    # bound is the Jura donor marginal (a public number), not the live symdiff
+    b = simulatable_cohort_bound(marg, "donor_spend", (), (("canton", "!=", "Jura"),))
+    assert b == n_jura
+
+    # well-separated cohorts: bound is the sum of both cantons' marginals (large)
+    big = simulatable_cohort_bound(
+        marg, "donor_spend", (("canton", "==", "Vaud"),), (("canton", "==", "Geneve"),))
+    assert big >= DisclosurePolicy.DEFAULT_THRESHOLD
+
+    # differ on two dimensions -> out of scope for the single-dim bound
+    two = simulatable_cohort_bound(
+        marg, "donor_spend", (),
+        (("canton", "!=", "Jura"), ("sex", "==", "M")))
+    assert two == ALLOW_SENTINEL
+
+    # the bound depends only on the marginals + predicates: recomputing with a
+    # copy of the marginals gives the same answer (nothing from live data)
+    assert simulatable_cohort_bound(dict(marg), "donor_spend", (),
+                                    (("canton", "!=", "Jura"),)) == b
 
 
 def test_service_lineage_differencing_denied(tables):

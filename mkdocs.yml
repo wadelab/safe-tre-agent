@@ -40,6 +40,8 @@ nav:
   - Model runtime: model-runtime.md
   - Tool manifest: tool-manifest.md
   - Formal methods: FORMAL_METHODS_ANALYSIS.md
+  - Verifiable extensions: verifiable-extensions.md
+  - Best-practice review: best-practice-review.md
   - Hardening log: hardening-log.md
   - Round 2 plan: round2-plan.md
   - Deployment: deployment.md
