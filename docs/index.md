@@ -23,6 +23,7 @@ every output; and every request is written to a tamper-evident audit log.
 | Understand the two-LLM tool contract | [Tool manifest](tool-manifest.md) |
 | See what's been red-teamed and fixed | [Hardening log](hardening-log.md) |
 | Run it on a host / tailnet | [Deployment](deployment.md) |
+| Certify it for real data (SATRE, ISO 27001, hardware) | [Certification & hardware](certification.md) |
 | Work on the code | [Development](development.md) |
 | Read the research rationale | [Write-up](writeup.md) |
 | Position it for fellowship funding | [Fellowship positioning](fellowship.md) |

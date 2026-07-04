@@ -33,6 +33,7 @@ is that local models will become strong enough for planning — roughly a good
 > [Verifiable extensions](docs/verifiable-extensions.md) ·
 > [Best-practice review](docs/best-practice-review.md) ·
 > [Deployment](docs/deployment.md) ·
+> [Certification & hardware](docs/certification.md) ·
 > [Development](docs/development.md) ·
 > [Research write-up](docs/writeup.md) ·
 > [Fellowship positioning](docs/fellowship.md).

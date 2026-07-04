@@ -140,6 +140,26 @@ endpoint. See `.env.example` and [Model runtime](model-runtime.md).
   `d2-1` cannot rewrite history. (Phase 2.)
 - Back up before upgrades; the chain is portable.
 
+## Hardware and key custody
+
+For real data, three hardware measures make the software controls real:
+
+- **Audit key in hardware.** Hold `SAFETRE_AUDIT_KEY` in an HSM (FIPS 140-2/3,
+  Common Criteria) or a hardware-backed key store — a YubiKey/PIV at small scale
+  — and anchor the audit head off-pod so a host compromise cannot rewrite history
+  undetected.
+- **Phishing-resistant MFA.** Put FIDO2/YubiKey MFA at the identity provider in
+  front of the restricted channel for all Safe People and admins; NIST recognises
+  only smart cards and FIDO2 as phishing-resistant. Keep break-glass keys
+  separate and logged.
+- **Trusted host.** TPM plus secure/measured boot, with disk-encryption keys
+  TPM-anchored and firmware locked, on top of the [safepod](safepod.md) physical
+  controls.
+
+See [Certification, hardware, and key custody](certification.md) for the full
+guidance — the SATRE benchmark, the ISO 27001 / NHS DSPT / DEA stack, and a
+pre-real-data checklist.
+
 ## Upgrades
 
 ```bash
