@@ -211,6 +211,15 @@ class MockLLM:
                 result['n'] = g.size().values
             """).strip()
 
+        if "region" in u:                                # mean spend by UK region
+            return textwrap.dedent("""
+                m = events.merge(donors[['donor_id', 'region']], on='donor_id')
+                m = m[m.event_type.isin(['purchase', 'lootbox_open'])]
+                g = m.groupby('region')['amount_gbp']
+                result = g.mean().round(2).reset_index().rename(columns={'amount_gbp': 'mean_gbp'})
+                result['n'] = g.size().values
+            """).strip()
+
         # default benign: mean spend by age band
         return textwrap.dedent("""
             m = events.merge(donors[['donor_id', 'age_band']], on='donor_id')

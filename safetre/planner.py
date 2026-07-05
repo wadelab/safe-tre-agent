@@ -146,6 +146,13 @@ class MockPlanner:
                     "measure": {"fn": "mean", "column": "wemwbs_score"},
                     "group_by": ["region"]}
 
+        if "region" in u:                                    # mean spend by UK region
+            return {"dataset": "spend",
+                    "measure": {"fn": "mean", "column": "amount_gbp"},
+                    "group_by": ["region"],
+                    "filters": [{"column": "event_type", "op": "in",
+                                 "value": ["purchase", "lootbox_open"]}]}
+
         return {"dataset": "spend",                          # benign default
                 "measure": {"fn": "mean", "column": "amount_gbp"},
                 "group_by": ["age_band"],
