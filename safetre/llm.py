@@ -202,12 +202,12 @@ class MockLLM:
         if "per donor" in u or "per-donor" in u:         # code-channel smuggling
             return "result = survey[['donor_id', 'wemwbs_score']]"
 
-        if "canton" in u and "device" in u:              # small-cell over-granular
+        if "region" in u and "device" in u:              # small-cell over-granular
             return textwrap.dedent("""
-                m = events.merge(donors[['donor_id', 'age_band', 'canton', 'device_os']], on='donor_id')
+                m = events.merge(donors[['donor_id', 'age_band', 'region', 'device_os']], on='donor_id')
                 m = m[m.event_type.isin(['purchase', 'lootbox_open'])]
-                g = m.groupby(['age_band', 'canton', 'device_os'])['amount_chf']
-                result = g.mean().round(2).reset_index().rename(columns={'amount_chf': 'mean_chf'})
+                g = m.groupby(['age_band', 'region', 'device_os'])['amount_gbp']
+                result = g.mean().round(2).reset_index().rename(columns={'amount_gbp': 'mean_gbp'})
                 result['n'] = g.size().values
             """).strip()
 
@@ -215,7 +215,7 @@ class MockLLM:
         return textwrap.dedent("""
             m = events.merge(donors[['donor_id', 'age_band']], on='donor_id')
             m = m[m.event_type.isin(['purchase', 'lootbox_open'])]
-            g = m.groupby('age_band')['amount_chf']
-            result = g.mean().round(2).reset_index().rename(columns={'amount_chf': 'mean_chf'})
+            g = m.groupby('age_band')['amount_gbp']
+            result = g.mean().round(2).reset_index().rename(columns={'amount_gbp': 'mean_gbp'})
             result['n'] = g.size().values
         """).strip()

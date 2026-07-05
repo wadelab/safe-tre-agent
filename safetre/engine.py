@@ -32,25 +32,25 @@ THREADS = 2
 _VIEWS = {
     "spend": """
         CREATE VIEW spend AS
-        SELECT d.age_band, d.sex, d.canton, d.income_band, d.device_os,
+        SELECT d.age_band, d.sex, d.region, d.income_band, d.device_os,
                a.genre, a.contains_lootboxes, a.price_tier, a.age_rating,
-               e.event_type, e.amount_chf, e.ingame_currency
+               e.event_type, e.amount_gbp, e.ingame_currency
         FROM events e JOIN donors d ON e.donor_id = d.donor_id
                       JOIN apps a   ON e.app_id   = a.app_id
     """,
     "donor_spend": """
         CREATE VIEW donor_spend AS
-        SELECT d.age_band, d.sex, d.canton, d.income_band, d.device_os,
+        SELECT d.age_band, d.sex, d.region, d.income_band, d.device_os,
                SUM(CASE WHEN e.event_type IN ('purchase', 'lootbox_open')
-                        THEN e.amount_chf ELSE 0 END) AS total_spend_chf,
+                        THEN e.amount_gbp ELSE 0 END) AS total_spend_gbp,
                SUM(CASE WHEN e.event_type = 'purchase' THEN 1 ELSE 0 END) AS purchase_events,
                SUM(CASE WHEN e.event_type = 'lootbox_open' THEN 1 ELSE 0 END) AS lootbox_events
         FROM donors d LEFT JOIN events e ON e.donor_id = d.donor_id
-        GROUP BY d.donor_id, d.age_band, d.sex, d.canton, d.income_band, d.device_os
+        GROUP BY d.donor_id, d.age_band, d.sex, d.region, d.income_band, d.device_os
     """,
     "wellbeing": """
         CREATE VIEW wellbeing AS
-        SELECT d.age_band, d.sex, d.canton, d.income_band, d.device_os,
+        SELECT d.age_band, d.sex, d.region, d.income_band, d.device_os,
                s.wave, s.pgsi_score, s.igds_score, s.wemwbs_score,
                s.monthly_spend_selfreport
         FROM survey s JOIN donors d ON s.donor_id = d.donor_id
@@ -62,25 +62,25 @@ _VIEWS = {
 _UNIT_VIEWS = {
     "spend": """
         CREATE VIEW _spend_u AS
-        SELECT e.donor_id, d.age_years, d.age_band, d.sex, d.canton, d.income_band, d.device_os,
+        SELECT e.donor_id, d.age_years, d.age_band, d.sex, d.region, d.income_band, d.device_os,
                a.genre, a.contains_lootboxes, a.price_tier, a.age_rating,
-               e.event_type, e.amount_chf, e.ingame_currency
+               e.event_type, e.amount_gbp, e.ingame_currency
         FROM events e JOIN donors d ON e.donor_id = d.donor_id
                       JOIN apps a   ON e.app_id   = a.app_id
     """,
     "donor_spend": """
         CREATE VIEW _donor_spend_u AS
-        SELECT d.donor_id, d.age_years, d.age_band, d.sex, d.canton, d.income_band, d.device_os,
+        SELECT d.donor_id, d.age_years, d.age_band, d.sex, d.region, d.income_band, d.device_os,
                SUM(CASE WHEN e.event_type IN ('purchase', 'lootbox_open')
-                        THEN e.amount_chf ELSE 0 END) AS total_spend_chf,
+                        THEN e.amount_gbp ELSE 0 END) AS total_spend_gbp,
                SUM(CASE WHEN e.event_type = 'purchase' THEN 1 ELSE 0 END) AS purchase_events,
                SUM(CASE WHEN e.event_type = 'lootbox_open' THEN 1 ELSE 0 END) AS lootbox_events
         FROM donors d LEFT JOIN events e ON e.donor_id = d.donor_id
-        GROUP BY d.donor_id, d.age_years, d.age_band, d.sex, d.canton, d.income_band, d.device_os
+        GROUP BY d.donor_id, d.age_years, d.age_band, d.sex, d.region, d.income_band, d.device_os
     """,
     "wellbeing": """
         CREATE VIEW _wellbeing_u AS
-        SELECT s.donor_id, d.age_years, d.age_band, d.sex, d.canton, d.income_band, d.device_os,
+        SELECT s.donor_id, d.age_years, d.age_band, d.sex, d.region, d.income_band, d.device_os,
                s.wave, s.pgsi_score, s.igds_score, s.wemwbs_score,
                s.monthly_spend_selfreport
         FROM survey s JOIN donors d ON s.donor_id = d.donor_id
@@ -411,7 +411,7 @@ def simulatable_cohort_bound(marginals: dict, dataset: str,
 
     Being an upper bound, it does NOT catch differencing that isolates a small
     group through the *interaction* of a common category with an otherwise-narrow
-    cohort (e.g. the over-50s within one small canton): the marginal is then
+    cohort (e.g. the over-50s within one small region): the marginal is then
     large even though the real symmetric difference is small. That residual is
     the price of simulatability; it is largely covered by the per-cell donor
     threshold (a narrow cohort's cells are suppressed anyway) and fully by a DP

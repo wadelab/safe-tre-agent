@@ -33,11 +33,11 @@ or a refusal.
 Good requests are specific about the outcome, grouping, and filters:
 
 - `mean spend by age band`
-- `mean wellbeing by canton`
+- `mean wellbeing by region`
 - `total spend by device os for purchases`
 - `count by sex and age band`
 - `correlation between monthly spend self report and wellbeing score`
-- `correlation between age and spend for sex==M in canton==Vaud`
+- `correlation between age and spend for sex==M in region==London`
 
 The current executable tool is `aggregate_query`: count, mean, sum, and Pearson
 correlation over allowlisted datasets. Correlation is fixed-function: it can only
@@ -46,7 +46,7 @@ use two allowlisted measure columns from the same dataset and returns `value`,
 such as GLM, regression, and ANOVA will appear in the manifest only after they
 have fixed schemas and disclosure checks.
 
-Composite filters such as `sex==M` and `canton==Vaud` are compiled as separate
+Composite filters such as `sex==M` and `region==London` are compiled as separate
 validated predicates with bound parameters. Raw age can be used inside fixed
 tools such as donor-level age/spend correlation, but it is an internal analysis
 variable only: it cannot be grouped, rendered, or returned.

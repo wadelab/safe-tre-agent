@@ -102,20 +102,20 @@ erDiagram
 
     donors  { string donor_id "DI (never exposed)" }
     apps    { string app_id "R" }
-    events  { float amount_chf "S" }
+    events  { float amount_gbp "S" }
     survey  { int pgsi_score "S" }
 ```
 
 - **view `spend`** — `events ⨝ donors ⨝ apps`, exposing dimensions
-  (`age_band, sex, canton, income_band, device_os, genre, contains_lootboxes,
-  price_tier, event_type, age_rating`) and measures (`amount_chf,
+  (`age_band, sex, region, income_band, device_os, genre, contains_lootboxes,
+  price_tier, event_type, age_rating`) and measures (`amount_gbp,
   ingame_currency`).
 - **view `donor_spend`** — one row per donor, exposing safe dimensions and
-  donor-level spend measures (`total_spend_chf`, `purchase_events`,
+  donor-level spend measures (`total_spend_gbp`, `purchase_events`,
   `lootbox_events`). Raw age is available only in the internal unit view for
   fixed tools such as age/spend correlation.
 - **view `wellbeing`** — `survey ⨝ donors`, exposing dimensions
-  (`age_band, sex, canton, income_band, device_os, wave`) and measures
+  (`age_band, sex, region, income_band, device_os, wave`) and measures
   (`pgsi_score, igds_score, wemwbs_score, monthly_spend_selfreport`).
 
 See `safetre/schema.py` for column roles (DI / QI / S / R) and

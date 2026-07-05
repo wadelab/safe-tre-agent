@@ -41,9 +41,9 @@ PLANNER_SYSTEM = (
     "For correlation requests, use fn='corr' with x and y set to two allowed "
     "measure columns from the same dataset, and column null. "
     "For age-versus-spend correlation, use dataset 'donor_spend', x='age_years', "
-    "y='total_spend_chf'. Raw age is an internal analysis variable only: never "
+    "y='total_spend_gbp'. Raw age is an internal analysis variable only: never "
     "group by it or return it. Composite criteria such as sex==M and "
-    "canton==Vaud must be emitted as separate filter objects. "
+    "region==London must be emitted as separate filter objects. "
     "Published tool manifest (anything else is rejected):\n" + _manifest_text() +
     "\nNever reference identifiers, names, timestamps or free text. JSON only."
 )
@@ -76,18 +76,18 @@ class MockPlanner:
         if sex:
             filters.append({"column": "sex", "op": "==", "value": sex.group(1).upper()})
 
-        canton = re.search(r"\bcanton\s*==\s*([A-Za-z]+)\b", request, re.I)
-        if canton:
+        region = re.search(r"\bregion\s*==\s*([A-Za-z]+)\b", request, re.I)
+        if region:
             canonical = {
-                "vaud": "Vaud",
-                "geneve": "Geneve",
-                "valais": "Valais",
-                "fribourg": "Fribourg",
-                "neuchatel": "Neuchatel",
-                "jura": "Jura",
+                "london": "London",
+                "south east": "South East",
+                "north west": "North West",
+                "scotland": "Scotland",
+                "wales": "Wales",
+                "northern ireland": "Northern Ireland",
             }
-            value = canonical.get(canton.group(1).lower(), canton.group(1))
-            filters.append({"column": "canton", "op": "==", "value": value})
+            value = canonical.get(region.group(1).lower(), region.group(1))
+            filters.append({"column": "region", "op": "==", "value": value})
 
         between = re.search(r"\bage\s+between\s+(\d+)\s+and\s+(\d+)\b", request, re.I)
         if between:
@@ -104,10 +104,10 @@ class MockPlanner:
     def plan(self, request: str) -> dict:
         u = request.lower()
 
-        if "canton" in u and "device" in u:                 # over-granular -> small cells
+        if "region" in u and "device" in u:                 # over-granular -> small cells
             return {"dataset": "spend",
-                    "measure": {"fn": "mean", "column": "amount_chf"},
-                    "group_by": ["age_band", "canton", "device_os"],
+                    "measure": {"fn": "mean", "column": "amount_gbp"},
+                    "group_by": ["age_band", "region", "device_os"],
                     "filters": [{"column": "event_type", "op": "in",
                                  "value": ["purchase", "lootbox_open"]}]}
 
@@ -123,7 +123,7 @@ class MockPlanner:
         if "correlat" in u or "relationship" in u or "association" in u:
             if "age" in u and "spend" in u:
                 return {"dataset": "donor_spend",
-                        "measure": {"fn": "corr", "x": "age_years", "y": "total_spend_chf"},
+                        "measure": {"fn": "corr", "x": "age_years", "y": "total_spend_gbp"},
                         "filters": self._filters_from_text(request)}
             if "wellbeing" in u or "wemwbs" in u:
                 return {"dataset": "wellbeing",
@@ -138,16 +138,16 @@ class MockPlanner:
                                     "y": "pgsi_score"},
                         "filters": self._filters_from_text(request)}
             return {"dataset": "spend",
-                    "measure": {"fn": "corr", "x": "amount_chf", "y": "ingame_currency"},
+                    "measure": {"fn": "corr", "x": "amount_gbp", "y": "ingame_currency"},
                     "filters": self._filters_from_text(request)}
 
         if "wellbeing" in u:
             return {"dataset": "wellbeing",
                     "measure": {"fn": "mean", "column": "wemwbs_score"},
-                    "group_by": ["canton"]}
+                    "group_by": ["region"]}
 
         return {"dataset": "spend",                          # benign default
-                "measure": {"fn": "mean", "column": "amount_chf"},
+                "measure": {"fn": "mean", "column": "amount_gbp"},
                 "group_by": ["age_band"],
                 "filters": [{"column": "event_type", "op": "in",
                              "value": ["purchase", "lootbox_open"]}]}

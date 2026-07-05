@@ -58,7 +58,7 @@ def test_benign_query_released_with_table():
 
 
 def test_small_cell_redacted():
-    r = client.post("/api/query", json={"q": "mean spend by age band, canton and device os"})
+    r = client.post("/api/query", json={"q": "mean spend by age band, region and device os"})
     assert "status-redacted" in r.text
 
 
@@ -84,7 +84,7 @@ def test_correlation_small_p_value_renders_three_decimals():
 def test_composite_age_spend_correlation_query_released():
     r = client.post(
         "/api/query",
-        json={"q": "correlation between age and spend for sex==M in canton==Vaud"},
+        json={"q": "correlation between age and spend for sex==M in region==London"},
         headers={"Tailscale-User-Login": "composite@example.test"},
     )
     assert r.status_code == 200

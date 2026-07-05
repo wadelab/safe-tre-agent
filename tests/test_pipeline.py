@@ -42,7 +42,7 @@ def test_benign_released(tables):
 
 
 def test_small_cell_redacted(tables):
-    r = fresh(tables).run("mean spend by age band, canton and device os")
+    r = fresh(tables).run("mean spend by age band, region and device os")
     assert r.status == "redacted"
     assert (r.output["n"] >= 10).all()          # offending cells suppressed
 
@@ -90,5 +90,5 @@ def test_sandbox_errors_do_not_leak(tables):
 
 
 def test_sandbox_runs_benign_aggregate(tables):
-    res = run_in_sandbox("result = donors.groupby('canton').size().reset_index()", tables)
+    res = run_in_sandbox("result = donors.groupby('region').size().reset_index()", tables)
     assert res.ok and res.result is not None and len(res.result) > 0

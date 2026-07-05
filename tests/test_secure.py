@@ -21,16 +21,16 @@ def tables():
 # --- QuerySpec validation (the boundary) -------------------------------------
 
 def test_valid_spec_accepted():
-    QuerySpec(dataset="spend", measure=Measure(fn="mean", column="amount_chf"),
+    QuerySpec(dataset="spend", measure=Measure(fn="mean", column="amount_gbp"),
               group_by=["age_band"])
     QuerySpec(dataset="wellbeing",
               measure=Measure(fn="corr", x="monthly_spend_selfreport", y="wemwbs_score"))
     QuerySpec(
         dataset="donor_spend",
-        measure=Measure(fn="corr", x="age_years", y="total_spend_chf"),
+        measure=Measure(fn="corr", x="age_years", y="total_spend_gbp"),
         filters=[
             Filter(column="sex", op="==", value="M"),
-            Filter(column="canton", op="==", value="Vaud"),
+            Filter(column="region", op="==", value="London"),
         ],
     )
 
@@ -42,10 +42,10 @@ def test_valid_spec_accepted():
     {"dataset": "spend", "measure": {"fn": "count"}, "group_by": ["a", "b", "c", "d"]},  # too many
     {"dataset": "spend", "measure": {"fn": "count"}, "evil": 1},                     # extra field
     {"dataset": "secrets", "measure": {"fn": "count"}},                             # unknown dataset
-    {"dataset": "spend", "measure": {"fn": "mean", "column": "amount_chf"},
+    {"dataset": "spend", "measure": {"fn": "mean", "column": "amount_gbp"},
      "filters": [{"column": "donor_id", "op": "==", "value": "D00001"}]},           # filter on identifier
     {"dataset": "spend", "measure": {"fn": "count"},
-     "filters": [{"column": "canton", "op": "in", "value": ["x"] * 200}]},          # oversize in-list (DoS)
+     "filters": [{"column": "region", "op": "in", "value": ["x"] * 200}]},          # oversize in-list (DoS)
     {"dataset": "wellbeing",
      "measure": {"fn": "corr", "x": "monthly_spend_selfreport", "y": "donor_id"}},   # corr identifier
     {"dataset": "wellbeing",
@@ -65,7 +65,7 @@ def test_offallowlist_specs_rejected(bad):
 
 def test_engine_returns_counts(tables):
     eng = QueryEngine(tables)
-    df = eng.run(QuerySpec(dataset="spend", measure=Measure(fn="mean", column="amount_chf"),
+    df = eng.run(QuerySpec(dataset="spend", measure=Measure(fn="mean", column="amount_gbp"),
                            group_by=["age_band"]))
     assert "n" in df.columns and "value" in df.columns and len(df) > 0
     assert "donor_id" not in df.columns and "free_text" not in df.columns
@@ -73,11 +73,11 @@ def test_engine_returns_counts(tables):
 
 def test_engine_attaches_dominance_internally(tables):
     eng = QueryEngine(tables)
-    s = eng.run(QuerySpec(dataset="spend", measure=Measure(fn="sum", column="amount_chf"),
-                          group_by=["canton"]))
+    s = eng.run(QuerySpec(dataset="spend", measure=Measure(fn="sum", column="amount_gbp"),
+                          group_by=["region"]))
     assert "dominance" in s.columns and s["dominance"].between(0, 1).all()
     assert "donor_id" not in s.columns                 # unit view never exposed
-    c = eng.run(QuerySpec(dataset="spend", measure=Measure(fn="count"), group_by=["canton"]))
+    c = eng.run(QuerySpec(dataset="spend", measure=Measure(fn="count"), group_by=["region"]))
     assert "dominance" not in c.columns                # only for sum/mean
 
 
@@ -102,10 +102,10 @@ def test_engine_returns_donor_level_age_spend_correlation_with_composite_filters
     eng = QueryEngine(tables)
     spec = QuerySpec(
         dataset="donor_spend",
-        measure=Measure(fn="corr", x="age_years", y="total_spend_chf"),
+        measure=Measure(fn="corr", x="age_years", y="total_spend_gbp"),
         filters=[
             Filter(column="sex", op="==", value="M"),
-            Filter(column="canton", op="==", value="Vaud"),
+            Filter(column="region", op="==", value="London"),
         ],
     )
     df = eng.run(spec)
@@ -124,7 +124,7 @@ def test_corr_influence_detects_dominating_donor(tables):
     # group sums, or influence collapses to 0/NaN and the control is disabled.)
     eng = QueryEngine(tables)
     spec = QuerySpec(dataset="donor_spend",
-                     measure=Measure(fn="corr", x="age_years", y="total_spend_chf"))
+                     measure=Measure(fn="corr", x="age_years", y="total_spend_gbp"))
     whole = eng.run(spec)
     assert float(whole["influence"].iloc[0]) < 0.5     # 500 donors: no single one dominates
 
@@ -132,15 +132,15 @@ def test_corr_influence_detects_dominating_donor(tables):
     d, e = t2["donors"], t2["events"]
     whale = "DWHALECORR"
     d.loc[len(d)] = {"donor_id": whale, "enrolment_date": d["enrolment_date"].iloc[0],
-                     "age_years": 69, "age_band": "50+", "sex": "M", "canton": "Jura",
+                     "age_years": 69, "age_band": "50+", "sex": "M", "region": "Northern Ireland",
                      "income_band": ">150k", "device_os": "iOS"}
     e2 = pd.DataFrame([{**e.iloc[0].to_dict(), "event_id": f"EWC{i}", "donor_id": whale,
-                        "event_type": "purchase", "amount_chf": 250000.0} for i in range(4)])
+                        "event_type": "purchase", "amount_gbp": 250000.0} for i in range(4)])
     t2["events"] = pd.concat([e, e2], ignore_index=True)
     small = QueryEngine(t2).run(QuerySpec(
         dataset="donor_spend",
-        measure=Measure(fn="corr", x="age_years", y="total_spend_chf"),
-        filters=[Filter(column="canton", op="==", value="Jura"),
+        measure=Measure(fn="corr", x="age_years", y="total_spend_gbp"),
+        filters=[Filter(column="region", op="==", value="Northern Ireland"),
                  Filter(column="sex", op="==", value="M")]))
     assert float(small["influence"].iloc[0]) > 0.5     # the whale dominates the correlation
 
@@ -149,12 +149,12 @@ def test_engine_attaches_distinct_donor_count(tables):
     # the frequency threshold must count individuals, not rows. On an
     # event-level dataset rows exceed donors; on the per-donor view they match.
     eng = QueryEngine(tables)
-    ev = eng.run(QuerySpec(dataset="spend", measure=Measure(fn="count"), group_by=["canton"]))
+    ev = eng.run(QuerySpec(dataset="spend", measure=Measure(fn="count"), group_by=["region"]))
     assert "n_donors" in ev.columns
     assert (ev["n"] >= ev["n_donors"]).all()            # rows >= distinct donors
     assert (ev["n"] > ev["n_donors"]).any()             # event-level: strictly more rows somewhere
     per_donor = eng.run(QuerySpec(dataset="donor_spend", measure=Measure(fn="count"),
-                                  group_by=["canton"]))
+                                  group_by=["region"]))
     assert (per_donor["n"] == per_donor["n_donors"]).all()   # one row per donor
     released, _, _ = DisclosurePolicy().apply(ev)
     assert "n_donors" not in released.columns           # helper dropped before release
@@ -167,20 +167,20 @@ def test_service_suppresses_cell_with_many_rows_but_few_donors(tables):
     d, e = t2["donors"], t2["events"]
     heavy = "DHEAVYROWS"
     d.loc[len(d)] = {"donor_id": heavy, "enrolment_date": d["enrolment_date"].iloc[0],
-                     "age_years": 16, "age_band": "16-17", "sex": "X", "canton": "Jura",
+                     "age_years": 16, "age_band": "16-17", "sex": "X", "region": "Northern Ireland",
                      "income_band": ">150k", "device_os": "iOS"}
     e2 = pd.DataFrame([{**e.iloc[0].to_dict(), "event_id": f"EHR{i}", "donor_id": heavy,
-                        "event_type": "purchase", "amount_chf": 5.0} for i in range(14)])
+                        "event_type": "purchase", "amount_gbp": 5.0} for i in range(14)])
     t2["events"] = pd.concat([e, e2], ignore_index=True)
 
     class Fixed:
         def plan(self, request):
             return {"dataset": "spend", "measure": {"fn": "count"},
                     "group_by": ["device_os"],
-                    "filters": [{"column": "canton", "op": "==", "value": "Jura"},
+                    "filters": [{"column": "region", "op": "==", "value": "Northern Ireland"},
                                 {"column": "age_band", "op": "==", "value": "16-17"}]}
 
-    r = QueryService(t2).handle("count events by device for young Jura players", Fixed())
+    r = QueryService(t2).handle("count events by device for young Northern Ireland players", Fixed())
     ios = r.output[r.output["device_os"] == "iOS"] if r.output is not None else None
     # the iOS cell has ~14 rows (>=10) but only ~1 donor -> must not be released
     assert ios is None or len(ios) == 0
@@ -194,26 +194,26 @@ def test_pearson_p_value_bounds():
 
 def test_cohort_size_and_symdiff(tables):
     eng = QueryEngine(tables)
-    n_jura = int((tables["donors"]["canton"] == "Jura").sum())
+    n_ni = int((tables["donors"]["region"] == "Northern Ireland").sum())
     everyone = eng.cohort_size("spend")
-    non_jura = eng.cohort_size("spend", [("canton", "!=", "Jura")])
-    assert everyone - non_jura == n_jura
-    assert eng.cohort_symdiff("spend", (), [("canton", "!=", "Jura")]) == n_jura
-    assert eng.cohort_symdiff("spend", [("canton", "!=", "Jura")],
-                              [("canton", "!=", "Jura")]) == 0
+    non_ni = eng.cohort_size("spend", [("region", "!=", "Northern Ireland")])
+    assert everyone - non_ni == n_ni
+    assert eng.cohort_symdiff("spend", (), [("region", "!=", "Northern Ireland")]) == n_ni
+    assert eng.cohort_symdiff("spend", [("region", "!=", "Northern Ireland")],
+                              [("region", "!=", "Northern Ireland")]) == 0
     with pytest.raises(ValueError):
         eng.cohort_size("secrets")                    # unknown dataset
     with pytest.raises(ValueError):
-        eng.cohort_size("spend", [("canton", "LIKE", "%")])   # off-allowlist op
+        eng.cohort_size("spend", [("region", "LIKE", "%")])   # off-allowlist op
 
 
 def test_filter_value_is_not_sql_injectable(tables):
     eng = QueryEngine(tables)
     evil = "x'; DROP TABLE events; --"
     df = eng.run(QuerySpec(dataset="spend", measure=Measure(fn="count"),
-                           group_by=["canton"],
-                           filters=[Filter(column="canton", op="==", value=evil)]))
-    assert len(df) == 0                              # no canton matches the literal
+                           group_by=["region"],
+                           filters=[Filter(column="region", op="==", value=evil)]))
+    assert len(df) == 0                              # no region matches the literal
     # the events table is untouched -> injection did nothing
     assert eng.con.execute("SELECT COUNT(*) FROM events").fetchone()[0] > 0
 
@@ -227,7 +227,7 @@ def test_service_benign_released(tables):
 
 
 def test_service_small_cell_redacted(tables):
-    r = QueryService(tables).handle("mean spend by age band, canton and device os", MockPlanner())
+    r = QueryService(tables).handle("mean spend by age band, region and device os", MockPlanner())
     assert r.status == "redacted"
     assert (r.output["n"] >= 10).all()
 
@@ -242,7 +242,7 @@ def test_service_correlation_released(tables):
 
 def test_service_composite_age_spend_correlation_released(tables):
     r = QueryService(tables).handle(
-        "correlation between age and spend for sex==M in canton==Vaud",
+        "correlation between age and spend for sex==M in region==London",
         MockPlanner(),
     )
     assert r.status == "released"
@@ -250,11 +250,11 @@ def test_service_composite_age_spend_correlation_released(tables):
     assert list(r.output.columns) == ["value", "p_value", "n"]
     assert r.spec == {
         "dataset": "donor_spend",
-        "measure": {"fn": "corr", "column": None, "x": "age_years", "y": "total_spend_chf"},
+        "measure": {"fn": "corr", "column": None, "x": "age_years", "y": "total_spend_gbp"},
         "group_by": [],
         "filters": [
             {"column": "sex", "op": "==", "value": "M"},
-            {"column": "canton", "op": "==", "value": "Vaud"},
+            {"column": "region", "op": "==", "value": "London"},
         ],
     }
 
@@ -286,8 +286,8 @@ def test_service_free_text_requests_denied_before_planner(tables, req):
 
 @pytest.mark.parametrize("req", [
     "how many purchases?",
-    "wellbeing by canton",
-    "same, excluding Jura",
+    "wellbeing by region",
+    "same, excluding Northern Ireland",
 ])
 def test_service_short_aggregate_requests_pass_vetting(tables, req):
     r = QueryService(tables).handle(req, MockPlanner())
@@ -317,62 +317,62 @@ class _ScriptedPlanner:
 def test_simulatable_cohort_bound(tables):
     from safetre.engine import ALLOW_SENTINEL, simulatable_cohort_bound
     marg = QueryEngine(tables).marginal_donor_counts()
-    n_jura = int((tables["donors"]["canton"] == "Jura").sum())
+    n_ni = int((tables["donors"]["region"] == "Northern Ireland").sum())
 
-    # everyone vs everyone-except-Jura: differ on canton by {Jura};
-    # bound is the Jura donor marginal (a public number), not the live symdiff
-    b = simulatable_cohort_bound(marg, "donor_spend", (), (("canton", "!=", "Jura"),))
-    assert b == n_jura
+    # everyone vs everyone-except-Northern Ireland: differ on region by {Northern Ireland};
+    # bound is the Northern Ireland donor marginal (a public number), not the live symdiff
+    b = simulatable_cohort_bound(marg, "donor_spend", (), (("region", "!=", "Northern Ireland"),))
+    assert b == n_ni
 
-    # well-separated cohorts: bound is the sum of both cantons' marginals (large)
+    # well-separated cohorts: bound is the sum of both regions' marginals (large)
     big = simulatable_cohort_bound(
-        marg, "donor_spend", (("canton", "==", "Vaud"),), (("canton", "==", "Geneve"),))
+        marg, "donor_spend", (("region", "==", "London"),), (("region", "==", "South East"),))
     assert big >= DisclosurePolicy.DEFAULT_THRESHOLD
 
     # differ on two dimensions -> out of scope for the single-dim bound
     two = simulatable_cohort_bound(
         marg, "donor_spend", (),
-        (("canton", "!=", "Jura"), ("sex", "==", "M")))
+        (("region", "!=", "Northern Ireland"), ("sex", "==", "M")))
     assert two == ALLOW_SENTINEL
 
     # the bound depends only on the marginals + predicates: recomputing with a
     # copy of the marginals gives the same answer (nothing from live data)
     assert simulatable_cohort_bound(dict(marg), "donor_spend", (),
-                                    (("canton", "!=", "Jura"),)) == b
+                                    (("region", "!=", "Northern Ireland"),)) == b
 
 
 def test_service_lineage_differencing_denied(tables):
-    # sum over everyone, then over "everyone except Jura": the two cohorts
+    # sum over everyone, then over "everyone except Northern Ireland": the two cohorts
     # differ by a handful of donors, so subtracting the sums would expose them
-    n_jura = int((tables["donors"]["canton"] == "Jura").sum())
+    n_ni = int((tables["donors"]["region"] == "Northern Ireland").sum())
     svc = QueryService(tables)
-    auditor = SessionAuditor(threshold=n_jura + 1)
+    auditor = SessionAuditor(threshold=n_ni + 1)
     planner = _ScriptedPlanner(
-        {"dataset": "spend", "measure": {"fn": "sum", "column": "amount_chf"},
+        {"dataset": "spend", "measure": {"fn": "sum", "column": "amount_gbp"},
          "group_by": ["age_band"]},
-        {"dataset": "spend", "measure": {"fn": "sum", "column": "amount_chf"},
+        {"dataset": "spend", "measure": {"fn": "sum", "column": "amount_gbp"},
          "group_by": ["age_band"],
-         "filters": [{"column": "canton", "op": "!=", "value": "Jura"}]},
+         "filters": [{"column": "region", "op": "!=", "value": "Northern Ireland"}]},
     )
     first = svc.handle("sum spend by age band", planner, auditor=auditor)
-    second = svc.handle("same, excluding Jura", planner, auditor=auditor)
+    second = svc.handle("same, excluding Northern Ireland", planner, auditor=auditor)
     assert first.status in ("released", "redacted")
     assert second.status == "denied" and second.output is None
     assert any(f.rule == "differencing" for f in second.findings)
 
 
 def test_service_lineage_separated_cohorts_allowed(tables):
-    # disjoint cohorts (different cantons) share no individuals -> no flag
+    # disjoint cohorts (different regions) share no individuals -> no flag
     svc = QueryService(tables)
     auditor = SessionAuditor()
-    spec = {"dataset": "spend", "measure": {"fn": "sum", "column": "amount_chf"},
+    spec = {"dataset": "spend", "measure": {"fn": "sum", "column": "amount_gbp"},
             "group_by": ["age_band"]}
     planner = _ScriptedPlanner(
-        {**spec, "filters": [{"column": "canton", "op": "==", "value": "Vaud"}]},
-        {**spec, "filters": [{"column": "canton", "op": "==", "value": "Geneve"}]},
+        {**spec, "filters": [{"column": "region", "op": "==", "value": "London"}]},
+        {**spec, "filters": [{"column": "region", "op": "==", "value": "South East"}]},
     )
-    first = svc.handle("sum spend by age band in Vaud", planner, auditor=auditor)
-    second = svc.handle("sum spend by age band in Geneve", planner, auditor=auditor)
+    first = svc.handle("sum spend by age band in London", planner, auditor=auditor)
+    second = svc.handle("sum spend by age band in South East", planner, auditor=auditor)
     assert first.status in ("released", "redacted")
     assert second.status in ("released", "redacted")
 
@@ -381,15 +381,15 @@ def test_service_lineage_ignores_denied_queries(tables):
     # a denied query released nothing, so it must not poison later queries
     svc = QueryService(tables)
     auditor = SessionAuditor()
-    spec = {"dataset": "spend", "measure": {"fn": "sum", "column": "amount_chf"},
+    spec = {"dataset": "spend", "measure": {"fn": "sum", "column": "amount_gbp"},
             "group_by": ["age_band"],
-            "filters": [{"column": "canton", "op": "==", "value": "Vaud"}]}
+            "filters": [{"column": "region", "op": "==", "value": "London"}]}
     planner = _ScriptedPlanner(
         {**spec, "group_by": ["donor_id"]},           # rejected at validation
         spec,
     )
-    first = svc.handle("per-donor sums in Vaud", planner, auditor=auditor)
-    second = svc.handle("sum spend by age band in Vaud", planner, auditor=auditor)
+    first = svc.handle("per-donor sums in London", planner, auditor=auditor)
+    second = svc.handle("sum spend by age band in London", planner, auditor=auditor)
     assert first.status == "denied"
     assert second.status in ("released", "redacted")
 

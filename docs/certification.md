@@ -9,8 +9,8 @@ Two framings up front. First, the code provides technical controls a certifier
 looks for — an off-box audit key, identity gating, a restricted channel, a
 disclosure gateway — but certification itself is an organisational programme, not
 a dependency you install. Second, the guidance is UK-centric because the project
-builds on OpenSAFELY, ACRO/SACRO and the Five Safes; the synthetic data is
-Swiss-flavoured, so the Swiss/EU equivalents are noted where they differ.
+builds on OpenSAFELY, ACRO/SACRO and the Five Safes, and the synthetic data uses
+UK regions; equivalents for other jurisdictions are noted where they differ.
 
 ## The benchmark: SATRE
 
@@ -55,9 +55,10 @@ others layer on depending on the data and route to access.
 - **DEA / ONS accreditation** — for research access under the Digital Economy
   Act, if that is the legal route.
 
-**Switzerland / EU.** The synthetic data uses Swiss cantons. For a Swiss or EU
-deployment the analogues are the **SPHN / BioMedIT** information-security policy
-and **FADP / GDPR** compliance, on the same **ISO 27001** base.
+**Other jurisdictions.** For an EU deployment the base is **GDPR** on the same
+**ISO 27001** foundation; for Switzerland, the analogues are the **SPHN /
+BioMedIT** information-security policy and **FADP**. The technical controls are
+jurisdiction-neutral; the governance wrapper is what changes.
 
 None of these exempts the others, and none certifies the code by itself — they
 certify the organisation and its processes.

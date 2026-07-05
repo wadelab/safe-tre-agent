@@ -18,7 +18,7 @@ TABLES = {
         "age_years": "QI",
         "age_band": "QI",
         "sex": "QI",
-        "canton": "QI",
+        "region": "QI",
         "income_band": "QI",
         "device_os": "QI",
     },
@@ -38,7 +38,7 @@ TABLES = {
         "ts": "QI",                # precise timing can re-identify
         "event_type": "R",
         "item_name": "R",
-        "amount_chf": "S",
+        "amount_gbp": "S",
         "ingame_currency": "S",
     },
     "survey": {

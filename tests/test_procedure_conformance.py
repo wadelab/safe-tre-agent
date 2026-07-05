@@ -79,7 +79,7 @@ def test_every_supported_fn_has_a_declared_obligation():
 @pytest.mark.parametrize("fn", sorted(PROCEDURES))
 def test_procedure_carries_declared_influence_control(engine, fn):
     obligation = PROCEDURES[fn]
-    df = engine.run(_representative_spec(fn, group_by=["canton"]))
+    df = engine.run(_representative_spec(fn, group_by=["region"]))
     control = obligation["influence_control"]
     if obligation["reads_individual_values"]:
         assert control is not None, f"{fn} reads individual values but declares no control"
@@ -95,7 +95,7 @@ def test_procedure_release_drops_helpers_and_obeys_disclosure(engine, fn):
     # end-to-end: representative (over-granular) spec -> engine -> gateway.
     # whatever the procedure, the released frame must disclose nothing and must
     # not leak the internal control helper.
-    group_by = [g for g in ("canton", "age_band", "device_os")
+    group_by = [g for g in ("region", "age_band", "device_os")
                 if g in CATALOGUE["donor_spend"]["dims"]]
     df = engine.run(_representative_spec(fn, group_by=group_by))
     released, action, _ = DisclosurePolicy().apply(df)
@@ -117,7 +117,7 @@ def test_procedure_release_drops_helpers_and_obeys_disclosure(engine, fn):
 
 @pytest.mark.parametrize("fn", sorted(PROCEDURES))
 def test_procedure_compiles_to_safe_sql(engine, fn):
-    plan = compile_query(_representative_spec(fn, group_by=["canton"]))
+    plan = compile_query(_representative_spec(fn, group_by=["region"]))
     assert plan.source_view in {"donor_spend", "_donor_spend_u"}
     assert plan.sql.startswith("SELECT ")
     assert plan.sql.endswith(f" ORDER BY n DESC LIMIT {ROW_CAP}")

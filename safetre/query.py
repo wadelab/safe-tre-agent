@@ -26,26 +26,26 @@ from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 CATALOGUE: dict[str, dict[str, Any]] = {
     "spend": {
         "dims": {
-            "age_band": "cat", "sex": "cat", "canton": "cat", "income_band": "cat",
+            "age_band": "cat", "sex": "cat", "region": "cat", "income_band": "cat",
             "device_os": "cat", "genre": "cat", "contains_lootboxes": "bool",
             "price_tier": "cat", "event_type": "cat", "age_rating": "int",
         },
-        "measures": {"amount_chf", "ingame_currency"},
+        "measures": {"amount_gbp", "ingame_currency"},
         "internal_filters": {"age_years": "int"},
         "internal_measures": set(),
     },
     "donor_spend": {
         "dims": {
-            "age_band": "cat", "sex": "cat", "canton": "cat", "income_band": "cat",
+            "age_band": "cat", "sex": "cat", "region": "cat", "income_band": "cat",
             "device_os": "cat",
         },
-        "measures": {"total_spend_chf", "purchase_events", "lootbox_events"},
+        "measures": {"total_spend_gbp", "purchase_events", "lootbox_events"},
         "internal_filters": {"age_years": "int"},
         "internal_measures": {"age_years"},
     },
     "wellbeing": {
         "dims": {
-            "age_band": "cat", "sex": "cat", "canton": "cat", "income_band": "cat",
+            "age_band": "cat", "sex": "cat", "region": "cat", "income_band": "cat",
             "device_os": "cat", "wave": "int",
         },
         "measures": {"pgsi_score", "igds_score", "wemwbs_score", "monthly_spend_selfreport"},

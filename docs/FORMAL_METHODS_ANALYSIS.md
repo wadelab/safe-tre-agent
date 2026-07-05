@@ -101,8 +101,8 @@ This is not a machine-checked grammar proof yet, but it makes the SQL safety con
 |-------|---------|--------|
 | **Secret** | `donor_id`, `free_text`, `ts` | Never released in any form |
 | **Internal-only** | `age_years` | Usable only inside fixed validator-approved tools; never grouped or returned |
-| **Sensitive** | `amount_chf`, `ingame_currency`, `pgsi_score`, `igds_score`, `wemwbs_score`, `monthly_spend_selfreport` | Released only as aggregates (count/mean/sum/correlation) with suppression and rounding |
-| **Public** | `age_band`, `sex`, `canton`, `income_band`, `device_os`, `genre`, `contains_lootboxes`, `price_tier`, `event_type`, `age_rating`, `wave` | Releasable as grouping dimensions (with cell-size thresholds) |
+| **Sensitive** | `amount_gbp`, `ingame_currency`, `pgsi_score`, `igds_score`, `wemwbs_score`, `monthly_spend_selfreport` | Released only as aggregates (count/mean/sum/correlation) with suppression and rounding |
+| **Public** | `age_band`, `sex`, `region`, `income_band`, `device_os`, `genre`, `contains_lootboxes`, `price_tier`, `event_type`, `age_rating`, `wave` | Releasable as grouping dimensions (with cell-size thresholds) |
 
 Prove noninterference: **Secret data cannot affect the Public/Sensitive output** except through the allowed aggregation functions (count, mean, sum, correlation) with the specified disclosure controls (threshold ≥ 10, dominance ≤ 50%, rounding to base 5).
 

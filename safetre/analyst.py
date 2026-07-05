@@ -59,9 +59,9 @@ ANALYSIS_CUES = [
 DOMAIN_CUES = [
     "spend", "spender", "spenders", "purchase", "purchases", "lootbox",
     "lootboxes", "wellbeing", "survey", "pgsi", "igds", "wemwbs", "mental",
-    "age", "age band", "sex", "canton", "income", "device", "os", "genre",
-    "price", "event", "wave", "currency", "chf", "amount", "donor", "app",
-    "vaud", "geneve", "valais", "fribourg", "neuchatel", "jura", "free-text",
+    "age", "age band", "sex", "region", "income", "device", "os", "genre",
+    "price", "event", "wave", "currency", "gbp", "amount", "donor", "app",
+    "london", "south east", "north west", "scotland", "wales", "northern ireland", "free-text",
     "free text", "comments",
 ]
 

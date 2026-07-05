@@ -79,7 +79,7 @@ not flagged. Original plan below.
 
 **Threat.** `SessionAuditor` compares only count totals for the same
 `measure_key` and ignores filters — so sum-differencing across overlapping
-cohorts (e.g. "sum spend in Vaud", then "…excluding 50+") evades it.
+cohorts (e.g. "sum spend in London", then "…excluding 50+") evades it.
 
 **Approach (deterministic, explainable).** Track each released query's **cohort**
 (its normalized filter predicate) and flag when a new cohort is a near sub/

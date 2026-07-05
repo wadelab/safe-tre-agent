@@ -191,8 +191,8 @@ def test_filter_values_are_only_bound_parameters_in_compiled_sql():
     spec = QuerySpec(
         dataset="spend",
         measure={"fn": "count"},
-        group_by=["canton"],
-        filters=[{"column": "canton", "op": "==", "value": evil}],
+        group_by=["region"],
+        filters=[{"column": "region", "op": "==", "value": evil}],
     )
 
     plan = compile_query(spec)

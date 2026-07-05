@@ -9,17 +9,17 @@ from safetre.guards import static_check
 def test_dominance_cell_suppressed():
     # two dominated cells: both go, and they protect each other against the
     # margin (a lone suppressed cell would trigger secondary suppression)
-    df = pd.DataFrame({"canton": ["A", "B", "C"], "value": [100.0, 200.0, 150.0],
+    df = pd.DataFrame({"region": ["A", "B", "C"], "value": [100.0, 200.0, 150.0],
                        "n": [15, 20, 25], "dominance": [0.8, 0.2, 0.6]})
     released, action, findings = DisclosurePolicy().apply(df)
     assert action == "redacted"
     assert any(f.rule == "dominance" for f in findings)
     assert "dominance" not in released.columns          # internal helper never released
-    assert list(released["canton"]) == ["B"]            # the dominated cells are gone
+    assert list(released["region"]) == ["B"]            # the dominated cells are gone
 
 
 def test_lone_dominance_cell_triggers_secondary_suppression():
-    df = pd.DataFrame({"canton": ["A", "B"], "value": [100.0, 200.0],
+    df = pd.DataFrame({"region": ["A", "B"], "value": [100.0, 200.0],
                        "n": [15, 20], "dominance": [0.8, 0.2]})
     released, action, findings = DisclosurePolicy().apply(df)
     assert action == "redacted"
@@ -30,41 +30,41 @@ def test_lone_dominance_cell_triggers_secondary_suppression():
 def test_influence_cell_suppressed():
     # a correlation cell one donor can move by > influence_threshold is dropped;
     # the well-behaved cell (with a benign neighbour to protect the margin) stays
-    df = pd.DataFrame({"canton": ["A", "B", "C"],
+    df = pd.DataFrame({"region": ["A", "B", "C"],
                        "value": [0.9, 0.1, 0.2], "p_value": [0.01, 0.7, 0.5],
                        "n": [12, 40, 45], "influence": [0.8, 0.05, 0.03]})
     released, action, findings = DisclosurePolicy().apply(df)
     assert action == "redacted"
     assert any(f.rule == "influence" for f in findings)
     assert "influence" not in released.columns          # internal helper never released
-    assert "A" not in set(released["canton"])           # the donor-dominated corr is gone
+    assert "A" not in set(released["region"])           # the donor-dominated corr is gone
 
 
 def test_influence_below_threshold_released():
-    df = pd.DataFrame({"canton": ["A", "B"],
+    df = pd.DataFrame({"region": ["A", "B"],
                        "value": [0.3, 0.2], "p_value": [0.02, 0.1],
                        "n": [50, 60], "influence": [0.1, 0.05]})
     released, action, findings = DisclosurePolicy().apply(df)
     assert action == "release"
     assert not any(f.rule == "influence" for f in findings)
     assert "influence" not in released.columns
-    assert list(released["canton"]) == ["A", "B"]
+    assert list(released["region"]) == ["A", "B"]
 
 
 def test_threshold_counts_donors_not_rows():
     # the frequency threshold protects individuals: a cell with many rows but
     # few distinct donors is disclosive and must be suppressed
-    df = pd.DataFrame({"canton": ["A", "B", "C"], "value": [1.0, 2.0, 3.0],
+    df = pd.DataFrame({"region": ["A", "B", "C"], "value": [1.0, 2.0, 3.0],
                        "n": [40, 50, 60], "n_donors": [3, 4, 50]})
     released, action, findings = DisclosurePolicy().apply(df)
     assert action == "redacted"
     assert any(f.rule == "small_cell" for f in findings)
     assert "n_donors" not in released.columns           # internal helper never released
-    assert set(released["canton"]) == {"C"}             # A,B have <10 donors despite 40-50 rows
+    assert set(released["region"]) == {"C"}             # A,B have <10 donors despite 40-50 rows
 
 
 def test_counts_rounded_on_release():
-    df = pd.DataFrame({"canton": ["A", "B"], "value": [1.0, 2.0],
+    df = pd.DataFrame({"region": ["A", "B"], "value": [1.0, 2.0],
                        "n": [123, 47], "n_donors": [123, 47]})
     released, action, _ = DisclosurePolicy().apply(df)
     assert action == "release"
@@ -73,7 +73,7 @@ def test_counts_rounded_on_release():
 
 
 def test_small_cells_redacted():
-    df = pd.DataFrame({"age_band": ["a", "b"], "mean_chf": [1.0, 2.0], "n": [50, 3]})
+    df = pd.DataFrame({"age_band": ["a", "b"], "mean_gbp": [1.0, 2.0], "n": [50, 3]})
     released, action, findings = DisclosurePolicy().apply(df)
     assert action == "redacted"
     assert (released["n"] >= 10).all()
@@ -93,7 +93,7 @@ def test_free_text_flagged():
 
 def test_static_check_blocks_import():
     assert not static_check("import os\nresult = 1").ok
-    assert static_check("result = donors.groupby('canton').size()").ok
+    assert static_check("result = donors.groupby('region').size()").ok
 
 
 def test_auditor_differencing():
@@ -105,70 +105,70 @@ def test_auditor_differencing():
 
 def test_auditor_cohort_lineage_flags_near_cohort():
     a = SessionAuditor()
-    vaud = (("canton", "==", "Vaud"),)
-    vaud_minus_elderly = (("age_band", "!=", "50+"), ("canton", "==", "Vaud"))
-    a.record_cohort("spend", vaud)
+    london = (("region", "==", "London"),)
+    london_minus_elderly = (("age_band", "!=", "50+"), ("region", "==", "London"))
+    a.record_cohort("spend", london)
     # the injected bound is small (< threshold) -> flagged
-    flags = a.observe_cohort("spend", vaud_minus_elderly, bound=lambda a_, b_: 3)
+    flags = a.observe_cohort("spend", london_minus_elderly, bound=lambda a_, b_: 3)
     assert any(f.rule == "differencing" for f in flags)
 
 
 def test_auditor_cohort_lineage_allows_separated_and_identical():
     a = SessionAuditor()
-    vaud = (("canton", "==", "Vaud"),)
-    a.record_cohort("spend", vaud)
+    london = (("region", "==", "London"),)
+    a.record_cohort("spend", london)
     # well-separated cohort: bound is large -> fine
-    assert a.observe_cohort("spend", (("canton", "==", "Geneve"),),
+    assert a.observe_cohort("spend", (("region", "==", "South East"),),
                             bound=lambda a_, b_: 200) == []
     # identical cohort: same query repeated reveals nothing new -> fine,
     # and the (possibly costly) bound is never even computed
-    assert a.observe_cohort("spend", vaud,
+    assert a.observe_cohort("spend", london,
                             bound=lambda a_, b_: 1 / 0) == []
     # other dataset: cohorts do not cross datasets
-    assert a.observe_cohort("wellbeing", (("canton", "==", "Vaud"),),
+    assert a.observe_cohort("wellbeing", (("region", "==", "London"),),
                             bound=lambda a_, b_: 1 / 0) == []
 
 
 def test_secondary_suppression_single_dim():
     # one primary-suppressed cell is recoverable from the grand total
     # (obtainable as a coarser query), so the next-smallest cell must go too
-    df = pd.DataFrame({"canton": ["A", "B", "C", "D"],
+    df = pd.DataFrame({"region": ["A", "B", "C", "D"],
                        "value": [1.0, 2.0, 3.0, 4.0],
                        "n": [3, 12, 30, 50]})
     released, action, findings = DisclosurePolicy().apply(df)
     assert action == "redacted"
     assert any(f.rule == "secondary_suppression" for f in findings)
-    assert list(released["canton"]) == ["C", "D"]
+    assert list(released["region"]) == ["C", "D"]
 
 
 def test_no_secondary_suppression_when_two_cells_suppressed():
     # two suppressed cells protect each other: the margin only gives their sum
-    df = pd.DataFrame({"canton": ["A", "B", "C", "D"],
+    df = pd.DataFrame({"region": ["A", "B", "C", "D"],
                        "value": [1.0, 2.0, 3.0, 4.0],
                        "n": [3, 4, 30, 50]})
     released, action, findings = DisclosurePolicy().apply(df)
     assert action == "redacted"
     assert not any(f.rule == "secondary_suppression" for f in findings)
-    assert list(released["canton"]) == ["C", "D"]
+    assert list(released["region"]) == ["C", "D"]
 
 
 def test_secondary_suppression_two_dims_margin():
     # (A, m) is primary-suppressed; protecting it against row AND column
-    # margins forces a suppression rectangle over cantons {A, B} x sexes
-    # {m, f}, after which no margin has a lone recoverable cell. Canton C
+    # margins forces a suppression rectangle over regions {A, B} x sexes
+    # {m, f}, after which no margin has a lone recoverable cell. Region C
     # survives. (Minimal patterns are an LP problem -> ACRO, round 3.)
-    df = pd.DataFrame({"canton": ["A", "A", "B", "B", "C", "C"],
+    df = pd.DataFrame({"region": ["A", "A", "B", "B", "C", "C"],
                        "sex": ["m", "f", "m", "f", "m", "f"],
                        "value": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
                        "n": [3, 20, 40, 50, 60, 70]})
     released, action, findings = DisclosurePolicy().apply(df)
     assert action == "redacted"
     assert any(f.rule == "secondary_suppression" for f in findings)
-    assert set(released["canton"]) == {"C"}
+    assert set(released["region"]) == {"C"}
     assert set(released["sex"]) == {"m", "f"}
-    # no margin (canton level or sex level) is left with exactly one
+    # no margin (region level or sex level) is left with exactly one
     # suppressed cell, so no cell is recoverable by subtraction
-    for dim in ("canton", "sex"):
+    for dim in ("region", "sex"):
         for lvl in df[dim].unique():
             n_missing = (df[dim] == lvl).sum() - (released[dim] == lvl).sum()
             assert n_missing != 1
