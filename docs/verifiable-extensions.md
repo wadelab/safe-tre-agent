@@ -71,6 +71,8 @@ technique. A procedure is *admissible* only when all four are discharged.
 | O2 | **Compilation safety** | it compiles to a read-only `SELECT` over a *declared* source view, bound parameters only, fixed shape | inspect the `SQLPlan`; property test over generated specs; grammar proof later | `compile_query` corr branch; shape asserted in `test_query_properties` |
 | O3 | **Individual-influence bound** | no single donor may dominate the released statistic; if one can, the cell is suppressed | an internal per-donor influence plan on the unit view + a gateway threshold | **the obligation that was nearly missed**: leave-one-donor-out `influence` (round 2d) |
 | O4 | **Lineage identity** | its released cohort is registered so cross-query differencing is caught | reuse `QuerySpec.normalized_filters()` + `SessionAuditor` | inherited for free — corr routes filters through the standard path |
+| O5 | **Reproducibility** *(model procedures)* | the released model is a deterministic function of the released artifacts alone — the fitter can see nothing an analyst could not | refit from the released cell table, assert exact equality (`refit_from_artifact` + the meta-test in `test_glm_properties.py`); AST noninterference checks; Alloy `P21` | discharged for `glm` |
+| O6 | **Skeleton export** | the procedure's finite request space is exported as data, so the exhaustive check and the formal model quantify over the space the code actually exposes | `skeleton()` / `measure_configs()` → `formal/skeleton.json` + sync tests + the generated Alloy catalogue | discharged for all registered procedures |
 
 Two observations make this tractable:
 
@@ -181,29 +183,49 @@ allowed to say.
 
 ---
 
-## 5. Worked example — admitting a new `regression` procedure
+## 5. Worked example — how the `glm` procedure was admitted (as built)
 
-The checklist a contributor would follow, end to end:
+An earlier draft of this section sketched a `regression` procedure fitted on
+row-level data, discharging O3 with a leverage/Cook's-distance witness and a
+residual-degrees-of-freedom floor. The `glm` procedure that actually landed
+takes a strictly stronger route — **cells-first**: it never touches rows, so
+O3 is *inherited* rather than re-proven, and a new obligation (O5) replaces it.
 
-1. **Schema (O1).** Add `regression` to the `Measure` `fn` set with its argument
-   shape (`y`, `x: list[str]`), constrained to public/internal-approved
-   measures. *`test_query_properties` immediately fuzzes it against the forbidden
-   set.*
-2. **Compilation (O2).** Provide `compile` producing a read-only `SELECT` of the
-   fitted summary (coefficients, R², n) over the declared source view, bound
-   params only. *The conformance SQL-shape test applies automatically.*
-3. **Influence (O3).** Provide `influence_plan`: a per-donor leave-one-out (or
-   leverage / Cook's distance) witness on the unit view; the gateway suppresses
-   cells one donor dominates. *You cannot register the procedure without this,
-   and `test_every_supported_fn_has_a_declared_obligation` fails until you
-   declare its obligation.* Also declare a minimum residual-degrees-of-freedom
-   floor, the regression analogue of the min-cell rule.
-4. **Lineage (O4).** Nothing to do if filters use the standard mechanism.
-5. **Output contract.** Never emit per-observation fitted values or residuals —
-   those are row-level. Release only the fixed summary vector.
+1. **Schema (O1).** `GLMSpec` is a parallel typed boundary (`tool: "glm"`,
+   family, response, ≤ 3 categorical terms), not a `Measure` extension: a
+   model is a multi-query procedure, and `QuerySpec` stays the frozen, proven
+   single-query space. The catalogue gained a `glm_responses` per-column
+   family allowlist. *`test_formal_glm_enumeration` exhaustively checks all
+   718 skeleton points and that off-allowlist perturbations fail.*
+2. **Compilation (O2) — by inheritance.** `plan_aggregates` emits ordinary
+   `QuerySpec`s (mean + sum_sq cells for gaussian; trials + successes counts
+   for binomial; sums with exposure for poisson). Every one compiles through
+   the same proven SafeSQL shape as any hand query. *The conformance and
+   enumeration suites assert every planned aggregate is a valid QuerySpec.*
+3. **Influence (O3) — by inheritance.** The gateway vets every design cell
+   with the standard threshold/dominance/fail-closed rules **before** the fit
+   exists; any suppression denies the whole model (P19). No model-specific
+   influence witness is needed because no released number is computed from
+   anything the gateway did not already pass.
+4. **Lineage (O4).** Free, as designed: each underlying aggregate routes its
+   cohort through `normalized_filters()`, so model differencing is caught by
+   the same auditor (red-team `glm_differencing_pair`). Budget is charged per
+   underlying aggregate.
+5. **Reproducibility (O5) + output contract.** The fitter is a pure stdlib
+   function of the finalized tables (P21); a release carries the coefficient
+   table, the model block, and the vetted cell table it was fitted from, and
+   `refit_from_artifact` reproduces the release bit-for-bit — machine-checked
+   over the skeleton. Per-observation outputs (residuals, fitted values,
+   leverage) are not expressible and are refused at intent (P20).
+6. **Skeleton export (O6).** `skeleton()` feeds `formal/skeleton.json`, the
+   exhaustive enumeration, and the generated Alloy catalogue; two sync tests
+   pin the chain.
 
-Every step maps to an existing check or a new registry method; none of it is
-optional, and the conformance suite enforces the ones a reviewer might miss.
+The engine-side route (row-level fitting with leverage witnesses and a
+dof floor) remains the template for procedures whose sufficient statistics are
+**not** catalogued aggregates — non-gaussian models with continuous
+predictors — and is deliberately parked behind ACRO integration (roadmap
+item 1), which would supply production-grade output checking to lean on.
 
 ---
 
@@ -211,11 +233,13 @@ optional, and the conformance suite enforces the ones a reviewer might miss.
 
 | Phase | Step | Status |
 |-------|------|--------|
-| now | Conformance suite enumerated from the schema; per-procedure influence obligation | **done** (`tests/test_procedure_conformance.py`) |
-| next | `Procedure` registry refactor; delete the `if fn == …` branches | proposed (reviewed PR — boundary files) |
-| next | Golden NL→spec corpus; commit a runnable (key-gated) real-model red-team harness | partial (round 2e run recorded) |
+| done | Conformance suite enumerated from the schema; per-procedure influence obligation | `tests/test_procedure_conformance.py` |
+| done | `Procedure` registry refactor; delete the `if fn == …` branches | `safetre/procedures.py` (aggregate + model registries) |
+| done | First model procedure (`glm`, cells-first) with O5 reproducibility + O6 skeleton export | `safetre/glm.py`, `test_glm*` suites |
+| done | Bounded Alloy model of the model release path (P19/P21/P4), generated from the skeleton, CI-gated | `formal/`, CI `formal` job |
+| next | Golden NL→spec corpus; commit a runnable (key-gated) real-model red-team harness | partial (round 2e run recorded; GLM corpus items added) |
 | later | Per-procedure Lean lemmas for O1/O2 (`decide` over the finite catalogue) | see [Formal methods analysis §A/§B](FORMAL_METHODS_ANALYSIS.md) |
-| later | Alloy model of the auditor for O3/O4 sequential composition | see [Formal methods analysis §D](FORMAL_METHODS_ANALYSIS.md) |
+| later | Alloy/TLA+ model of the auditor's sequential composition (`observe → apply → record`) | see [Formal methods analysis §D](FORMAL_METHODS_ANALYSIS.md) |
 
 The through-line: make the **procedure interface the proof-obligation
 checklist**, keep **natural language outside the proofs**, and let a single

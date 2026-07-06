@@ -194,9 +194,20 @@ This does not replace Lean/Alloy, but it gives CI a broad executable approximati
 
 ### Phase 2 — Stronger Guarantees (1–2 months)
 
+- [x] **First Alloy artifact (2026-07-07):** a bounded model of the GLM release
+      path — admissibility over the real generated catalogue at exact bounds,
+      nondeterministic per-cell vetting, and the service rule — checking
+      P19/P21/P4 in CI, with two pytest sync hops pinning
+      code → `formal/skeleton.json` → model (see `formal/README.md`). The
+      disclosure-policy/differencing model below remains open.
 - [ ] Model the disclosure policy in Alloy; search for differencing/triangulation counterexamples
 - [x] Extract SQL compilation into inspectable plans and add property tests for the safe public SQL shape
 - [ ] Prove SQL generation correctness in a proof assistant (engine produces only read-only SELECT from public views)
+- [x] Formalize noninterference for the model-fitting path: the fitter is
+      statically stdlib-only and structurally fed only gateway-finalized
+      tables; machine-checked by refit-equality over the enumerated skeleton
+      (`tests/test_glm_properties.py`, `tests/test_glm_noninterference.py`).
+      The full web-path label lattice remains open.
 - [ ] Formalize information-flow labels and prove noninterference for the web query path
 - [ ] Prove that the composition of `QuerySpec` validation + engine + disclosure gateway maintains the identifier-free invariant end-to-end
 

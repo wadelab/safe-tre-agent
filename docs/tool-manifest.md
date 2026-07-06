@@ -91,17 +91,25 @@ It must not be allowed to:
 The inside LLM's output should become an audit finding, not an authorization
 decision.
 
-## Future stats tools
+## Stats tools
 
-Standard analyses should enter as fixed-function tools with explicit schemas,
-not as arbitrary code. Examples:
+Standard analyses enter as fixed-function tools with explicit schemas, not as
+arbitrary code. The first one is live:
 
-| Tool class | Typical use | Key vetting constraints |
-|---|---|---|
-| `glm` | logistic, Poisson, Gaussian, gamma-style models | allowed outcome/predictor roles, min events per parameter, no rare levels, no row diagnostics |
-| `regression` | OLS/robust linear models | min rows per parameter, bounded covariate count, no residual/fitted-value release |
-| `anova` | group comparisons and contrasts | min group size, predeclared contrasts, suppress sparse levels |
-| `survival` | time-to-event models | extra caution: event counts, censoring patterns, and time granularity can disclose |
+| Tool class | Status | Typical use | Key vetting constraints |
+|---|---|---|---|
+| `glm` | **available (v1, manifest v4)** | gaussian, logistic (binomial), Poisson over categorical terms | fitted from gateway-finalized design cells only (R15/P21); any suppressed cell denies the model (P19); ≤ 3 terms, canonical links, per-dataset response allowlist; releases coefficients + model block + the vetted cell table; no row diagnostics ever (P20) |
+| `regression` | planned | continuous-predictor linear models (moment cells, L2) | min rows per parameter, bounded covariate count, no residual/fitted-value release |
+| `anova` | planned | group comparisons and contrasts | min group size, predeclared contrasts, suppress sparse levels |
+| `survival` | parked | time-to-event models | extra caution: event counts, censoring patterns, and time granularity can disclose |
+
+The `glm` entry deliberately does **not** follow this table's original "min
+events per parameter / no rare levels" sketch: under the cells-first
+architecture those output-side heuristics are superseded by the gateway
+itself vetting every design cell (see
+[verifiable-extensions §5](verifiable-extensions.md)). Non-gaussian models
+with continuous predictors — which genuinely need output-side checking — wait
+for ACRO.
 
 Every stats tool should define:
 

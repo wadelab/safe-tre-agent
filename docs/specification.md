@@ -278,14 +278,17 @@ with a documented limitation.
 | P16 concurrency serialisation | `session.py`, `app.py` | `test_hardening.py` | Implemented |
 | P17 budget short-circuit | `service.py`, `disclosure.py` | `test_hardening.py` | Implemented |
 | P18 no table on denial | `_result.html`, `service.py` | `test_web.py` | Implemented |
-| P19 deny on incomplete cell table | `service.py` (`_handle_model`) | `test_glm.py`, red-team | Planned |
-| P20 no per-observation model output | `glm.py` (output contract), `analyst.py` (intent) | `test_glm.py`, conformance suite | Planned |
-| P21 fitter noninterference | `stats.py`, `glm.py` (pure fit) | reproducibility meta-test, AST noninterference test, Alloy `P21_flow` | Planned |
-| P22 refusals from released-equivalent data | `glm.py` (`preconditions`), `service.py` | `test_glm.py` (non-numeric refusals) | Planned |
+| P19 deny on incomplete cell table | `service.py` (`_handle_model`) | `test_glm.py`, `test_glm_properties.py`, red-team, Alloy `P19` | Implemented |
+| P20 no per-observation model output | `glm.py` (output contract), `analyst.py` (intent) | `test_glm.py`, `test_procedure_conformance.py` | Implemented |
+| P21 fitter noninterference | `stats.py`, `glm.py` (pure fit) | reproducibility meta-test (`test_glm_properties.py`), `test_glm_noninterference.py`, Alloy `P21` | Implemented |
+| P22 refusals from released-equivalent data | `glm.py` (`preconditions`), `service.py` | `test_glm.py` (non-numeric, term-naming refusals) | Implemented |
 | R5 complementary suppression | `disclosure.py` (`_secondary_suppress`) | `test_disclosure.py` | Partial (single-dim exact, multi-dim conservative) |
-| R14 procedure registry | `procedures.py` | `test_procedure_conformance.py` | Planned |
-| R15 GLM from vetted cells | `glm.py`, `stats.py`, `service.py` | `test_glm.py`, `test_formal_glm_enumeration.py` | Planned |
-| R16 skeleton export + model check | `procedures.py`, `formal/` | `test_skeleton_sync.py`, CI `formal` job | Planned |
+| R14 procedure registry | `procedures.py` | `test_procedure_conformance.py` | Implemented |
+| R15 GLM from vetted cells | `glm.py`, `stats.py`, `service.py` | `test_glm.py`, `test_formal_glm_enumeration.py`, `test_glm_oracle.py` | Implemented |
+| R16 skeleton export + model check | `procedures.py`, `formal/` | `test_skeleton_sync.py`, `test_formal_alloy_sync.py`, CI `formal` job | Implemented |
 
-The red-team suite (`redteam/run_redteam.py`, R12) exercises P1–P6 and P10–P11
-end to end, off gateway versus on.
+The red-team suite (`redteam/run_redteam.py`, R12) exercises P1–P6, P10–P11,
+and P19–P22 end to end, off gateway versus on. The bounded formal model
+(`formal/glm_gateway.als`, R16) discharges P19/P21 over every vetting outcome
+and P4-admissibility over the exact catalogue atoms, pinned to the code by the
+skeleton sync tests.

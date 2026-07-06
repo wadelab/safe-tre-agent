@@ -21,6 +21,34 @@ dataset with pinned disclosure anchors, the GOV.UK restyle of the demo shell
 The shell is now genuinely finished — items 1–4 below are unchanged in order,
 and three new items enter behind them.
 
+## Status refresh — 2026-07-07 (the GLM / procedure-framework round)
+
+**A first slice of item 2 is delivered, and the statistical surface grew.**
+The [verifiable-extensions](verifiable-extensions.md) design is now real:
+statistical procedures are registered contracts (spec R14), and the first
+model procedure — `glm`, gaussian/binomial/poisson over categorical terms —
+is live behind the **cells-first** architecture (R15): models fit exclusively
+on gateway-finalized design-cell tables, any suppressed cell denies the whole
+model (P19), the fitter is provably a function of released-equivalent data
+(P21, machine-checked by refit-equality over the enumerated skeleton), and a
+release carries the vetted cell table so the analyst can reproduce the fit.
+New clauses R14–R16 / P19–P22 are Implemented in the traceability table; a
+bounded **Alloy model** generated from the committed skeleton export runs in
+CI next to pytest (the first machine-checked model artifact — item 2 is
+started, not finished: the P1–P9 query-boundary model and the auditor's
+temporal model remain). Round-4 hardening fixed the count-rounding bypass
+(#25). The planner-eval corpus and red-team grew GLM coverage (20 attacks,
+all blocked by named controls). The finalized-weights distortion is measured,
+not asserted (`scripts/measure_rounding_distortion.py` →
+`artifacts/rounding_distortion.json`) — a preprint paragraph for item 7.
+
+**Effect on item 1 (ACRO):** unchanged in priority, and the cells-first
+design composes with it cleanly — ACRO slots in *underneath* the GLM layer
+(it vets cells; models consume vetted cells), rather than needing its own
+regression checking on day one. Non-gaussian models with continuous
+predictors stay parked until ACRO lands (see
+[verifiable-extensions §5](verifiable-extensions.md)).
+
 ## 1. ACRO integration (fellowship WP3)
 
 The disclosure gateway is a stand-in, and it says so. The SDC community will

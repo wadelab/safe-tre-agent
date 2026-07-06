@@ -48,6 +48,19 @@ NL request
   → released aggregate
 ```
 
+Statistical procedures are **registered contracts** (spec R14): the five
+aggregate measures plus a **GLM tool** (gaussian / logistic / Poisson over
+categorical terms) that is fitted *exclusively from gateway-vetted cell
+tables* — any suppressed design cell denies the whole model, a release
+carries the cell table it was fitted from, and refitting from the released
+artifacts reproduces the coefficients bit-for-bit (machine-checked, and
+model-checked in Alloy: see [`formal/`](formal/README.md) and
+[verifiable extensions](docs/verifiable-extensions.md)).
+
+```bash
+uv run python scripts/demo_query.py "regress total spend on age band"
+```
+
 ## What it builds on
 
 - **OpenSAFELY** (Bennett Institute, Oxford) — the code-to-data, outputs-checked
