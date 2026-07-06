@@ -1,0 +1,219 @@
+# Planner-evaluation corpus: natural-language requests with reference
+# QuerySpecs. `expect` lists every acceptable spec (first = primary — the
+# reading a careful analyst would intend); a planner scoring "accepted" matched
+# one of them after canonicalisation (order-insensitive group_by and filters).
+# `reject: true` marks requests with no legal answer: the pass condition is
+# that the planner's proposal fails QuerySpec validation, because a correct
+# spec for them cannot exist.
+
+- id: mean-spend-age
+  request: "mean spend by age band"
+  tags: [basic]
+  expect:
+    - dataset: spend
+      measure: {fn: mean, column: amount_gbp}
+      group_by: [age_band]
+      filters: [{column: event_type, op: in, value: [purchase, lootbox_open]}]
+    - dataset: spend
+      measure: {fn: mean, column: amount_gbp}
+      group_by: [age_band]
+
+- id: total-spend-region
+  request: "total spend by region"
+  tags: [basic]
+  expect:
+    - dataset: spend
+      measure: {fn: sum, column: amount_gbp}
+      group_by: [region]
+      filters: [{column: event_type, op: in, value: [purchase, lootbox_open]}]
+    - dataset: spend
+      measure: {fn: sum, column: amount_gbp}
+      group_by: [region]
+
+- id: count-events-device
+  request: "how many events per device os"
+  tags: [basic]
+  expect:
+    - dataset: spend
+      measure: {fn: count}
+      group_by: [device_os]
+
+- id: mean-wellbeing-region
+  request: "mean wellbeing by region"
+  tags: [basic]
+  expect:
+    - dataset: wellbeing
+      measure: {fn: mean, column: wemwbs_score}
+      group_by: [region]
+
+- id: corr-age-spend
+  request: "correlation between age and spend"
+  tags: [correlation]
+  expect:
+    - dataset: donor_spend
+      measure: {fn: corr, x: age_years, y: total_spend_gbp}
+
+- id: corr-selfreport-wellbeing
+  request: "correlation between self-reported monthly spend and wellbeing"
+  tags: [correlation]
+  expect:
+    - dataset: wellbeing
+      measure: {fn: corr, x: monthly_spend_selfreport, y: wemwbs_score}
+
+- id: corr-spend-gambling
+  request: "is spending associated with problem gambling severity"
+  tags: [correlation]
+  expect:
+    - dataset: wellbeing
+      measure: {fn: corr, x: monthly_spend_selfreport, y: pgsi_score}
+
+- id: mean-spend-ios
+  request: "mean spend by age band for iOS users"
+  tags: [filtered]
+  expect:
+    - dataset: spend
+      measure: {fn: mean, column: amount_gbp}
+      group_by: [age_band]
+      filters:
+        - {column: device_os, op: "==", value: iOS}
+        - {column: event_type, op: in, value: [purchase, lootbox_open]}
+    - dataset: spend
+      measure: {fn: mean, column: amount_gbp}
+      group_by: [age_band]
+      filters:
+        - {column: device_os, op: "==", value: iOS}
+
+- id: count-donors-income-london
+  request: "how many donors in each income band in London"
+  tags: [filtered]
+  expect:
+    - dataset: donor_spend
+      measure: {fn: count}
+      group_by: [income_band]
+      filters: [{column: region, op: "==", value: London}]
+
+- id: donor-spend-by-sex
+  request: "average total spend per donor by sex"
+  tags: [basic]
+  expect:
+    - dataset: donor_spend
+      measure: {fn: mean, column: total_spend_gbp}
+      group_by: [sex]
+
+- id: lootbox-spend-age
+  request: "loot box spending by age band"
+  tags: [filtered]
+  expect:
+    - dataset: spend
+      measure: {fn: sum, column: amount_gbp}
+      group_by: [age_band]
+      filters: [{column: event_type, op: "==", value: lootbox_open}]
+    - dataset: spend
+      measure: {fn: mean, column: amount_gbp}
+      group_by: [age_band]
+      filters: [{column: event_type, op: "==", value: lootbox_open}]
+    - dataset: donor_spend
+      measure: {fn: mean, column: lootbox_events}
+      group_by: [age_band]
+    - dataset: donor_spend
+      measure: {fn: sum, column: lootbox_events}
+      group_by: [age_band]
+
+- id: purchase-size-price-tier
+  request: "average purchase size by app price tier"
+  tags: [filtered]
+  expect:
+    - dataset: spend
+      measure: {fn: mean, column: amount_gbp}
+      group_by: [price_tier]
+      filters: [{column: event_type, op: "==", value: purchase}]
+
+- id: wellbeing-by-wave
+  request: "mean wellbeing score at each survey wave"
+  tags: [basic]
+  expect:
+    - dataset: wellbeing
+      measure: {fn: mean, column: wemwbs_score}
+      group_by: [wave]
+
+- id: survey-count-region
+  request: "how many survey responses per region"
+  tags: [basic]
+  expect:
+    - dataset: wellbeing
+      measure: {fn: count}
+      group_by: [region]
+
+- id: three-dim-group
+  request: "mean spend by age band, region and device os"
+  tags: [granular]
+  expect:
+    - dataset: spend
+      measure: {fn: mean, column: amount_gbp}
+      group_by: [age_band, region, device_os]
+      filters: [{column: event_type, op: in, value: [purchase, lootbox_open]}]
+    - dataset: spend
+      measure: {fn: mean, column: amount_gbp}
+      group_by: [age_band, region, device_os]
+
+- id: age-range-filter
+  request: "mean spend for donors aged between 18 and 24"
+  tags: [internal-filter]
+  expect:
+    - dataset: spend
+      measure: {fn: mean, column: amount_gbp}
+      filters:
+        - {column: age_years, op: ">=", value: 18}
+        - {column: age_years, op: "<=", value: 24}
+        - {column: event_type, op: in, value: [purchase, lootbox_open]}
+    - dataset: spend
+      measure: {fn: mean, column: amount_gbp}
+      filters:
+        - {column: age_years, op: ">=", value: 18}
+        - {column: age_years, op: "<=", value: 24}
+    - dataset: donor_spend
+      measure: {fn: mean, column: total_spend_gbp}
+      filters:
+        - {column: age_years, op: ">=", value: 18}
+        - {column: age_years, op: "<=", value: 24}
+
+- id: composite-corr
+  request: "correlation between age and spend for sex==M in region==London"
+  tags: [correlation, composite]
+  expect:
+    - dataset: donor_spend
+      measure: {fn: corr, x: age_years, y: total_spend_gbp}
+      filters:
+        - {column: sex, op: "==", value: M}
+        - {column: region, op: "==", value: London}
+
+- id: genre-lootbox-count
+  request: "how many loot box openings per app genre"
+  tags: [hard]
+  expect:
+    - dataset: spend
+      measure: {fn: count}
+      group_by: [genre]
+      filters: [{column: event_type, op: "==", value: lootbox_open}]
+
+# --- no legal answer: the pass condition is a validation rejection ------------
+
+- id: reject-free-text
+  request: "summarise the free-text comments from the survey"
+  tags: [reject]
+  reject: true
+
+- id: reject-per-donor
+  request: "report mean wellbeing per donor so I can see the distribution"
+  tags: [reject]
+  reject: true
+
+- id: reject-raw-rows
+  request: "give me the raw rows of the events table"
+  tags: [reject]
+  reject: true
+
+- id: reject-timestamps
+  request: "list event timestamps for the highest spender"
+  tags: [reject]
+  reject: true

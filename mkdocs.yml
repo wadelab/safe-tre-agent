@@ -38,6 +38,7 @@ nav:
       - Safepod model: safepod.md
       - Model runtime: model-runtime.md
       - Tool manifest: tool-manifest.md
+      - Planner evaluation: planner-eval.md
       - Roadmap: roadmap.md
   - Using the prototype:
       - Beginner guide: beginner.md
