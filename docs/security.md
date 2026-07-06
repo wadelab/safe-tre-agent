@@ -119,6 +119,19 @@ closed:
   true count internally. That residual (one bit) is the documented deviation a
   DP accountant closes; see the roadmap.
 
+- **Schema disclosure is design-time, not data-derived.** `GET /api/schema`
+  publishes the study **codebook** — dimension and measure names, types,
+  disclosure roles (QI/S/R), descriptions, and the *declared* categorical value
+  domains. All of it is metadata about the study design, independent of any
+  participant, so it is safe to show in full (a valid category being an *option*
+  is not the same as anyone having it). The two things that *are* data-derived —
+  which values actually occur, and how many donors carry them — stay behind
+  `/api/marginals` with the SDC treatment above. Crucially, the published
+  marginals now also drop any value **outside its declared domain**: an
+  undeclared string (a hostile payload smuggled into a field, a data-entry
+  typo) is disclosive by its very *name*, so count-nulling it is not enough — it
+  is removed entirely, leaving only codebook categories.
+
 - **Timing.** Denial *stage* is distinguishable by latency (intent-vetting vs
   validation vs a gateway suppression that runs the full engine first), but the
   analyst already learns the stage from the explicit status, so no extra signal.

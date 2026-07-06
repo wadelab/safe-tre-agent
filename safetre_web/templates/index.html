@@ -114,19 +114,39 @@
       <section class="rail-section">
         <div class="rail-title">
           <h2>Datasets</h2>
-          <span>{{ catalogue | length }}</span>
+          <span>{{ schema.datasets | length }}</span>
         </div>
-        {% for ds, info in catalogue.items() %}
+        <p class="rail-note">Schema codebook &middot; <a href="/api/schema">/api/schema</a></p>
+        {% for ds, info in schema.datasets.items() %}
         <details class="dataset" {% if loop.first %}open{% endif %}>
           <summary>{{ ds }}</summary>
           <dl>
             <dt>Dimensions</dt>
-            <dd>{{ info.dims.keys() | join(", ") }}</dd>
+            <dd class="cols">
+              {% for name, d in info.dimensions.items() %}
+              <span class="col role-{{ d.role }}"
+                    title="{{ d.role_label }} &middot; {{ d.type }}{% if d.description %} &mdash; {{ d.description }}{% endif %}{% if d.domain %}&#10;values: {{ d.domain | join(', ') }}{% endif %}">
+                {{ name }}<em>{{ d.role }}</em>
+              </span>
+              {% endfor %}
+            </dd>
             <dt>Measures</dt>
-            <dd>{{ info.measures | join(", ") }}</dd>
+            <dd class="cols">
+              {% for name, m in info.measures.items() %}
+              <span class="col role-{{ m.role }}"
+                    title="{{ m.role_label }} &middot; {{ m.type }}{% if m.description %} &mdash; {{ m.description }}{% endif %}">
+                {{ name }}<em>{{ m.role }}</em>
+              </span>
+              {% endfor %}
+            </dd>
           </dl>
         </details>
         {% endfor %}
+        <div class="role-legend">
+          <span class="role-QI">QI quasi-identifier</span>
+          <span class="role-S">S sensitive</span>
+          <span class="role-R">R reference</span>
+        </div>
       </section>
 
       <section class="rail-section compact">

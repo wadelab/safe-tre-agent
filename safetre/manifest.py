@@ -14,8 +14,52 @@ import json
 from typing import Any
 
 from .query import CATALOGUE, MAX_FILTERS, MAX_GROUP_BY, MAX_IN_VALUES
+from .schema import ROLE_LABELS, column_description, declared_domain, role_of
 
 MANIFEST_VERSION = "2026-07-06.aggregate.v3"
+
+
+def public_schema() -> dict[str, Any]:
+    """A disclosure-safe data dictionary, safe to show outside the safepod.
+
+    For each dataset it lists the dimensions and measures with their type,
+    disclosure role (quasi-identifier / sensitive / reference / ...), a plain
+    description, and — for categorical dimensions — the DECLARED value domain.
+    Every field here is design-time metadata, independent of any participant, so
+    none of it is row-level: it is the study codebook. It tells an analyst the
+    vocabulary of legal filters and group-bys without guessing; the safepod still
+    validates every request, and observed frequencies live behind /api/marginals
+    (disclosure-checked), not here. Internal analysis variables (e.g. raw age)
+    are deliberately absent — they can never be grouped or returned.
+    """
+    datasets: dict[str, Any] = {}
+    for dataset, info in sorted(CATALOGUE.items()):
+        dims = {}
+        for name, dtype in sorted(info["dims"].items()):
+            role = role_of(name)
+            entry: dict[str, Any] = {
+                "type": dtype,
+                "role": role,
+                "role_label": ROLE_LABELS.get(role, role),
+                "description": column_description(name),
+                "filterable": True,
+                "groupable": True,
+            }
+            domain = declared_domain(name)
+            if domain is not None:
+                entry["domain"] = domain
+            dims[name] = entry
+        measures = {}
+        for name in sorted(info["measures"]):
+            role = role_of(name)
+            measures[name] = {
+                "type": "numeric",
+                "role": role,
+                "role_label": ROLE_LABELS.get(role, role),
+                "description": column_description(name),
+            }
+        datasets[dataset] = {"dimensions": dims, "measures": measures}
+    return {"schema_version": MANIFEST_VERSION, "datasets": datasets}
 
 
 def _catalogue_for_manifest() -> dict[str, dict[str, Any]]:

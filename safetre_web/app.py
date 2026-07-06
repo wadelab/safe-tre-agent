@@ -26,8 +26,7 @@ from safetre import synth
 from safetre.audit import AuditLog
 from safetre.config import load_policy_config
 from safetre.disclosure import DisclosurePolicy
-from safetre.llm import real_llm_enabled
-from safetre.manifest import manifest_for_response
+from safetre.manifest import manifest_for_response, public_schema
 from safetre.planner import LLMPlanner, MockPlanner
 from safetre.query import CATALOGUE
 from safetre.service import QueryService
@@ -61,10 +60,19 @@ limiter = RateLimiter(int(os.environ.get("SAFETRE_RATE_LIMIT", "120")))
 
 
 def make_planner():
-    if real_llm_enabled():
-        from safetre.llm import LLMClient
-        return LLMPlanner(LLMClient())
-    return MockPlanner()
+    """Always plan with the real (online/local) LLM.
+
+    There is no silent offline fallback: if the model is missing or unreachable
+    the request fails loudly rather than quietly dropping to the deterministic
+    MockPlanner. The stub ignores group-by and other request nuance, so falling
+    back to it silently degrades result quality (e.g. a grouped correlation
+    collapses to a single aggregate). The offline stub is opt-in for tests/CI
+    only, via an explicit SAFETRE_LLM=mock.
+    """
+    if (os.environ.get("SAFETRE_LLM") or "").strip().lower() == "mock":
+        return MockPlanner()
+    from safetre.llm import LLMClient
+    return LLMPlanner(LLMClient())
 
 
 def _format_p_value(value) -> str:
@@ -111,7 +119,7 @@ def index(request: Request):
     manifest = manifest_for_response()
     return templates.TemplateResponse(request, "index.html", {
         "user": user, "allowed": allowed, "catalogue": CATALOGUE,
-        "manifest": manifest,
+        "manifest": manifest, "schema": public_schema(),
     })
 
 
@@ -159,6 +167,20 @@ def manifest(request: Request):
     if not allowed:
         raise HTTPException(403, "not on the Safe People allowlist")
     return manifest_for_response()
+
+
+@app.get("/api/schema")
+def schema(request: Request):
+    """The disclosure-safe data dictionary: each dataset's dimensions and
+    measures with type, disclosure role, description and declared value domains.
+    Design-time metadata only — the study codebook, no row counts (those are
+    /api/marginals). Lets an analyst see the legal filter/group-by vocabulary
+    without guessing. Gated on the Safe People allowlist like the other
+    metadata endpoints."""
+    _, allowed = current_user(request)
+    if not allowed:
+        raise HTTPException(403, "not on the Safe People allowlist")
+    return public_schema()
 
 
 @app.get("/api/marginals")

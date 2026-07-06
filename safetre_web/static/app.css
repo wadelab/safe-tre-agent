@@ -831,6 +831,69 @@ summary::-webkit-details-marker { display: none; }
   line-height: 1.7;
 }
 
+.rail-note {
+  margin: 0 0 4px;
+  color: var(--faint);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+}
+
+.rail-note a { color: var(--accent); text-decoration: none; }
+.rail-note a:hover { text-decoration: underline; }
+
+/* column chips: name + a small disclosure-role tag, tinted by role. The full
+   description and declared value domain live in the title tooltip. */
+.dataset dd.cols {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.col {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 2px 7px;
+  background: rgba(148, 163, 184, 0.05);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink);
+  cursor: help;
+}
+
+.col em {
+  font-style: normal;
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--faint);
+}
+
+.col.role-S  { border-color: rgba(248, 113, 113, 0.28); }
+.col.role-S em  { color: var(--bad); }
+.col.role-QI { border-color: rgba(251, 191, 36, 0.28); }
+.col.role-QI em { color: var(--warn); }
+.col.role-R em  { color: var(--faint); }
+
+.role-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 4px;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.role-legend .role-QI { color: var(--warn); }
+.role-legend .role-S  { color: var(--bad); }
+.role-legend .role-R  { color: var(--faint); }
+
 /* policy stat tiles */
 .compact {
   display: grid;

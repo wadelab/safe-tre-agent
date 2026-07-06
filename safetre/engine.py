@@ -21,6 +21,7 @@ import duckdb
 import pandas as pd
 
 from .query import CATALOGUE, QuerySpec
+from .schema import declared_domain
 from .stats import pearson_p_value
 
 _IDENT = re.compile(r"^[a-z_][a-z0-9_]*$")
@@ -419,17 +420,26 @@ class QueryEngine:
         deny/allow decision reproducible by an analyst *up to* that one bit — the
         residual (using the true sub-threshold count internally to actually catch
         rare-category isolation) is the documented, DP-closed deviation.
+
+        Values outside a column's DECLARED domain are dropped entirely, not
+        count-nulled: an undeclared value (a hostile string smuggled into a
+        field, a data-entry typo) is disclosive by its mere *name*, and nulling
+        the count still leaks the string as a key. Only declared categories — the
+        public codebook vocabulary — appear. Numeric columns with no declared
+        domain keep every observed value (count-nulled if sub-threshold).
         """
         raw = self.marginal_donor_counts()
         pub: dict = {}
         for dataset, per_dim in raw.items():
-            pub[dataset] = {
-                dim: {
+            pub_dims: dict = {}
+            for dim, counts in per_dim.items():
+                domain = declared_domain(dim)
+                pub_dims[dim] = {
                     str(v): (int(round(c / round_base) * round_base) if c >= threshold else None)
                     for v, c in counts.items()
+                    if domain is None or v in domain
                 }
-                for dim, counts in per_dim.items()
-            }
+            pub[dataset] = pub_dims
         return pub
 
     def _unit_view(self, dataset: str) -> str:

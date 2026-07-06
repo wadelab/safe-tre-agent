@@ -124,12 +124,22 @@ def test_published_marginals_suppress_subthreshold(tables):
         for dim, counts in per_dim.items():
             for v, c in counts.items():
                 assert c is None or (c % 5 == 0 and c >= 10)
-    # a sub-threshold raw cell must be suppressed in the published table
-    sub = [(ds, dim, v) for ds, pd_ in raw.items() for dim, cc in pd_.items()
-           for v, c in cc.items() if 0 < c < 10]
-    if sub:
-        ds, dim, v = sub[0]
-        assert pub[ds][dim][str(v)] is None
+    # a sub-threshold *declared* cell (e.g. Northern Ireland) is kept but
+    # suppressed to None; an undeclared value (a poison string) is dropped
+    # entirely — its name is disclosive, so count-nulling it is not enough.
+    from safetre.schema import declared_domain
+    sub_declared = [(ds, dim, v) for ds, pd_ in raw.items() for dim, cc in pd_.items()
+                    for v, c in cc.items() if 0 < c < 10
+                    and declared_domain(dim) is not None and v in declared_domain(dim)]
+    assert sub_declared, "expected at least one sub-threshold declared value"
+    ds, dim, v = sub_declared[0]
+    assert pub[ds][dim][str(v)] is None
+    # no undeclared value survives anywhere in the published table
+    for ds, per_dim in pub.items():
+        for dim, counts in per_dim.items():
+            dom = declared_domain(dim)
+            if dom is not None:
+                assert all(k in {str(x) for x in dom} for k in counts)
 
 
 def test_differencing_refusal_has_no_numeric_bound(tables):
