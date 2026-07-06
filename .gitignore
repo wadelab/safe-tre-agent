@@ -26,3 +26,10 @@ artifacts/*.pptx
 artifacts/*.pdf
 .DS_Store
 .~lock.*#
+# LaTeX build artifacts (the preprint PDF is distributed via releases)
+paper/*.aux
+paper/*.bbl
+paper/*.blg
+paper/*.log
+paper/*.out
+paper/*.pdf
