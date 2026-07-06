@@ -1,10 +1,16 @@
-# Default policy. Mirrors common TRE conventions (e.g. NHS min cell size).
+# Default disclosure policy. Mirrors common TRE conventions (e.g. NHS min cell
+# size). These values are LOADED at startup (safetre/config.py) and drive the
+# gateway and session auditor — editing them changes behaviour. Environment
+# variables (SAFETRE_MIN_CELL, SAFETRE_QUERY_BUDGET, ...) override this file.
 disclosure:
   min_cell_size: 10        # suppress aggregate cells with fewer underlying individuals
   max_output_rows: 100     # outputs larger than this look like a row dump
+  dom_threshold: 0.5       # p%-rule: suppress a cell one contributor dominates beyond this share
+  influence_threshold: 0.5 # suppress a corr cell if removing one donor moves r by more than this
+  round_base: 5            # released counts are rounded to this base
 session:
   query_budget: 20         # max released aggregates per session before review
-  differencing_delta: 10   # flag same-measure totals differing by < this
+  differencing_delta: 10   # flag same-measure totals / cohorts differing by < this
 hitl:
   default: human           # borderline (medium) findings escalate to a human
 model:

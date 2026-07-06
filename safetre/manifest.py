@@ -15,7 +15,7 @@ from typing import Any
 
 from .query import CATALOGUE, MAX_FILTERS, MAX_GROUP_BY, MAX_IN_VALUES
 
-MANIFEST_VERSION = "2026-07-03.aggregate.v3"
+MANIFEST_VERSION = "2026-07-06.aggregate.v3"
 
 
 def _catalogue_for_manifest() -> dict[str, dict[str, Any]]:

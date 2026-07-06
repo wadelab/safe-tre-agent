@@ -24,6 +24,8 @@ from pydantic import BaseModel, Field
 
 from safetre import synth
 from safetre.audit import AuditLog
+from safetre.config import load_policy_config
+from safetre.disclosure import DisclosurePolicy
 from safetre.llm import real_llm_enabled
 from safetre.manifest import manifest_for_response
 from safetre.planner import LLMPlanner, MockPlanner
@@ -40,11 +42,21 @@ app = FastAPI(title="safe-tre-agent", docs_url=None, redoc_url=None)
 templates = Jinja2Templates(directory=str(BASE / "templates"))
 app.mount("/static", StaticFiles(directory=str(BASE / "static")), name="static")
 
+# One authoritative disclosure policy: defaults < config.yaml < env. This is what
+# makes the thresholds in config.yaml / SAFETRE_MIN_CELL actually take effect.
+_cfg = load_policy_config()
 _data = pathlib.Path("data")
 _tables = synth.load_csvs() if _data.is_dir() and any(_data.glob("*.csv")) else synth.generate()
-service = QueryService(_tables)
+_policy = DisclosurePolicy(
+    threshold=_cfg.min_cell_size, max_rows=_cfg.max_output_rows,
+    dom_threshold=_cfg.dom_threshold, influence_threshold=_cfg.influence_threshold,
+    round_base=_cfg.round_base)
+service = QueryService(_tables, _policy)
 audit_log = AuditLog(os.environ.get("SAFETRE_AUDIT_DB", "audit.db"))
-sessions = SessionStore()
+# Off-box anchor for the audit chain head (optional); when set, /api/audit/verify
+# checks the recomputed head against it, not just internal consistency.
+_audit_head_anchor = os.environ.get("SAFETRE_AUDIT_HEAD_ANCHOR") or None
+sessions = SessionStore(threshold=_cfg.differencing_delta, budget=_cfg.query_budget)
 limiter = RateLimiter(int(os.environ.get("SAFETRE_RATE_LIMIT", "120")))
 
 
@@ -112,9 +124,15 @@ def query(request: Request, body: QueryRequest):
         raise HTTPException(429, "rate limit exceeded; slow down")
 
     sess = sessions.get(user)
-    result = service.handle(body.q, make_planner(), auditor=sess.auditor,
-                            audit_log=audit_log, user=user)
-    sess.history.append((body.q, result.status))
+    # Serialise a single identity's requests across the whole check-then-act
+    # critical section (observe -> apply -> record_cohort). Without this, two
+    # concurrent requests could both pass the differencing-lineage check before
+    # either records its cohort, bypassing the control. Cross-user parallelism is
+    # unaffected — the lock is per session.
+    with sess.lock:
+        result = service.handle(body.q, make_planner(), auditor=sess.auditor,
+                                audit_log=audit_log, user=user)
+        sess.history.append((body.q, result.status))
 
     table_html = None
     if result.output is not None:
@@ -136,10 +154,29 @@ def healthz():
 
 
 @app.get("/api/manifest")
-def manifest():
+def manifest(request: Request):
+    _, allowed = current_user(request)
+    if not allowed:
+        raise HTTPException(403, "not on the Safe People allowlist")
     return manifest_for_response()
 
 
+@app.get("/api/marginals")
+def marginals(request: Request):
+    """The disclosure-safe donor-frequency table the differencing auditor's
+    decision is defined against (sub-threshold cells reported as null). Publishing
+    it is what lets an analyst reproduce the auditor's deny/allow decision — the
+    simulatable-auditing property (see docs/security.md)."""
+    _, allowed = current_user(request)
+    if not allowed:
+        raise HTTPException(403, "not on the Safe People allowlist")
+    return service.engine.published_marginal_donor_counts(
+        threshold=_cfg.min_cell_size, round_base=_cfg.round_base)
+
+
 @app.get("/api/audit/verify")
-def audit_verify():
-    return {"chain_intact": audit_log.verify()}
+def audit_verify(request: Request):
+    _, allowed = current_user(request)
+    if not allowed:
+        raise HTTPException(403, "not on the Safe People allowlist")
+    return {"chain_intact": audit_log.verify(expected_head=_audit_head_anchor)}

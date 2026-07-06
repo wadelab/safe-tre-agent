@@ -19,10 +19,19 @@ from fastapi import Request
 
 DEFAULT_CHANNEL_NETS = "127.0.0.1/32,::1/128"
 FALSEY = {"0", "false", "no", "off"}
+TRUTHY = {"1", "true", "yes", "on"}
 
 
 def restricted_channel_enabled() -> bool:
     return os.environ.get("SAFETRE_RESTRICTED_CHANNEL", "1").strip().lower() not in FALSEY
+
+
+def _test_client_allowed() -> bool:
+    """Starlette's TestClient presents peer host 'testclient'. Honouring it is a
+    test affordance, so it is OFF by default and must be explicitly enabled
+    (tests set SAFETRE_ALLOW_TEST_CLIENT via conftest). Never leave it on in a
+    real deployment: it is a channel-check bypass sentinel."""
+    return os.environ.get("SAFETRE_ALLOW_TEST_CLIENT", "").strip().lower() in TRUTHY
 
 
 def _allowed_networks():
@@ -34,6 +43,27 @@ def _allowed_networks():
     return nets
 
 
+def _net_is_loopback(net) -> bool:
+    return net.network_address.is_loopback and net.broadcast_address.is_loopback
+
+
+def channel_is_loopback_only() -> bool:
+    """True iff the restricted channel is enabled and admits only loopback peers.
+
+    Identity trust (the `Tailscale-User-Login` header) is only sound when the app
+    is reachable solely over loopback, because the header is otherwise forgeable
+    by anyone who can reach the socket. `identity.py` uses this to decide whether
+    trusting the header is safe or must be gated behind an explicit opt-in.
+    """
+    if not restricted_channel_enabled():
+        return False
+    try:
+        nets = _allowed_networks()
+    except ValueError:
+        return False
+    return bool(nets) and all(_net_is_loopback(net) for net in nets)
+
+
 def channel_allowed(request: Request) -> tuple[bool, str]:
     """Return whether this request arrived over an allowed physical/logical path."""
     if not restricted_channel_enabled():
@@ -42,7 +72,7 @@ def channel_allowed(request: Request) -> tuple[bool, str]:
         return False, "missing client address"
 
     host = request.client.host
-    if host == "testclient":
+    if host == "testclient" and _test_client_allowed():
         return True, "test client"
 
     try:

@@ -474,23 +474,33 @@ class QueryEngine:
         return result
 
     def _attach_dominance(self, spec: QuerySpec, plan: SQLPlan, result: pd.DataFrame):
-        """Largest single donor's contribution / cell total, per group."""
+        """Largest single donor's contribution / cell total, per group.
+
+        A missing/unresolved dominance is filled with +inf, not 0.0: an unresolved
+        safety check must fail **closed** (be suppressed), never default to "safe".
+        """
         dom = self.con.execute(plan.sql, plan.params).df()
         if spec.group_by:
             result = result.merge(dom, on=spec.group_by, how="left")
         else:
-            result = result.assign(dominance=(dom["dominance"].iloc[0] if len(dom) else 0.0))
-        result["dominance"] = result["dominance"].fillna(0.0)
+            result = result.assign(dominance=(dom["dominance"].iloc[0]
+                                              if len(dom) else float("inf")))
+        result["dominance"] = result["dominance"].fillna(float("inf"))
         return result
 
     def _attach_influence(self, spec: QuerySpec, plan: SQLPlan, result: pd.DataFrame):
-        """Max single-donor leave-one-out |Δr| per group (for corr cells)."""
+        """Max single-donor leave-one-out |Δr| per group (for corr cells).
+
+        Filled with +inf when unresolved (e.g. every leave-one-out drops below the
+        3-row floor) so an uncomputed influence is suppressed, not released.
+        """
         inf = self.con.execute(plan.sql, plan.params).df()
         if spec.group_by:
             result = result.merge(inf, on=spec.group_by, how="left")
         else:
-            result = result.assign(influence=(inf["influence"].iloc[0] if len(inf) else 0.0))
-        result["influence"] = result["influence"].fillna(0.0)
+            result = result.assign(influence=(inf["influence"].iloc[0]
+                                             if len(inf) else float("inf")))
+        result["influence"] = result["influence"].fillna(float("inf"))
         return result
 
     def _attach_donor_count(self, spec: QuerySpec, plan: SQLPlan, result: pd.DataFrame):
@@ -532,6 +542,33 @@ class QueryEngine:
             out[dataset] = per_dim
         self._marginals = out
         return out
+
+    def published_marginal_donor_counts(self, threshold: int = 10,
+                                        round_base: int = 5) -> dict:
+        """The disclosure-safe form of `marginal_donor_counts`, safe to expose.
+
+        The simulatable-auditing argument (Kenthapadi–Mishra–Nissim, 2005) only
+        holds if the metadata the auditor decides from is genuinely public. The
+        raw marginals include sub-threshold cells (e.g. a rare `sex`/`age_years`
+        value), which are themselves disclosive, so they are not published as-is.
+        This returns the releasable projection: counts at or above `threshold` are
+        rounded to `round_base`; counts below it are reported as `None`
+        ("< threshold"). The endpoint serving this is what makes the auditor's
+        deny/allow decision reproducible by an analyst *up to* that one bit — the
+        residual (using the true sub-threshold count internally to actually catch
+        rare-category isolation) is the documented, DP-closed deviation.
+        """
+        raw = self.marginal_donor_counts()
+        pub: dict = {}
+        for dataset, per_dim in raw.items():
+            pub[dataset] = {
+                dim: {
+                    str(v): (int(round(c / round_base) * round_base) if c >= threshold else None)
+                    for v, c in counts.items()
+                }
+                for dim, counts in per_dim.items()
+            }
+        return pub
 
     def _unit_view(self, dataset: str) -> str:
         if dataset not in _UNIT_VIEWS:

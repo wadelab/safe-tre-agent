@@ -3,6 +3,61 @@
 A dated record of self-red-team findings and the fixes applied. New findings get
 appended; the table is the quick index, the notes below give detail.
 
+## 2026-07-06 — round 3 (external red-team of the stateful controls)
+
+A full review focused on the components *around* the QuerySpec boundary — the
+session controls, policy configuration, concurrency, identity/channel coupling,
+and side channels — since the boundary itself held. The boundary held again here;
+every finding was in state, config, or deployment coupling.
+
+| # | Finding | Sev | Status | Fix | Where |
+|---|---|---|---|---|---|
+| 18 | **Concurrency TOCTOU on the session controls.** FastAPI runs the sync handler in a threadpool, and the differencing-lineage / query-budget controls are a check-then-act over shared mutable state with no lock. Firing the two halves of a differencing pair concurrently let both pass `observe_cohort` before either `record_cohort`, bypassing the auditor; the budget raced the same way | **High** | **Fixed** | a per-session `threading.Lock` held by the web handler across the whole `observe → apply → record_cohort` critical section; `SessionStore.get` guarded (no duplicate-session race) | `safetre_web/session.py`, `safetre_web/app.py` |
+| 19 | **`config.yaml` and `SAFETRE_MIN_CELL` were inert.** Nothing read them; every threshold was a hardcoded default, and `leak_detector` used class constants rather than the instance policy — so an operator tightening `min_cell_size` got no change | **High** | **Fixed** | one loader (`safetre/config.py`) resolves defaults < `config.yaml` < env and threads the values into `DisclosurePolicy`/`SessionAuditor`; `leak_detector` takes the configured thresholds; regression test asserts a changed floor changes a real suppression | `safetre/config.py`, `disclosure.py`, `safetre_web/app.py`, `config.yaml` |
+| 20 | **Fail-open suppression.** A missing/NULL dominance or influence was filled with `0.0` (= safe) and released; an all-NULL leave-one-out influence (`< 3` rows after any removal) scored a corr cell as safe | **Med** | **Fixed** | unresolved safety columns fill to `+inf` (unsafe); `leak_detector` flags NaN/inf counts, dominance and influence as violations — suppression fails **closed** | `safetre/engine.py`, `disclosure.py` |
+| 21 | **Simulatable auditing was only half-true.** The decision used exact private marginals that were never published; some are sub-threshold, so publishing them exact would itself disclose. Refusals also carried the exact numeric bound | **Med** | **Fixed (leak reduced; residual documented)** | published disclosure-safe marginals at `GET /api/marginals` (sub-threshold → `null`, rest rounded); refusal messages made non-numeric; the sub-threshold residual is the one bit a DP accountant closes (D2) | `safetre/engine.py`, `disclosure.py`, `safetre_web/app.py` |
+| 22 | **Identity trust was silently coupled to the channel.** The spoofable `Tailscale-User-Login` header is only safe on a loopback-only channel; widening `SAFETRE_CHANNEL_ALLOW_NETS` turned it into an auth bypass, and the local (untrusted) model runtime shares loopback | **Med** | **Fixed** | header trust now requires a loopback-only channel, or an explicit `SAFETRE_TRUST_FORWARDED_IDENTITY=1` opt-in for a trusted upstream proxy; optional `SAFETRE_PROXY_SHARED_SECRET`; fail closed otherwise | `safetre_web/identity.py`, `channel.py` |
+| 23 | **HITL escalation was documented but absent from the secure web path**, and the gateway released on any action it did not explicitly deny | Low | **Fixed** | `service.py` runs `hitl_decision` on residual findings and **fails closed** on any non-`release`/`redacted` action; a residual medium escalates to a `review` status that withholds data | `safetre/service.py` |
+| 24 | **Unbounded session state + info endpoints.** `_history` grew per query (O(n²) scan) and the budget never hard-stopped work; `/api/manifest` and `/api/audit/verify` were unauthenticated and leaned only on the channel; the `testclient` bypass was hardcoded in the channel check | Low | **Fixed** | budget short-circuits before engine/planner work; `_history` bounded; rate-limiter map swept; manifest/verify gated on the allowlist; `verify` takes an off-box `SAFETRE_AUDIT_HEAD_ANCHOR`; the `testclient` bypass is off unless `SAFETRE_ALLOW_TEST_CLIENT` is set | `disclosure.py`, `service.py`, `rate.py`, `app.py`, `channel.py` |
+
+### Notes
+
+**#18 concurrency.** This is the sharpest finding of the round: a security control
+that is correct sequentially but bypassable under the concurrency the framework
+actually provides. The fix serialises only a single identity's requests (cross-user
+parallelism is preserved), which matches how one researcher issues queries.
+`test_concurrent_differencing_serialised_by_session_lock` fires the pair from two
+threads and asserts exactly one is released.
+
+**#19 config authority.** A disclosure-control system whose safety knobs silently
+do nothing is a latent incident. The values in `config.yaml` happened to equal the
+defaults, which hid it. Now there is one authoritative resolution path with an
+explicit precedence, and env always wins so a checked-in file can be overridden
+without editing it.
+
+**#20 fail-closed.** "The safety check produced no value, so we released it" is the
+wrong default for a gateway. The `+inf` sentinel makes an unresolved dominance or
+influence trip the same rule a genuine violation would, in both the detector and
+the suppression filter. The donor-count threshold already covered the exploitable
+cases; this removes the fail-open default regardless.
+
+**#21 simulatability.** Kenthapadi–Mishra–Nissim requires the auditor's decision to
+be a function of information the analyst already holds. Publishing the safe
+marginal projection makes that true up to one bit (isolating a sub-threshold
+category, which still uses the true count internally). Making refusals non-numeric
+removes the larger leak — the exact symmetric-difference count. Full simulatability
+is the DP accountant (D2), unchanged as a research round.
+
+**#22 identity/channel coupling.** The header approach is fine for the intended
+`tailscale serve → loopback` topology; the failure mode was an operator widening the
+channel and unknowingly making identity forgeable. The coupling is now explicit and
+fails closed, with a shared-secret path for proxies that can inject one.
+
+**Side channels.** Documented, not "closed": the SDC response is an inherent oracle
+(bounded by secondary suppression + lineage + the DP roadmap), refusals are now
+non-numeric, and the audit-lock timing residual is accepted because serialisation
+is required for chain integrity. See [security.md](security.md#side-channels-and-residual-oracles).
+
 ## 2026-07-04 — round 2h (best-practice fixes: D4, D1)
 
 Acting on the [best-practice review](best-practice-review.md). Two deviations

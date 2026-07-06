@@ -51,6 +51,17 @@ class QueryService:
             record("denied", None, f, None)
             return Result("denied", message=why, findings=f, trace=trace)
 
+        # Budget short-circuit: once the session has spent its query budget, deny
+        # before doing planner/engine work at all (bounds cost and the per-session
+        # state a flood can accumulate).
+        if auditor.over_budget():
+            f = [D.Finding("high", "query_budget",
+                           f"session query budget {auditor.budget} exceeded")]
+            trace.append("auditor: query budget exhausted")
+            record("denied", None, f, None)
+            return Result("denied", message="session query budget exceeded",
+                          findings=f, trace=trace)
+
         raw = planner.plan(request)
         trace.append("planner: QuerySpec proposed (untrusted)")
 
@@ -86,9 +97,27 @@ class QueryService:
         findings = findings + audit_findings
         trace.append(f"gateway: {action} ({[f.rule for f in findings]})")
 
-        if audit_findings or action == "deny":
+        # Fail closed: any auditor flag, an explicit deny, or an unrecognised
+        # action withholds all data.
+        if audit_findings or action not in ("release", "redacted"):
             record("denied", spec.model_dump(), findings, None)
             return Result("denied", message="blocked by safe-outputs gateway",
+                          spec=spec.model_dump(), findings=findings, trace=trace)
+
+        # Human-in-the-loop: suppression-resolved findings are settled, but any
+        # residual medium/high finding escalates (and a residual high denies).
+        # This keeps the documented HITL step present in the secure path — today
+        # nothing medium can reach here, so it is future-proofing + fail-closed.
+        residual = [f for f in findings if f.rule not in D.SUPPRESSABLE]
+        decision = D.hitl_decision(residual)
+        trace.append(f"hitl: {decision}")
+        if decision == "deny":
+            record("denied", spec.model_dump(), findings, None)
+            return Result("denied", message="blocked at human-in-the-loop",
+                          spec=spec.model_dump(), findings=findings, trace=trace)
+        if decision == "human":
+            record("review", spec.model_dump(), findings, None)
+            return Result("review", message="escalated to human output checker",
                           spec=spec.model_dump(), findings=findings, trace=trace)
 
         auditor.record_cohort(spec.dataset, cohort)

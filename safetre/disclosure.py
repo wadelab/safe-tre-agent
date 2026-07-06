@@ -8,7 +8,9 @@ single-donor influence) so the demo runs with no extra dependency.
 
 from __future__ import annotations
 
+from collections import deque
 from dataclasses import dataclass, field
+from typing import ClassVar
 
 import pandas as pd
 
@@ -18,6 +20,10 @@ COUNT_COLUMNS = {"n", "count", "size", "freq", "n_donors"}
 DOM_THRESHOLD = 0.5      # suppress a cell if one contributor exceeds this share
 INFLUENCE_THRESHOLD = 0.5  # suppress a corr cell if removing one donor moves r by more than this
 ROUND_BASE = 5           # released counts are rounded to this base
+# cap the per-session history scanned by `observe`; the query budget short-circuit
+# keeps this well under the cap in normal use, but bound it so a flood cannot grow
+# it without limit (memory + O(n) scan per call).
+MAX_HISTORY = 1000
 
 
 @dataclass
@@ -31,13 +37,26 @@ def _count_cols(df: pd.DataFrame) -> list[str]:
     return [c for c in df.columns if str(c).lower() in COUNT_COLUMNS]
 
 
-def leak_detector(df: pd.DataFrame | None) -> list[Finding]:
+def leak_detector(df: pd.DataFrame | None, threshold: int | None = None,
+                  max_rows: int | None = None, dom_threshold: float | None = None,
+                  influence_threshold: float | None = None) -> list[Finding]:
     """Inspect a released output for residual disclosure risk.
 
     Used both as the gateway's check and as the red-team's ground-truth oracle.
+    Thresholds default to the policy defaults so the oracle keeps a fixed meaning;
+    the gateway passes its *configured* thresholds so `config.yaml` actually bites.
+
+    Fails **closed**: a safety column that is NULL/NaN/±inf (i.e. the engine could
+    not establish the cell is safe) is treated as a violation, not as safe. A
+    fail-open default here would release a cell whose dominance/influence check
+    silently produced no value.
     """
     if df is None or len(df) == 0:
         return []
+    threshold = DisclosurePolicy.DEFAULT_THRESHOLD if threshold is None else threshold
+    max_rows = DisclosurePolicy.DEFAULT_MAX_ROWS if max_rows is None else max_rows
+    dom_threshold = DOM_THRESHOLD if dom_threshold is None else dom_threshold
+    influence_threshold = INFLUENCE_THRESHOLD if influence_threshold is None else influence_threshold
     findings: list[Finding] = []
     cols = {str(c) for c in df.columns}
 
@@ -57,32 +76,38 @@ def leak_detector(df: pd.DataFrame | None) -> list[Finding]:
     if "free_text" in cols:
         findings.append(Finding("high", "free_text_egress", "free-text column present"))
 
-    # small cells
+    # small cells (a NaN count means "unknown size" -> unsafe)
     for c in _count_cols(df):
-        small = df[df[c] < DisclosurePolicy.DEFAULT_THRESHOLD]
+        small = df[df[c].isna() | (df[c] < threshold)]
         if len(small) > 0:
             findings.append(Finding("high", "small_cell",
                                     f"{len(small)} cell(s) in '{c}' below threshold "
-                                    f"{DisclosurePolicy.DEFAULT_THRESHOLD}"))
+                                    f"{threshold}"))
 
-    # dominance (p%-rule): one contributor dominates a cell's sum/mean
+    # dominance (p%-rule): one contributor dominates a cell's sum/mean.
+    # Missing/NaN dominance is fail-closed (the engine fills unresolved cells with
+    # +inf, which trips this rule) so an uncomputed check cannot pass.
     if "dominance" in cols:
-        dominated = df[df["dominance"] > DOM_THRESHOLD]
+        dom = pd.to_numeric(df["dominance"], errors="coerce")
+        dominated = df[dom.isna() | (dom > dom_threshold)]
         if len(dominated) > 0:
             findings.append(Finding("high", "dominance",
                                     f"{len(dominated)} cell(s) where one contributor "
-                                    f"exceeds {DOM_THRESHOLD:.0%} of the total"))
+                                    f"exceeds {dom_threshold:.0%} of the total (or was unresolved)"))
 
-    # influence (corr analogue of the p%-rule): one donor drives a correlation
+    # influence (corr analogue of the p%-rule): one donor drives a correlation.
+    # Same fail-closed treatment: an unresolved influence (NaN/inf) is a violation.
     if "influence" in cols:
-        influential = df[df["influence"] > INFLUENCE_THRESHOLD]
+        inf = pd.to_numeric(df["influence"], errors="coerce")
+        influential = df[inf.isna() | (inf > influence_threshold)]
         if len(influential) > 0:
             findings.append(Finding("high", "influence",
                                     f"{len(influential)} correlation cell(s) where removing "
-                                    f"one donor shifts r by more than {INFLUENCE_THRESHOLD}"))
+                                    f"one donor shifts r by more than {influence_threshold} "
+                                    "(or was unresolved)"))
 
     # excessive granularity (looks like a row dump)
-    if len(df) > DisclosurePolicy.DEFAULT_MAX_ROWS and not _count_cols(df):
+    if len(df) > max_rows and not _count_cols(df):
         findings.append(Finding("medium", "too_granular",
                                 f"{len(df)} rows with no aggregation"))
     return findings
@@ -94,8 +119,9 @@ SUPPRESSABLE = {"small_cell", "dominance", "influence"}
 
 @dataclass
 class DisclosurePolicy:
-    DEFAULT_THRESHOLD: int = 10
-    DEFAULT_MAX_ROWS: int = 100
+    # Class constants: the oracle/default meaning of the thresholds (not fields).
+    DEFAULT_THRESHOLD: ClassVar[int] = 10
+    DEFAULT_MAX_ROWS: ClassVar[int] = 100
     threshold: int = 10
     max_rows: int = 100
     dom_threshold: float = DOM_THRESHOLD
@@ -163,7 +189,8 @@ class DisclosurePolicy:
 
         action in {"release", "redacted", "deny"}.
         """
-        findings = leak_detector(df)
+        findings = leak_detector(df, self.threshold, self.max_rows,
+                                 self.dom_threshold, self.influence_threshold)
         if df is None:
             return None, "deny", findings
 
@@ -205,12 +232,31 @@ class SessionAuditor:
 
     Deterministic and explainable by design; does not defend across sessions or
     colluding users (that needs global accounting — DP, round 3).
+
+    Refusal messages are deliberately non-numeric. The deny/allow decision is a
+    thin signal an interactive SDC control must expose to function, but the exact
+    total delta or symmetric-difference size is itself the quantity a differencing
+    attack is trying to recover, so it is never put in a finding shown to the
+    caller (or written to the audit trail).
     """
     threshold: int = 10
     budget: int = 20
-    _history: list[tuple[str, float]] = field(default_factory=list)
+    _history: deque = field(default_factory=lambda: deque(maxlen=MAX_HISTORY))
     _cohorts: list[tuple[str, tuple]] = field(default_factory=list)
     _spent: int = 0
+
+    @property
+    def spent(self) -> int:
+        return self._spent
+
+    def over_budget(self) -> bool:
+        """True once the session has already spent its query budget.
+
+        Lets the caller short-circuit further work (engine + planner) instead of
+        computing an aggregate only to deny it — bounds both cost and the
+        per-session state a flood can accumulate.
+        """
+        return self._spent >= self.budget
 
     def observe(self, measure: str, total_n: float) -> list[Finding]:
         findings: list[Finding] = []
@@ -221,9 +267,9 @@ class SessionAuditor:
         for prev_measure, prev_n in self._history:
             if prev_measure == measure and 0 < abs(prev_n - total_n) < self.threshold:
                 findings.append(Finding("high", "differencing",
-                                        f"'{measure}' totals differ by "
-                                        f"{abs(prev_n - total_n):g} (<{self.threshold}): "
-                                        "possible differencing attack"))
+                                        f"'{measure}' totals are within {self.threshold} of a "
+                                        "prior release: possible differencing attack"))
+                break
         self._history.append((measure, total_n))
         return findings
 
@@ -233,8 +279,9 @@ class SessionAuditor:
         `filters` is QuerySpec.normalized_filters(); `bound(a, b) -> int` returns
         an upper bound on the number of individuals in exactly one of the two
         cohorts. The caller injects a *simulatable* bound computed from published
-        donor marginals, not the live donor sets, so a refusal leaks nothing an
-        analyst could not already compute (see engine.simulatable_cohort_bound).
+        donor marginals, not the live donor sets. The refusal reveals only the one
+        bit "too similar to a prior release", not the numeric bound (see
+        engine.simulatable_cohort_bound and docs/security.md on simulatability).
         Cost is bounded by the session budget: at most `budget` prior cohorts.
         """
         for prev_dataset, prev_filters in self._cohorts:
@@ -244,9 +291,8 @@ class SessionAuditor:
             if 0 < d < self.threshold:
                 return [Finding(
                     "high", "differencing",
-                    f"cohort differs from a previously released cohort by at most "
-                    f"{d} individual(s) (<{self.threshold}): "
-                    "possible differencing attack")]
+                    "cohort is within the differencing threshold of a previously "
+                    "released cohort: possible differencing attack")]
         return []
 
     def record_cohort(self, dataset: str, filters: tuple) -> None:
