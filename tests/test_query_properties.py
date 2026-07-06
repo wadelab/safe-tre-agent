@@ -335,3 +335,19 @@ def test_service_denies_hallucinated_grouping_end_to_end(data):
     assert result.status == "denied"
     assert result.output is None
     assert any(f.rule == "grouping_mismatch" for f in result.findings)
+
+
+@given(data=st.data())
+@settings(max_examples=150, deadline=None)
+def test_grouping_gate_denies_dropped_breakdown(data):
+    # request names >=2 valid breakdowns; a planner that groups by only a proper
+    # subset (silently omitting the rest) must be refused.
+    dataset = data.draw(st.sampled_from(sorted(CATALOGUE)))
+    dims = sorted(CATALOGUE[dataset]["dims"])
+    k = data.draw(st.integers(min_value=2, max_value=min(MAX_GROUP_BY, len(dims))))
+    requested = data.draw(st.lists(st.sampled_from(dims), min_size=k, max_size=k, unique=True))
+    request = "mean value by " + " and ".join(_DIM_PHRASE[d] for d in requested)
+    kept = data.draw(
+        st.lists(st.sampled_from(requested), min_size=1, max_size=k - 1, unique=True))
+    ok, why = check_grouping_coherence(request, dataset, kept)
+    assert not ok, (request, dataset, requested, kept, why)

@@ -381,6 +381,29 @@ def test_grouping_faithful_request_released(tables):
     assert not any(f.rule == "grouping_mismatch" for f in r.findings)
 
 
+def test_grouping_dropped_dimension_denied(tables):
+    # asked to break down by region AND sex; the planner silently dropped sex.
+    planner = _FixedSpecPlanner(
+        {"dataset": "wellbeing", "measure": {"fn": "mean", "column": "wemwbs_score"},
+         "group_by": ["region"]})
+    r = QueryService(tables).handle("mean wellbeing by region and sex", planner)
+    assert r.status == "denied" and r.output is None
+    assert any(f.rule == "grouping_mismatch" for f in r.findings)
+    assert "sex" in r.message
+
+
+def test_grouping_filter_terms_do_not_force_grouping(tables):
+    # "for age over 40" is a filter, not a breakdown: grouping by region alone
+    # must still be accepted (no false 'omitted age' denial).
+    planner = _FixedSpecPlanner(
+        {"dataset": "wellbeing", "measure": {"fn": "mean", "column": "wemwbs_score"},
+         "group_by": ["region"],
+         "filters": [{"column": "age_years", "op": ">", "value": 40}]})
+    r = QueryService(tables).handle("mean wellbeing by region for age over 40", planner)
+    assert r.status in ("released", "redacted")
+    assert not any(f.rule == "grouping_mismatch" for f in r.findings)
+
+
 class _ScriptedPlanner:
     """Returns pre-baked specs in order — a stand-in for a hostile planner."""
 

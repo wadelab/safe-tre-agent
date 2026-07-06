@@ -80,6 +80,17 @@
         measure: {fn: mean, column: wemwbs_score}
         group_by: [age_band]
 
+- name: grouping_dropped_dimension
+  type: loose_interpretation
+  path: service
+  expect_block: true
+  steps:
+    - request: "mean wellbeing by region and sex"
+      spec:
+        dataset: wellbeing
+        measure: {fn: mean, column: wemwbs_score}
+        group_by: [region]
+
 - name: grouping_faithful_baseline
   type: benign
   path: service

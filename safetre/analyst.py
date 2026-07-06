@@ -136,26 +136,53 @@ DIMENSION_SYNONYMS = {
 }
 
 
+# Words that end a grouping clause and begin a filter/condition, so a breakdown
+# ("by region for age > 40") is not mistaken for a request to group by the
+# filtered column.
+FILTER_TERMINATORS = [
+    " for ", " where ", " excluding ", " exclude ", " with ", " in ",
+    " between ", " over ", " under ", " above ", " below ", " during ",
+    " among ", " if ", " that ", " who ", " having ", " restricted to ",
+]
+
+
 def _dims_mentioned(text: str) -> set[str]:
-    """Catalogue dimensions named (by synonym, whole-word) anywhere in `text`."""
+    """Catalogue dimensions named (by synonym) in `text`.
+
+    Longest synonyms match first and consume their span, so "age rating" names
+    age_rating only — not also age_band via the "age" inside it.
+    """
     low = text.lower()
+    consumed = [False] * len(low)
     found = set()
-    for term, dim in DIMENSION_SYNONYMS.items():
-        if re.search(rf"(?<!\w){re.escape(term)}(?:s|es)?(?!\w)", low):
-            found.add(dim)
+    for term in sorted(DIMENSION_SYNONYMS, key=len, reverse=True):
+        dim = DIMENSION_SYNONYMS[term]
+        for m in re.finditer(rf"(?<!\w){re.escape(term)}(?:s|es)?(?!\w)", low):
+            if not any(consumed[m.start():m.end()]):
+                found.add(dim)
+                for i in range(m.start(), m.end()):
+                    consumed[i] = True
     return found
 
 
 def _grouping_clause(request: str) -> str | None:
-    """Text following the last grouping keyword, or None if the request asks
-    for no explicit breakdown."""
+    """The breakdown clause: text from the first grouping keyword up to the next
+    filter keyword (or end). None if the request asks for no explicit breakdown."""
     low = f" {request.lower()} "
-    end = -1
+    start = None
     for kw in GROUPING_KEYWORDS:
-        idx = low.rfind(kw)
-        if idx != -1:
-            end = max(end, idx + len(kw))
-    return low[end:] if end != -1 else None
+        idx = low.find(kw)
+        if idx != -1 and (start is None or idx < start[0]):
+            start = (idx, idx + len(kw))
+    if start is None:
+        return None
+    clause = low[start[1]:]
+    cut = len(clause)
+    for term in FILTER_TERMINATORS:
+        t = clause.find(term)
+        if t != -1:
+            cut = min(cut, t)
+    return clause[:cut]
 
 
 def check_grouping_coherence(request: str, dataset: str,
@@ -164,10 +191,12 @@ def check_grouping_coherence(request: str, dataset: str,
 
     The untrusted planner can emit a spec that VALIDATES (every group_by dim is
     on the dataset's allowlist) yet answers a *different* question than the one
-    asked — e.g. "mean wellbeing per lootbox" (lootbox is not a wellbeing
-    dimension) is quietly turned into group_by=['age_band']. Rather than release
-    an answer to a substituted question, refuse. Runs after validation, before
-    the engine, and is independent of the (untrusted) planner.
+    asked. Rather than release an answer to a substituted question, refuse.
+    Three ways the spec can be unfaithful to an explicit breakdown request:
+      A. a breakdown this dataset cannot provide ("wellbeing per lootbox");
+      B. a group_by dimension the request never named (hallucination);
+      C. a requested, valid breakdown the planner silently dropped (omission).
+    Runs after validation, before the engine, independent of the planner.
 
     Lenient by design: it only fires when the request names a groupable concept,
     so it does not flag differencing follow-ups ("same, excluding ...") or
@@ -180,6 +209,7 @@ def check_grouping_coherence(request: str, dataset: str,
     clause_dims = _dims_mentioned(clause)
     if not clause_dims:
         return True, "no recognised grouping dimension in request"
+    grouped = set(group_by)
 
     # Rule A: a requested breakdown this dataset cannot provide.
     unsupported = sorted(d for d in clause_dims if d not in dims)
@@ -192,9 +222,17 @@ def check_grouping_coherence(request: str, dataset: str,
             f"cannot break {dataset!r} down by {', '.join(unsupported)}: {where}. "
             f"valid breakdowns for {dataset!r}: {', '.join(sorted(dims))}")
 
+    # Rule C: a requested, valid breakdown the planner silently dropped.
+    missing = sorted(d for d in clause_dims if d in dims and d not in grouped)
+    if missing:
+        return False, (
+            f"request asks to break {dataset!r} down by {', '.join(missing)}, but the "
+            f"query {'omits it' if len(missing) == 1 else 'omits them'} "
+            f"(group_by={sorted(grouped)})")
+
     # Rule B: the planner grouped by a dimension the request never mentioned.
     referenced = _dims_mentioned(request)
-    hallucinated = sorted(g for g in group_by if g not in referenced)
+    hallucinated = sorted(g for g in grouped if g not in referenced)
     if hallucinated:
         return False, (
             f"query groups by {', '.join(hallucinated)}, which was not part of the "
