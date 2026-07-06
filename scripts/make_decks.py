@@ -364,6 +364,98 @@ def build_best_practice(shots: str, out: str) -> None:
     print(f"deck -> {out}")
 
 
+def build_elif(shots: str, out: str) -> None:
+    """The plain-language deck: docs/elif.md as slides (TL;DR + ELI5)."""
+    prs = Presentation()
+    prs.slide_width = SLIDE_W
+    prs.slide_height = SLIDE_H
+
+    title_slide(prs, "What we built, explained simply",
+                "Statistical models behind the safe-outputs gateway — the ELIF version "
+                "(precise version: docs/specification.md)")
+
+    bullets_slide(prs, "TL;DR", [
+        "The gateway now fits statistical models (gaussian / logistic / Poisson GLMs).",
+        "A model is computed ONLY from summary cells the gateway already checked and released.",
+        "If even one cell would be blocked, the whole model is refused — loudly, never quietly repaired.",
+        "Every release ships the cell table it was fitted from: refitting reproduces it bit-for-bit.",
+        "Around it: a framework where every statistical procedure is a registered, CI-enforced contract.",
+    ], accent=GREEN)
+
+    bullets_slide(prs, "The library with a careful librarian", [
+        "A library holds everyone's diaries. You may never read a diary.",
+        "You may ask about GROUPS — and the librarian follows strict rules:",
+        "   no answers about groups smaller than ten; answers rounded; every question remembered.",
+        "A robot helper turns your English into her official request form.",
+        "We do NOT trust the robot — it can only fill in the form; the rulebook checks every box.",
+    ])
+
+    bullets_slide(prs, "The trick that makes models safe", [
+        "Fitting a model normally means reading every individual's data.",
+        "For the models we allow, the maths has a special property:",
+        "   the model is computable EXACTLY from the group summaries alone (verified to ~1e-14).",
+        "So the fit uses only tables the librarian already released — it cannot know more",
+        "than she already said out loud. That is the whole safety argument.",
+    ], accent=GREEN)
+
+    bullets_slide(prs, "How a model request runs", [
+        "1. Work out which group tables the model needs.",
+        "2. Ask for each through EXACTLY the same rulebook as any hand query.",
+        "3. Any blocked cell ⇒ refuse the whole model, out loud (no merging, no dropping).",
+        "4. Fit with a pure calculator that physically cannot touch the database.",
+        "5. Release coefficients + the very table they came from.",
+    ])
+
+    shot_slide(prs, "What the researcher sees",
+               "The same gateway page: models appear as a released result with "
+               "every check reported; a refusal renders no data at all.",
+               os.path.join(shots, "released.png"), accent=GREEN)
+
+    bullets_slide(prs, "Why refusing loudly matters", [
+        "A 'helpful' system might quietly drop the too-small group and answer anyway.",
+        "Then you'd trust an answer to a question you didn't ask.",
+        "Here: blocked means blocked, and it says so.",
+        "Even the refusal is computed only from things you were allowed to know —",
+        "so a 'no' can't leak a secret either.",
+    ], accent=AMBER)
+
+    bullets_slide(prs, "The framework: adding statistics without adding holes", [
+        "Every procedure is a registered contract: allowed columns, blessed query shape,",
+        "safety witnesses (or inheritance), declared outputs, and its finite request space.",
+        "Skip an obligation and the BUILD FAILS — a test enumerates and demands each one.",
+        "Then: all 718 model shapes tried exhaustively · random fuzzing · 20 replayed attacks ·",
+        "an Alloy solver searches for any way to fit past a blocked cell (it finds none —",
+        "and finds the counterexample instantly when we deliberately weaken the rule).",
+    ], accent=GREEN)
+
+    bullets_slide(prs, "And one embarrassing thing we found", [
+        "The existing counting rule rounded the count in one column…",
+        "…and wrote the EXACT count in the column next to it.",
+        "Count rounding was doing nothing. Found while planning, fixed first, regression-tested.",
+        "Exactly the gap the new 'declare every released column' contract makes impossible.",
+    ], accent=RED)
+
+    table_slide(prs, "The numbers",
+                ["What", "Count"],
+                [["Spec clauses", "R1–R16, P1–P22 (7 new this round)"],
+                 ["Model shapes, all machine-checked", "718"],
+                 ["Tests in the default suite", "360+ (plus exhaustive -m slow pass)"],
+                 ["Red-team attacks, all blocked by a named control", "20 (9 new)"],
+                 ["Solver-checked properties (Alloy, in CI)", "4"],
+                 ["Agreement with reference implementations", "~1e-14 exact / 1e-8 tested"],
+                 ["New runtime dependencies", "0 — the fitter is stdlib-only"]],
+                col_widths=[7.0, 4.5])
+
+    bullets_slide(prs, "What it still does not do", [
+        "Logistic/Poisson models with continuous predictors (genuinely need rows — parked for ACRO).",
+        "Cross-session or colluding-user protection (differential privacy is the roadmap answer).",
+        "It remains a research prototype, on synthetic data only.",
+    ], accent=GREY)
+
+    prs.save(out)
+    print(f"deck -> {out}")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--out-dir", default=os.path.join(ROOT, "artifacts"))
@@ -386,6 +478,10 @@ def main() -> int:
                     os.path.join(args.out_dir, "safe-tre-agent-technical.pptx"))
     build_best_practice(args.shots_dir,
                         os.path.join(args.out_dir, "safe-tre-agent-best-practice.pptx"))
+    # the plain-language deck (docs/elif.md as slides). Note the extension:
+    # ELIF.ppt is deliberately outside the artifacts/*.pptx ignore rule and is
+    # committed alongside docs/elif.md.
+    build_elif(args.shots_dir, os.path.join(args.out_dir, "ELIF.ppt"))
     return 0
 
 
