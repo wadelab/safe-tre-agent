@@ -6,6 +6,8 @@
 
 This document catalogues the existing lightweight formal guarantees, identifies six concrete opportunities for stronger formal methods, proposes a phased roadmap, and notes the inherent limits of what formal methods can achieve in this context.
 
+> **Source of truth:** the properties to prove are stated normatively in the [specification](specification.md) as the `P` (prohibition) and `R` (requirement) clauses. This document is about *how* to prove them; the specification is *what* must hold.
+
 > **Companion:** [Verifiable extensions](verifiable-extensions.md) covers the *structural* side of the same problem — how to lay out modules so that adding a new statistical procedure or natural-language query comes with a fixed, enforced set of verification obligations, rather than a hand-audited change. It introduces the procedure-contract model (O1–O4) and the executable conformance suite (`tests/test_procedure_conformance.py`) that holds every present and future procedure to the same bar.
 
 ---

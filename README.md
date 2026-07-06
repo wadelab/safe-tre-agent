@@ -21,6 +21,7 @@ is that local models will become strong enough for planning — roughly a good
 
 > **📚 Documentation:** [`docs/`](docs/index.md). The canonical technical
 > report is the [research write-up](docs/writeup.md); start there, then the
+> [specification](docs/specification.md) (what it must and must not do), the
 > [security model](docs/security.md) and the [roadmap](docs/roadmap.md).
 > Guides for installing, deploying, and certifying the prototype — and the
 > hardening/red-team record — are grouped in the [docs index](docs/index.md).

@@ -19,6 +19,7 @@ argument. Everything else supports it.
 | If you want to… | Read |
 |---|---|
 | Read the canonical technical report | [Write-up](writeup.md) |
+| See what it must and must not do (normative) | [Specification](specification.md) |
 | Understand the threat model and controls | [Security model](security.md) |
 | Understand how the system is built | [Architecture](architecture.md) |
 | Understand the physical deployment boundary | [Safepod model](safepod.md) |

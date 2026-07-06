@@ -32,6 +32,7 @@ nav:
   - Home: index.md
   - Research argument:
       - Research write-up: writeup.md
+      - Specification: specification.md
       - Security model: security.md
       - Architecture: architecture.md
       - Safepod model: safepod.md
