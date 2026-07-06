@@ -246,12 +246,21 @@ def compile_influence_query(spec: QuerySpec) -> SQLPlan:
     join = (f"per_donor p JOIN grp g USING ({gsel})" if spec.group_by
             else "per_donor p, grp g")
     gcols_j = ("g." + ", g.".join(_ident(g) for g in spec.group_by) + ", ") if spec.group_by else ""
+    # Guard the sqrt with a strictly-positive CASE, not NULLIF(x, 0): the
+    # variance product is >= 0 in exact arithmetic but floating-point
+    # cancellation can make it a tiny negative, and DuckDB's sqrt RAISES on a
+    # negative argument rather than returning NaN. A non-positive product means a
+    # degenerate (zero-variance) group, so NULL is the right answer — it flows to
+    # a NULL influence, which fills to +inf and suppresses the cell (fail closed).
     r_full = ("(tn*txy - tx*ty) / "
-              "sqrt(NULLIF((tn*txx - tx*tx) * (tn*tyy - ty*ty), 0))")
+              "sqrt(CASE WHEN (tn*txx - tx*tx) * (tn*tyy - ty*ty) > 0 "
+              "THEN (tn*txx - tx*tx) * (tn*tyy - ty*ty) END)")
     # sums with this donor removed (subtract their partials)
     r_drop = ("((tn-dm)*(txy-dxy) - (tx-dx)*(ty-dy)) / "
-              "sqrt(NULLIF(((tn-dm)*(txx-dxx) - (tx-dx)*(tx-dx)) * "
-              "((tn-dm)*(tyy-dyy) - (ty-dy)*(ty-dy)), 0))")
+              "sqrt(CASE WHEN ((tn-dm)*(txx-dxx) - (tx-dx)*(tx-dx)) * "
+              "((tn-dm)*(tyy-dyy) - (ty-dy)*(ty-dy)) > 0 "
+              "THEN ((tn-dm)*(txx-dxx) - (tx-dx)*(tx-dx)) * "
+              "((tn-dm)*(tyy-dyy) - (ty-dy)*(ty-dy)) END)")
     sql = (
         f"WITH per_donor AS ({per_donor}), grp AS ({grp}), "  # nosec
         f"j AS (SELECT {gcols_j}"
