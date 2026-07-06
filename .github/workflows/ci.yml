@@ -36,6 +36,29 @@ jobs:
       - name: Dependency audit (CVEs)
         run: uv run pip-audit            # relax to advisory (continue-on-error) if it blocks on an unfixable transitive CVE
 
+  formal:
+    # Bounded model check of the P-clauses over the generated catalogue (R16).
+    # The pytest job already pins code -> skeleton -> model correspondence;
+    # this job only has to prove the assertions. The Alloy jar comes from a
+    # GitHub release pinned by sha256 (same supply-chain posture as the SHA-
+    # pinned actions); run_checks.py turns the receipt into the verdict
+    # because the Alloy CLI exits 0 even on a counterexample.
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Install Temurin 21
+        uses: actions/setup-java@1bcf9fb12cf4aa7d266a90ae39939e61372fe520 # v5.4.0
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Fetch Alloy 6.2.0 (sha256-pinned)
+        run: |
+          curl -sL -o /tmp/alloy.jar https://github.com/AlloyTools/org.alloytools.alloy/releases/download/v6.2.0/org.alloytools.alloy.dist.jar
+          echo "6b8c1cb5bc93bedfc7c61435c4e1ab6e688a242dc702a394628d9a9801edb78d  /tmp/alloy.jar" | sha256sum -c
+      - name: Model check (P19, P21, P4 + vacuity guards)
+        run: python3 formal/run_checks.py --jar /tmp/alloy.jar
+
   accessibility:
     # pa11y (WCAG 2AA) against the four demo states, using the runner's Chrome.
     # SAFETRE_LLM=mock: CI has no local model, and the mock planner is the
