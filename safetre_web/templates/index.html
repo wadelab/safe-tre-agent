@@ -7,17 +7,38 @@
   <link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
+<div class="aurora" aria-hidden="true"></div>
+<div class="gridlines" aria-hidden="true"></div>
+
 <main class="shell">
   <header class="topbar">
-    <div>
-      <p class="eyebrow">Trusted Research Environment</p>
-      <h1>Analysis workspace</h1>
+    <div class="brand">
+      <svg class="mark" viewBox="0 0 46 46" aria-hidden="true">
+        <defs>
+          <linearGradient id="mg" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#2dd4bf"/>
+            <stop offset="1" stop-color="#818cf8"/>
+          </linearGradient>
+        </defs>
+        <polygon points="23,3 40,13 40,33 23,43 6,33 6,13"
+                 fill="none" stroke="url(#mg)" stroke-width="2.4" stroke-linejoin="round"/>
+        <path d="M14 23h12M22 17l6 6-6 6" fill="none" stroke="url(#mg)"
+              stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="34" cy="23" r="2.2" fill="#2dd4bf"/>
+      </svg>
+      <div>
+        <p class="eyebrow">Trusted Research Environment &middot; Safe Outputs Gateway</p>
+        <h1>Analysis workspace</h1>
+      </div>
     </div>
     <div class="identity {% if allowed %}is-allowed{% else %}is-denied{% endif %}">
-      <span class="identity-label">Signed in</span>
-      <strong>{{ user }}</strong>
-      {% if allowed %}<span class="state">Safe People</span>
-      {% else %}<span class="state">Not allowlisted</span>{% endif %}
+      <span class="avatar">{{ user[:1] }}</span>
+      <div>
+        <span class="identity-label">Signed in</span>
+        <strong>{{ user }}</strong>
+        {% if allowed %}<span class="state">Safe People</span>
+        {% else %}<span class="state">Not allowlisted</span>{% endif %}
+      </div>
     </div>
   </header>
 
@@ -26,9 +47,9 @@
       <div class="surface-head">
         <div>
           <h2 id="query-title">New aggregate request</h2>
-          <p class="muted">Manifest {{ manifest.manifest_sha256[:10] }}</p>
+          <p class="muted">Validated allowlist catalogue &middot; read-only engine</p>
         </div>
-        <a class="manifest-link" href="/api/manifest">Manifest</a>
+        <a class="manifest-link" href="/api/manifest">{{ manifest.manifest_sha256[:10] }} &middot; manifest</a>
       </div>
 
       <form id="qform" autocomplete="off">
@@ -42,17 +63,35 @@
       </form>
 
       <div class="examples" aria-label="Example queries">
-        <button type="button" data-query="mean spend by age band">Mean spend</button>
-        <button type="button" data-query="mean wellbeing by region">Wellbeing</button>
-        <button type="button" data-query="total spend by device os for purchases">Device spend</button>
+        <button type="button" data-query="mean spend by age band">mean spend by age band</button>
+        <button type="button" data-query="mean wellbeing by region">wellbeing by region</button>
+        <button type="button" data-query="correlation between age and spend">age&ndash;spend correlation</button>
+        <button type="button" data-query="mean spend by region and device os">stress: region &times; device</button>
+        <button type="button" data-query="show mean wellbeing per donor">per-donor (attack)</button>
+      </div>
+
+      <div class="pipeline" id="pipeline" aria-label="Gateway pipeline">
+        <div class="pipe-node" data-stage="vetting"><span class="pipe-dot"></span><span class="pipe-label">Vetting</span></div>
+        <div class="pipe-link"></div>
+        <div class="pipe-node" data-stage="planner"><span class="pipe-dot"></span><span class="pipe-label">Planner</span></div>
+        <div class="pipe-link"></div>
+        <div class="pipe-node" data-stage="validation"><span class="pipe-dot"></span><span class="pipe-label">Validate</span></div>
+        <div class="pipe-link"></div>
+        <div class="pipe-node" data-stage="engine"><span class="pipe-dot"></span><span class="pipe-label">Engine</span></div>
+        <div class="pipe-link"></div>
+        <div class="pipe-node" data-stage="auditor"><span class="pipe-dot"></span><span class="pipe-label">Auditor</span></div>
+        <div class="pipe-link"></div>
+        <div class="pipe-node" data-stage="gateway"><span class="pipe-dot"></span><span class="pipe-label">Gateway</span></div>
+        <div class="pipe-link"></div>
+        <div class="pipe-node" data-stage="hitl"><span class="pipe-dot"></span><span class="pipe-label">Review</span></div>
       </div>
 
       <div id="result" class="result">
         <div class="empty-state">
-          <span class="dot"></span>
+          <span class="beacon"></span>
           <div>
-            <strong>Ready</strong>
-            <p>Results appear here after safepod validation.</p>
+            <strong>Standing by</strong>
+            <p>Results appear here after safepod validation. Try an example.</p>
           </div>
         </div>
       </div>
@@ -96,12 +135,12 @@
           <strong>10</strong>
         </div>
         <div class="metric">
-          <span>Count rounding</span>
+          <span>Rounding</span>
           <strong>5</strong>
         </div>
         <div class="metric">
           <span>Raw rows</span>
-          <strong>Never</strong>
+          <strong>0</strong>
         </div>
       </section>
     </aside>
@@ -109,8 +148,9 @@
 
   <footer>
     <span>Hash-chained audit log</span>
-    <span>Disclosure checked outputs</span>
+    <span>Disclosure-checked outputs</span>
     <span>Session differencing audit</span>
+    <span>Restricted channel</span>
   </footer>
 </main>
 <script src="/static/app.js"></script>

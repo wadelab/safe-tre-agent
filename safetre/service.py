@@ -79,6 +79,7 @@ class QueryService:
         trace.append(f"validation: ok ({spec.measure_key()}, group_by={spec.group_by})")
 
         df = self.engine.run(spec)
+        trace.append(f"engine: {len(df)} aggregate row(s) computed")
 
         total = float(df["n"].sum()) if "n" in df.columns else float(len(df))
         audit_findings = auditor.observe(spec.measure_key(), total)

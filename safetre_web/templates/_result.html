@@ -1,11 +1,13 @@
-<div class="result-card status-{{ r.status }}">
+<div class="result-card status-{{ r.status }}" data-status="{{ r.status }}"
+     data-stages="{% for step in r.trace %}{{ step.split(':', 1)[0] }}{% if not loop.last %},{% endif %}{% endfor %}">
   <div class="result-head">
-    <div>
+    <div class="result-meta">
       <span class="status-badge">{{ r.status | upper }}</span>
-      {% if r.message %}<p class="status-msg">{{ r.message }}</p>{% endif %}
+      <span class="latency"></span>
     </div>
     <span class="budget">Budget {{ budget_left }}</span>
   </div>
+  {% if r.message %}<p class="status-msg">{{ r.message }}</p>{% endif %}
 
   {% if table_html %}
   <div class="table-wrap">{{ table_html | safe }}</div>
@@ -24,9 +26,10 @@
 
   <div class="detail-grid">
     {% if r.spec %}
+    {% set rejected = r.findings | selectattr("rule", "equalto", "spec_rejected") | list %}
     <details class="spec" open>
-      <summary>Validated QuerySpec</summary>
-      <code>{{ r.spec }}</code>
+      <summary>{% if rejected %}Rejected QuerySpec{% else %}Validated QuerySpec{% endif %}</summary>
+      <pre class="spec-code">{{ r.spec | tojson(indent=2) }}</pre>
     </details>
     {% endif %}
 
