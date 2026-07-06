@@ -315,4 +315,31 @@ def _merge_binomial(finalized: dict[str, pd.DataFrame]) -> pd.DataFrame:
     return merged
 
 
+def refit_from_artifact(cells: pd.DataFrame, spec: GLMSpec
+                        ) -> tuple[pd.DataFrame, dict[str, pd.DataFrame]]:
+    """Reproduce a released fit from its released cell table alone.
+
+    This IS the P21 claim in executable form: an analyst outside the safepod,
+    holding only the released artifacts, runs this exact function and obtains
+    the released coefficients bit-for-bit. The reproducibility meta-test
+    asserts exactly that over the enumerated skeleton.
+    """
+    keys = list(spec.terms)
+    if spec.family == "gaussian":
+        finalized = {
+            "mean": cells[keys + ["mean", "n"]].rename(columns={"mean": "value"}),
+            "sum_sq": cells[keys + ["sum_sq", "n"]].rename(columns={"sum_sq": "value"}),
+        }
+    elif spec.family == "binomial":
+        finalized = {
+            "trials": cells[keys + ["n"]].copy(),
+            "successes": cells[keys + ["k"]].rename(columns={"k": "n"}),
+        }
+    else:
+        finalized = {
+            "sum": cells[keys + ["sum", "n"]].rename(columns={"sum": "value"}),
+        }
+    return GLMProcedure().fit(finalized, spec)
+
+
 MODEL_REGISTRY[GLMProcedure.tool] = GLMProcedure()

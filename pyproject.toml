@@ -53,3 +53,6 @@ packages = ["safetre", "safetre_web"]
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+# `slow` marks the exhaustive full-skeleton passes (run with: pytest -m slow)
+markers = ["slow: exhaustive whole-skeleton runs, excluded from the default run"]
+addopts = "-m 'not slow'"

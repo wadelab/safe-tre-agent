@@ -93,18 +93,13 @@ def test_hostile_undeclared_dim_value_stays_subthreshold_and_denies(service):
 def test_released_model_is_reproducible_from_artifacts(service):
     # P21 in miniature (the exhaustive version lives in test_glm_properties):
     # refitting from the released cell table alone reproduces the release.
+    from safetre.glm import refit_from_artifact
     r = service.handle("regress total spend on age band", MockPlanner())
     assert r.status == "released"
-    proc = GLMProcedure()
     spec = GLMSpec(**{k: v for k, v in r.spec.items() if k != "aggregates"})
-    cells = r.artifacts["cells"]
-    finalized = {
-        "mean": cells[["age_band", "mean", "n"]].rename(columns={"mean": "value"}),
-        "sum_sq": cells[["age_band", "sum_sq", "n"]].rename(columns={"sum_sq": "value"}),
-    }
-    refit, artifacts = proc.fit(finalized, spec)
+    refit, artifacts = refit_from_artifact(r.artifacts["cells"], spec)
     assert refit.equals(r.output)
-    assert artifacts["cells"].equals(cells)
+    assert artifacts["cells"].equals(r.artifacts["cells"])
 
 
 # --- fail-closed denials ---------------------------------------------------------
