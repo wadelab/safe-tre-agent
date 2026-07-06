@@ -46,6 +46,7 @@ argument. Everything else supports it.
 | See what's been red-teamed and fixed | [Hardening log](hardening-log.md) |
 | See the conformance review against TRE practice | [Best-practice review](best-practice-review.md) |
 | See the round-2 hardening plan (done) | [Round 2 plan](round2-plan.md) |
+| See the GOV.UK interface restyle plan | [GOV.UK UI plan](govuk-ui-plan.md) |
 | See the formal-methods analysis | [Formal methods](FORMAL_METHODS_ANALYSIS.md) |
 | See candidate verifiable extensions | [Verifiable extensions](verifiable-extensions.md) |
 

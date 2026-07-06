@@ -51,6 +51,7 @@ nav:
       - Hardening log: hardening-log.md
       - Best-practice review: best-practice-review.md
       - Round 2 plan: round2-plan.md
+      - GOV.UK UI plan: govuk-ui-plan.md
       - Formal methods: FORMAL_METHODS_ANALYSIS.md
       - Verifiable extensions: verifiable-extensions.md
   - Fellowship positioning: fellowship.md
