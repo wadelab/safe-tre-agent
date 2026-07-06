@@ -36,6 +36,9 @@ dev = [
 docs = [
     "mkdocs-material>=9.5",   # optional: `uv run --group docs mkdocs serve`
 ]
+decks = [
+    "python-pptx>=0.6.23",    # optional: `uv run --group decks python scripts/make_decks.py`
+]
 
 # The research core (safetre) is an installable library so TRE/SDC teams can
 # wrap the gateway without adopting the demo web shell. safetre_web ships too,

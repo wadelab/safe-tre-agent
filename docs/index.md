@@ -26,6 +26,7 @@ argument. Everything else supports it.
 | Understand local model assumptions | [Model runtime](model-runtime.md) |
 | Understand the two-LLM tool contract | [Tool manifest](tool-manifest.md) |
 | See how well local models actually plan | [Planner evaluation](planner-eval.md) |
+| See what has been built, most recent first | [Progress](progress.md) |
 | See what comes next, in order | [Roadmap](roadmap.md) |
 
 ### Using the prototype
