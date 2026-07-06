@@ -19,5 +19,9 @@ htmlcov/
 *.db-shm
 *.db.key
 site/
+# binary presentation artifacts are distributed via releases, not git
+# (see artifacts/README.md)
+artifacts/*.pptx
+artifacts/*.pdf
 .DS_Store
 .~lock.*#
