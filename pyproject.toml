@@ -37,9 +37,15 @@ docs = [
     "mkdocs-material>=9.5",   # optional: `uv run --group docs mkdocs serve`
 ]
 
-# App, not a library: let uv manage the env without building/installing the project.
-[tool.uv]
-package = false
+# The research core (safetre) is an installable library so TRE/SDC teams can
+# wrap the gateway without adopting the demo web shell. safetre_web ships too,
+# but is a reference deployment, not part of the security claim (see README).
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["safetre", "safetre_web"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

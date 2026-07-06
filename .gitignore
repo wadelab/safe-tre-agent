@@ -14,6 +14,7 @@ redteam/realmodel_results.txt
 .coverage
 htmlcov/
 *.egg-info/
+dist/
 *.db
 *.db-wal
 *.db-shm

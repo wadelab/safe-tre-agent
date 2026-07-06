@@ -71,6 +71,20 @@ NL request
 - **Five Safes** — vetting = Safe Projects/People; gateway = Safe Outputs; local
   model = Safe Settings.
 
+## Research core vs demo shell
+
+The claim this repo makes lives entirely in **`safetre/`**: the validated
+`QuerySpec`, the read-only engine, the disclosure gateway, the session auditor,
+and the hash-chained audit log. That is the research artifact, and it is
+installable (`pip install .` / `uv build`) so a TRE team can wrap the gateway
+in their own infrastructure without adopting anything else here.
+
+**`safetre_web/`** and **`deploy/`** are a demo shell: a reference deployment
+for synthetic-data test drives. A production TRE would replace them with its
+own identity, network boundary, and service management — none of the security
+claim depends on them. They are kept working and red-teamed, but they are not
+the research.
+
 ## Quick start (uv, offline, no API key)
 
 ```bash
@@ -145,14 +159,17 @@ and DP accounting for the session budget.
 ## Layout
 
 ```
-safetre/      query (QuerySpec), engine (DuckDB), planner, service,   ← secure path
-              disclosure gateway, session auditor, audit (hash-chain),
-              schema, synthetic data, analyst+guards (legacy/escalation), llm
-safetre_web/  FastAPI app, identity (Safe People), session, templates, static
+safetre/      RESEARCH CORE — query (QuerySpec), engine (DuckDB), planner,
+              service, disclosure gateway + session auditor, audit (hash-chain),
+              config (policy loader), stats, schema, synthetic data,
+              analyst+guards (legacy/escalation), llm
+safetre_web/  DEMO SHELL — FastAPI app, identity (Safe People), session,
+              channel, rate limit, templates, static
 scripts/      make_data.py, demo.py, make_figures.py, run_web.sh
 redteam/      attacks.yaml, run_redteam.py
 deploy/       safetre-web.service (hardened systemd unit)
 docs/         writeup.md + figures
 tests/        pytest suite: disclosure, pipeline, secure QuerySpec/engine/audit,
-              web, local-model config, manifest, and query invariants
+              hardening regressions, stats cross-validation, web, local-model
+              config, manifest, and query invariants
 ```
