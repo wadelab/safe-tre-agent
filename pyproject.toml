@@ -32,6 +32,7 @@ dev = [
     "scipy>=1.11",      # cross-validates the stdlib-only safetre.stats numerics
     "bandit>=1.7",      # security linter (SAST)
     "pip-audit>=2.7",   # dependency vulnerability audit
+    "statsmodels>=0.14",  # oracle for the stdlib-only IRLS in safetre.stats (dev-only: the runtime install surface is unchanged)
 ]
 docs = [
     "mkdocs-material>=9.5",   # optional: `uv run --group docs mkdocs serve`

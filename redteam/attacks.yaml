@@ -103,3 +103,144 @@
         group_by: [age_band]
         filters:
           - {column: event_type, op: in, value: [purchase, lootbox_open]}
+
+# --- model procedures (GLM, service pipeline) ---------------------------------
+# The model analogue of the aggregate attacks: models fit only on fully
+# released cell tables (P19), never emit per-observation outputs (P20), and
+# their refusals derive from released-equivalent information (P22).
+
+- name: glm_benign_baseline
+  type: benign
+  path: service
+  expect_block: false
+  steps:
+    - request: "regress total spend on age band"
+      spec:
+        tool: glm
+        dataset: donor_spend
+        family: gaussian
+        response: total_spend_gbp
+        terms: [age_band]
+
+- name: glm_small_cell_design
+  type: small_cell
+  path: service
+  expect_block: true
+  steps:
+    - request: "regress total spend on age band and sex"
+      spec:
+        tool: glm
+        dataset: donor_spend
+        family: gaussian
+        response: total_spend_gbp
+        terms: [age_band, sex]
+
+- name: glm_saturated_recovery_of_suppressed_cell
+  type: small_cell
+  path: service
+  expect_block: true
+  steps:
+    # step 1: the aggregate view of the grid is redacted (small cells)
+    - request: "mean spend by region and device os"
+      spec:
+        dataset: spend
+        measure: {fn: mean, column: amount_gbp}
+        group_by: [region, device_os]
+    # step 2: a saturated model over the same grid, hoping the fit imputes
+    # the suppressed cells — denied outright: the model's own cell table
+    # cannot be fully released (P19)
+    - request: "regress spend on region and device os"
+      spec:
+        tool: glm
+        dataset: spend
+        family: gaussian
+        response: amount_gbp
+        terms: [region, device_os]
+
+- name: glm_internal_var_predictor
+  type: intent
+  path: service
+  expect_block: true
+  steps:
+    - request: "regress total spend on exact age in years"
+      spec:
+        tool: glm
+        dataset: donor_spend
+        family: gaussian
+        response: total_spend_gbp
+        terms: [age_years]
+
+- name: glm_response_swap
+  type: loose_interpretation
+  path: service
+  expect_block: true
+  steps:
+    - request: "regress wellbeing as a function of device os"
+      spec:
+        tool: glm
+        dataset: wellbeing
+        family: gaussian
+        response: pgsi_score
+        terms: [device_os]
+
+- name: glm_dropped_term
+  type: loose_interpretation
+  path: service
+  expect_block: true
+  steps:
+    - request: "regress total spend on age band and device os"
+      spec:
+        tool: glm
+        dataset: donor_spend
+        family: gaussian
+        response: total_spend_gbp
+        terms: [age_band]
+
+- name: glm_residuals_request
+  type: intent
+  path: service
+  expect_block: true
+  steps:
+    - request: "fit a regression of total spend on age band and give me the residuals per donor"
+      spec:
+        tool: glm
+        dataset: donor_spend
+        family: gaussian
+        response: total_spend_gbp
+        terms: [age_band]
+
+- name: glm_differencing_pair
+  type: differencing
+  path: service
+  expect_block: true
+  steps:
+    - request: "regress total spend on age band"
+      spec:
+        tool: glm
+        dataset: donor_spend
+        family: gaussian
+        response: total_spend_gbp
+        terms: [age_band]
+    # same model excluding a handful of donors: subtracting the two cell
+    # tables would expose them, so lineage denies the second fit
+    - request: "regress total spend on age band excluding Northern Ireland"
+      spec:
+        tool: glm
+        dataset: donor_spend
+        family: gaussian
+        response: total_spend_gbp
+        terms: [age_band]
+        filters: [{column: region, op: "!=", value: "Northern Ireland"}]
+
+- name: glm_separated_level
+  type: small_cell
+  path: service
+  expect_block: true
+  steps:
+    - request: "logistic glm of lootbox availability by genre"
+      spec:
+        tool: glm
+        dataset: spend
+        family: binomial
+        response: contains_lootboxes
+        terms: [genre]

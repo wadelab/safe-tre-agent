@@ -24,6 +24,7 @@ from safetre.disclosure import (              # noqa: E402
 )
 from safetre.engine import QueryEngine        # noqa: E402
 from safetre.llm import MockLLM               # noqa: E402
+from safetre.procedures import model_registry  # noqa: E402
 from safetre.query import QuerySpec           # noqa: E402
 from safetre.service import QueryService      # noqa: E402
 
@@ -67,12 +68,23 @@ class _ScriptedPlanner:
 
 
 def run_service_unguarded(tables, steps):
-    """What the proposed spec would return with no fidelity/disclosure gate."""
+    """What the proposed spec would return with no fidelity/disclosure gate.
+
+    For a model spec the baseline is its raw design-cell tables straight off
+    the engine — unrounded, unsuppressed, safety helpers attached — i.e. what
+    a fit would consume if the gateway did not sit in front of it.
+    """
     engine = QueryEngine(tables)
     out = None
     for step in steps:
         try:
-            out = engine.run(QuerySpec(**step["spec"]))
+            spec = step["spec"]
+            if isinstance(spec, dict) and "tool" in spec:
+                proc = model_registry()[spec["tool"]]
+                for agg in proc.plan_aggregates(proc.validate(spec)):
+                    out = engine.run(agg)
+            else:
+                out = engine.run(QuerySpec(**spec))
         except Exception:                       # noqa: BLE001 - off-guard baseline
             out = None
     return out
