@@ -19,24 +19,11 @@ is that local models will become strong enough for planning — roughly a good
 120B-class model — while still being treated as untrusted. A deterministic
 `MockLLM` lets the whole pipeline and the red-team run offline.
 
-> **📚 Documentation:** [`docs/`](docs/index.md) —
-> [Beginner guide](docs/beginner.md) ·
-> [How to install](docs/install.md) ·
-> [Test deployment](docs/test-deployment.md) ·
-> [User guide](docs/userguide.md) ·
-> [Architecture](docs/architecture.md) ·
-> [Security model](docs/security.md) ·
-> [Safepod model](docs/safepod.md) ·
-> [Model runtime](docs/model-runtime.md) ·
-> [Tool manifest](docs/tool-manifest.md) ·
-> [Formal methods](docs/FORMAL_METHODS_ANALYSIS.md) ·
-> [Verifiable extensions](docs/verifiable-extensions.md) ·
-> [Best-practice review](docs/best-practice-review.md) ·
-> [Deployment](docs/deployment.md) ·
-> [Certification & hardware](docs/certification.md) ·
-> [Development](docs/development.md) ·
-> [Research write-up](docs/writeup.md) ·
-> [Fellowship positioning](docs/fellowship.md).
+> **📚 Documentation:** [`docs/`](docs/index.md). The canonical technical
+> report is the [research write-up](docs/writeup.md); start there, then the
+> [security model](docs/security.md) and the [roadmap](docs/roadmap.md).
+> Guides for installing, deploying, and certifying the prototype — and the
+> hardening/red-team record — are grouped in the [docs index](docs/index.md).
 > Browse as a site with `uv run --group docs mkdocs serve`.
 
 ## Where it sits
@@ -83,7 +70,9 @@ in their own infrastructure without adopting anything else here.
 for synthetic-data test drives. A production TRE would replace them with its
 own identity, network boundary, and service management — none of the security
 claim depends on them. They are kept working and red-teamed, but they are not
-the research.
+the research: the shell is frozen (fixes only), and new effort goes to the core
+in the order set out in the [roadmap](docs/roadmap.md) — ACRO integration,
+then the formal model, then a DP accountant.
 
 ## Quick start (uv, offline, no API key)
 

@@ -1,5 +1,8 @@
 # Round 2 hardening — plan
 
+> **This plan is done and kept as a record.** Forward planning lives in the
+> [roadmap](roadmap.md).
+
 **Status: code items done (A0, A, B, C shipped; see the
 [hardening log](hardening-log.md) round 2c entry). D remains a go-public
 decision.** Follow-on to [hardening round 1](hardening-log.md).

@@ -97,6 +97,9 @@ The prototype already demonstrates:
 
 ## Near-term fellowship work packages
 
+Execution order lives in the [roadmap](roadmap.md): WP3 (ACRO) first, then
+WP2 (formal specification), then the DP accountant, then the WP1 extension.
+
 ### Work package 1: Lineage-aware disclosure auditing
 
 A first per-session version is now in the prototype: released cohorts are

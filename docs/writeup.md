@@ -135,6 +135,36 @@ the naive leak oracle reads "safe" even with the gateway off — which is exactl
 why they are dangerous. The disclosure is realised by combining queries
 (caught by the session auditor) or by intent (caught by vetting).*
 
+## Simulatable auditing: the refusal is an output too
+
+The control specific to the agentic setting is the session auditor: it
+remembers each released cohort by its normalized filter predicate and denies a
+query whose cohort differs from a prior release by only a few individuals —
+the signature of a differencing attack.
+
+An auditor that decides from the live data leaks through its decisions: every
+denial tells the analyst something about the donor sets, which is the quantity
+the attack is trying to recover. Kenthapadi, Mishra and Nissim (2005) call an
+auditor *simulatable* when its decisions are a function only of information
+the analyst already holds, so a refusal reveals nothing new. Our auditor
+decides from published donor marginals — a disclosure-safe frequency table
+served at `GET /api/marginals` — and its refusal messages carry no numbers, so
+an analyst holding the marginals can reproduce every deny/allow decision.
+
+The bound is conservative, and its residual is stated exactly. For two cohorts
+that differ on one dimension, the whole-population marginal of the differing
+values bounds the symmetric difference from above: a denial is always sound,
+and the canonical attack — isolating a globally rare category by adding or
+removing one predicate — is caught. What the bound misses is differencing that
+isolates a small group through the *interaction* of a common category with a
+narrow cohort; the per-cell donor threshold covers most of that case, and a
+differential-privacy accountant closes it (see the
+[roadmap](roadmap.md#3-differential-privacy-accountant)). The residual is one
+bit: sub-threshold rare-category isolation is caught using the true count
+internally. That gap — deterministic, explainable SDC on one side, DP on the
+other — is the trade this prototype exists to measure. The full side-channel
+statement is in the [security model](security.md#side-channels-and-residual-oracles).
+
 ## Limitations (and what production needs)
 
 This is a prototype that makes the *agentic* disclosure problem legible — it is

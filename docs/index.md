@@ -10,22 +10,48 @@ every output; and every request is written to a tamper-evident audit log.
 
 ## Start here
 
+The **[research write-up](writeup.md)** is the canonical technical report: the
+problem, the design, the red-team results, and the simulatable-auditing
+argument. Everything else supports it.
+
+### The research argument
+
+| If you want to… | Read |
+|---|---|
+| Read the canonical technical report | [Write-up](writeup.md) |
+| Understand the threat model and controls | [Security model](security.md) |
+| Understand how the system is built | [Architecture](architecture.md) |
+| Understand the physical deployment boundary | [Safepod model](safepod.md) |
+| Understand local model assumptions | [Model runtime](model-runtime.md) |
+| Understand the two-LLM tool contract | [Tool manifest](tool-manifest.md) |
+| See what comes next, in order | [Roadmap](roadmap.md) |
+
+### Using the prototype
+
 | If you want to… | Read |
 |---|---|
 | Understand the project from scratch | [Beginner guide](beginner.md) |
 | Install or run the project | [How to install](install.md) |
-| Rehearse a synthetic-data deployment | [Test deployment runbook](test-deployment.md) |
 | Use the interface as a researcher | [User guide](userguide.md) |
-| Understand how the system is built | [Architecture](architecture.md) |
-| Understand the threat model and controls | [Security model](security.md) |
-| Understand the physical deployment boundary | [Safepod model](safepod.md) |
-| Understand local model assumptions | [Model runtime](model-runtime.md) |
-| Understand the two-LLM tool contract | [Tool manifest](tool-manifest.md) |
-| See what's been red-teamed and fixed | [Hardening log](hardening-log.md) |
+| Rehearse a synthetic-data deployment | [Test deployment runbook](test-deployment.md) |
 | Run it on a host / tailnet | [Deployment](deployment.md) |
 | Certify it for real data (SATRE, ISO 27001, hardware) | [Certification & hardware](certification.md) |
 | Work on the code | [Development](development.md) |
-| Read the research rationale | [Write-up](writeup.md) |
+
+### Engineering record (appendices)
+
+| If you want to… | Read |
+|---|---|
+| See what's been red-teamed and fixed | [Hardening log](hardening-log.md) |
+| See the conformance review against TRE practice | [Best-practice review](best-practice-review.md) |
+| See the round-2 hardening plan (done) | [Round 2 plan](round2-plan.md) |
+| See the formal-methods analysis | [Formal methods](FORMAL_METHODS_ANALYSIS.md) |
+| See candidate verifiable extensions | [Verifiable extensions](verifiable-extensions.md) |
+
+### Positioning
+
+| If you want to… | Read |
+|---|---|
 | Position it for fellowship funding | [Fellowship positioning](fellowship.md) |
 
 ## The one-paragraph version
@@ -45,7 +71,8 @@ exposed to a tailnet via `tailscale serve`.
 
 Phase 1 (secure web interface) is built and tested. The data is **synthetic**.
 See [Security model § Limitations](security.md#limitations-and-roadmap) for what
-is and isn't production-ready, and the [roadmap](security.md#limitations-and-roadmap).
+is and isn't production-ready, and the [roadmap](roadmap.md) for what comes
+next (ACRO integration first, then the formal model, then a DP accountant).
 
 > **Built on:** OpenSAFELY (Bennett Institute, Oxford) for the code-to-data,
 > outputs-checked TRE model; ACRO/SACRO (DARE UK) for statistical disclosure

@@ -30,22 +30,26 @@ markdown_extensions:
 
 nav:
   - Home: index.md
-  - Beginner guide: beginner.md
-  - How to install: install.md
-  - Test deployment: test-deployment.md
-  - User guide: userguide.md
-  - Architecture: architecture.md
-  - Security model: security.md
-  - Safepod model: safepod.md
-  - Model runtime: model-runtime.md
-  - Tool manifest: tool-manifest.md
-  - Formal methods: FORMAL_METHODS_ANALYSIS.md
-  - Verifiable extensions: verifiable-extensions.md
-  - Best-practice review: best-practice-review.md
-  - Hardening log: hardening-log.md
-  - Round 2 plan: round2-plan.md
-  - Deployment: deployment.md
-  - Certification & hardware: certification.md
-  - Development: development.md
-  - Research write-up: writeup.md
+  - Research argument:
+      - Research write-up: writeup.md
+      - Security model: security.md
+      - Architecture: architecture.md
+      - Safepod model: safepod.md
+      - Model runtime: model-runtime.md
+      - Tool manifest: tool-manifest.md
+      - Roadmap: roadmap.md
+  - Using the prototype:
+      - Beginner guide: beginner.md
+      - How to install: install.md
+      - User guide: userguide.md
+      - Test deployment: test-deployment.md
+      - Deployment: deployment.md
+      - Certification & hardware: certification.md
+      - Development: development.md
+  - Engineering record:
+      - Hardening log: hardening-log.md
+      - Best-practice review: best-practice-review.md
+      - Round 2 plan: round2-plan.md
+      - Formal methods: FORMAL_METHODS_ANALYSIS.md
+      - Verifiable extensions: verifiable-extensions.md
   - Fellowship positioning: fellowship.md
