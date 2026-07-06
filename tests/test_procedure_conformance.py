@@ -90,6 +90,44 @@ def test_registry_is_the_schema_and_matches_declared_obligations():
         assert proc.influence_control == obligation["influence_control"]
 
 
+# --- model procedures: the same bar, multi-query shape (R14/R15) ---------------
+# fits_on_finalized_only: the fitter consumes gateway-finalized tables and
+#   nothing else (P21) — enforced structurally by _handle_model and statically
+#   by test_glm_noninterference.
+# denies_on_suppression: any redacted/denied underlying aggregate denies the
+#   whole model (P19).
+MODEL_PROCEDURES = {
+    "glm": {"multi_query": True, "fits_on_finalized_only": True,
+            "denies_on_suppression": True},
+}
+
+
+def test_every_model_tool_has_a_declared_obligation():
+    from safetre.procedures import model_registry
+    assert set(model_registry()) == set(MODEL_PROCEDURES), (
+        "model tools without a conformance obligation: "
+        f"{set(model_registry()) - set(MODEL_PROCEDURES)}; "
+        f"stale obligations: {set(MODEL_PROCEDURES) - set(model_registry())}")
+
+
+@pytest.mark.parametrize("tool", sorted(MODEL_PROCEDURES))
+def test_model_procedure_inherits_through_valid_queryspecs(tool):
+    # the inheritance theorem, executable form: every aggregate a model plans
+    # is an ordinary valid QuerySpec, so O2 (SafeSQL shape), O3 (witnesses)
+    # and O4 (lineage identity) hold for the model because they hold for
+    # every QuerySpec — checked exhaustively in test_formal_glm_enumeration.
+    from safetre.procedures import model_registry
+    proc = model_registry()[tool]
+    for point in proc.skeleton(CATALOGUE)[::37]:      # a spread sample; the
+        spec = proc.validate(point)                   # full space is exhausted
+        for agg in proc.plan_aggregates(spec):        # in the enumeration test
+            assert isinstance(agg, QuerySpec)
+        assert proc.cost(spec) == len(proc.plan_aggregates(spec))
+        assert proc.model_key(spec)
+        contract = proc.output_contract(spec)
+        assert set(contract) >= {"output", "cells", "model"}
+
+
 @pytest.mark.parametrize("fn", sorted(PROCEDURES))
 def test_procedure_declares_a_complete_output_contract(fn):
     # R14: every released payload column must carry a declared disclosure

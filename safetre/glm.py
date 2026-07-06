@@ -35,13 +35,14 @@ quantities.
 
 from __future__ import annotations
 
+import itertools
 import math
 from typing import Any
 
 import pandas as pd
 
 from .procedures import MODEL_REGISTRY, DisclosureClass, ModelProcedure
-from .query import Filter, GLMSpec, QuerySpec
+from .query import MAX_MODEL_TERMS, Filter, GLMSpec, QuerySpec
 from .schema import declared_domain
 from .stats import irls_cells, matrix_rank, normal_sf, student_t_sf
 
@@ -251,6 +252,21 @@ class GLMProcedure(ModelProcedure):
 
     def model_key(self, spec: GLMSpec) -> str:
         return spec.model_key()
+
+    def skeleton(self, catalogue: dict) -> list[dict[str, Any]]:
+        out: list[dict[str, Any]] = []
+        for dataset in sorted(catalogue):
+            cat = catalogue[dataset]
+            dims = sorted(cat["dims"])
+            for response in sorted(cat.get("glm_responses", {})):
+                candidates = [d for d in dims if d != response]
+                for family in sorted(cat["glm_responses"][response]):
+                    for k in range(1, MAX_MODEL_TERMS + 1):
+                        for terms in itertools.combinations(candidates, k):
+                            out.append({"tool": "glm", "dataset": dataset,
+                                        "family": family, "response": response,
+                                        "terms": list(terms)})
+        return out
 
 
 def _term_levels(cells: pd.DataFrame, terms: list[str]) -> dict[str, list[Any]]:

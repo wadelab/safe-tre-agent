@@ -316,6 +316,11 @@ class ModelProcedure:
         differencable release, so each must individually count)."""
         return len(self.plan_aggregates(spec))
 
+    def skeleton(self, catalogue: dict) -> list[dict[str, Any]]:
+        """Every admissible no-filter spec, as JSON-able dicts (R16) — the
+        finite space the exhaustive check and the formal model quantify over."""
+        raise NotImplementedError
+
 
 MODEL_REGISTRY: dict[str, ModelProcedure] = {}
 
@@ -326,3 +331,36 @@ def model_registry() -> dict[str, ModelProcedure]:
     from . import glm  # noqa: F401  (self-registers on import)
 
     return MODEL_REGISTRY
+
+
+def registry_skeleton() -> dict[str, Any]:
+    """The registries' finite request space, exported as data (R16).
+
+    Committed as `formal/skeleton.json`; a sync test regenerates it live so
+    drift between the running catalogue/registries and the formal model's
+    input fails CI. The formal model is generated FROM this file, giving the
+    correspondence chain: code -> skeleton (pytest-checked) -> model
+    (pytest-checked) -> solver-checked assertions.
+    """
+    from .query import CATALOGUE
+
+    catalogue = {
+        dataset: {
+            "dims": dict(sorted(info["dims"].items())),
+            "measures": sorted(info["measures"]),
+            "internal_filters": sorted(info.get("internal_filters", {})),
+            "internal_measures": sorted(info.get("internal_measures", set())),
+            "glm_responses": {col: sorted(fams) for col, fams
+                              in sorted(info.get("glm_responses", {}).items())},
+        }
+        for dataset, info in sorted(CATALOGUE.items())
+    }
+    aggregate = {
+        dataset: [cfg for fn in sorted(REGISTRY)
+                  for cfg in REGISTRY[fn].measure_configs(CATALOGUE[dataset])]
+        for dataset in sorted(CATALOGUE)
+    }
+    model = {tool: proc.skeleton(CATALOGUE)
+             for tool, proc in sorted(model_registry().items())}
+    return {"skeleton_version": 1, "catalogue": catalogue,
+            "aggregate": aggregate, "model": model}

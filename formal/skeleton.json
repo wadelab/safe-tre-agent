@@ -1,0 +1,7843 @@
+{
+ "aggregate": {
+  "donor_spend": [
+   {
+    "fn": "corr",
+    "x": "age_years",
+    "y": "lootbox_events"
+   },
+   {
+    "fn": "corr",
+    "x": "age_years",
+    "y": "purchase_events"
+   },
+   {
+    "fn": "corr",
+    "x": "age_years",
+    "y": "total_spend_gbp"
+   },
+   {
+    "fn": "corr",
+    "x": "lootbox_events",
+    "y": "purchase_events"
+   },
+   {
+    "fn": "corr",
+    "x": "lootbox_events",
+    "y": "total_spend_gbp"
+   },
+   {
+    "fn": "corr",
+    "x": "purchase_events",
+    "y": "total_spend_gbp"
+   },
+   {
+    "fn": "count"
+   },
+   {
+    "column": "lootbox_events",
+    "fn": "mean"
+   },
+   {
+    "column": "purchase_events",
+    "fn": "mean"
+   },
+   {
+    "column": "total_spend_gbp",
+    "fn": "mean"
+   },
+   {
+    "column": "lootbox_events",
+    "fn": "sum"
+   },
+   {
+    "column": "purchase_events",
+    "fn": "sum"
+   },
+   {
+    "column": "total_spend_gbp",
+    "fn": "sum"
+   },
+   {
+    "column": "lootbox_events",
+    "fn": "sum_sq"
+   },
+   {
+    "column": "purchase_events",
+    "fn": "sum_sq"
+   },
+   {
+    "column": "total_spend_gbp",
+    "fn": "sum_sq"
+   }
+  ],
+  "spend": [
+   {
+    "fn": "corr",
+    "x": "amount_gbp",
+    "y": "ingame_currency"
+   },
+   {
+    "fn": "count"
+   },
+   {
+    "column": "amount_gbp",
+    "fn": "mean"
+   },
+   {
+    "column": "ingame_currency",
+    "fn": "mean"
+   },
+   {
+    "column": "amount_gbp",
+    "fn": "sum"
+   },
+   {
+    "column": "ingame_currency",
+    "fn": "sum"
+   },
+   {
+    "column": "amount_gbp",
+    "fn": "sum_sq"
+   },
+   {
+    "column": "ingame_currency",
+    "fn": "sum_sq"
+   }
+  ],
+  "wellbeing": [
+   {
+    "fn": "corr",
+    "x": "igds_score",
+    "y": "monthly_spend_selfreport"
+   },
+   {
+    "fn": "corr",
+    "x": "igds_score",
+    "y": "pgsi_score"
+   },
+   {
+    "fn": "corr",
+    "x": "igds_score",
+    "y": "wemwbs_score"
+   },
+   {
+    "fn": "corr",
+    "x": "monthly_spend_selfreport",
+    "y": "pgsi_score"
+   },
+   {
+    "fn": "corr",
+    "x": "monthly_spend_selfreport",
+    "y": "wemwbs_score"
+   },
+   {
+    "fn": "corr",
+    "x": "pgsi_score",
+    "y": "wemwbs_score"
+   },
+   {
+    "fn": "count"
+   },
+   {
+    "column": "igds_score",
+    "fn": "mean"
+   },
+   {
+    "column": "monthly_spend_selfreport",
+    "fn": "mean"
+   },
+   {
+    "column": "pgsi_score",
+    "fn": "mean"
+   },
+   {
+    "column": "wemwbs_score",
+    "fn": "mean"
+   },
+   {
+    "column": "igds_score",
+    "fn": "sum"
+   },
+   {
+    "column": "monthly_spend_selfreport",
+    "fn": "sum"
+   },
+   {
+    "column": "pgsi_score",
+    "fn": "sum"
+   },
+   {
+    "column": "wemwbs_score",
+    "fn": "sum"
+   },
+   {
+    "column": "igds_score",
+    "fn": "sum_sq"
+   },
+   {
+    "column": "monthly_spend_selfreport",
+    "fn": "sum_sq"
+   },
+   {
+    "column": "pgsi_score",
+    "fn": "sum_sq"
+   },
+   {
+    "column": "wemwbs_score",
+    "fn": "sum_sq"
+   }
+  ]
+ },
+ "catalogue": {
+  "donor_spend": {
+   "dims": {
+    "age_band": "cat",
+    "device_os": "cat",
+    "income_band": "cat",
+    "region": "cat",
+    "sex": "cat"
+   },
+   "glm_responses": {
+    "lootbox_events": [
+     "poisson"
+    ],
+    "purchase_events": [
+     "poisson"
+    ],
+    "total_spend_gbp": [
+     "gaussian"
+    ]
+   },
+   "internal_filters": [
+    "age_years"
+   ],
+   "internal_measures": [
+    "age_years"
+   ],
+   "measures": [
+    "lootbox_events",
+    "purchase_events",
+    "total_spend_gbp"
+   ]
+  },
+  "spend": {
+   "dims": {
+    "age_band": "cat",
+    "age_rating": "int",
+    "contains_lootboxes": "bool",
+    "device_os": "cat",
+    "event_type": "cat",
+    "genre": "cat",
+    "income_band": "cat",
+    "price_tier": "cat",
+    "region": "cat",
+    "sex": "cat"
+   },
+   "glm_responses": {
+    "amount_gbp": [
+     "gaussian"
+    ],
+    "contains_lootboxes": [
+     "binomial"
+    ],
+    "ingame_currency": [
+     "gaussian"
+    ]
+   },
+   "internal_filters": [
+    "age_years"
+   ],
+   "internal_measures": [],
+   "measures": [
+    "amount_gbp",
+    "ingame_currency"
+   ]
+  },
+  "wellbeing": {
+   "dims": {
+    "age_band": "cat",
+    "device_os": "cat",
+    "income_band": "cat",
+    "region": "cat",
+    "sex": "cat",
+    "wave": "int"
+   },
+   "glm_responses": {
+    "igds_score": [
+     "gaussian"
+    ],
+    "monthly_spend_selfreport": [
+     "gaussian"
+    ],
+    "pgsi_score": [
+     "gaussian"
+    ],
+    "wemwbs_score": [
+     "gaussian"
+    ]
+   },
+   "internal_filters": [
+    "age_years"
+   ],
+   "internal_measures": [],
+   "measures": [
+    "igds_score",
+    "monthly_spend_selfreport",
+    "pgsi_score",
+    "wemwbs_score"
+   ]
+  }
+ },
+ "model": {
+  "glm": [
+   {
+    "dataset": "donor_spend",
+    "family": "poisson",
+    "response": "lootbox_events",
+    "terms": [
+     "age_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "poisson",
+    "response": "lootbox_events",
+    "terms": [
+     "device_os"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "poisson",
+    "response": "lootbox_events",
+    "terms": [
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "poisson",
+    "response": "lootbox_events",
+    "terms": [
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "poisson",
+    "response": "lootbox_events",
+    "terms": [
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "poisson",
+    "response": "lootbox_events",
+    "terms": [
+     "age_band",
+     "device_os"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "poisson",
+    "response": "lootbox_events",
+    "terms": [
+     "age_band",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "poisson",
+    "response": "lootbox_events",
+    "terms": [
+     "age_band",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "poisson",
+    "response": "lootbox_events",
+    "terms": [
+     "age_band",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "poisson",
+    "response": "lootbox_events",
+    "terms": [
+     "device_os",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "poisson",
+    "response": "lootbox_events",
+    "terms": [
+     "device_os",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "poisson",
+    "response": "lootbox_events",
+    "terms": [
+     "device_os",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "poisson",
+    "response": "lootbox_events",
+    "terms": [
+     "income_band",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "poisson",
+    "response": "lootbox_events",
+    "terms": [
+     "income_band",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "poisson",
+    "response": "lootbox_events",
+    "terms": [
+     "region",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "poisson",
+    "response": "lootbox_events",
+    "terms": [
+     "age_band",
+     "device_os",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "poisson",
+    "response": "lootbox_events",
+    "terms": [
+     "age_band",
+     "device_os",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "poisson",
+    "response": "lootbox_events",
+    "terms": [
+     "age_band",
+     "device_os",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "poisson",
+    "response": "lootbox_events",
+    "terms": [
+     "age_band",
+     "income_band",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "poisson",
+    "response": "lootbox_events",
+    "terms": [
+     "age_band",
+     "income_band",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "poisson",
+    "response": "lootbox_events",
+    "terms": [
+     "age_band",
+     "region",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "poisson",
+    "response": "lootbox_events",
+    "terms": [
+     "device_os",
+     "income_band",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "poisson",
+    "response": "lootbox_events",
+    "terms": [
+     "device_os",
+     "income_band",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "poisson",
+    "response": "lootbox_events",
+    "terms": [
+     "device_os",
+     "region",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "poisson",
+    "response": "lootbox_events",
+    "terms": [
+     "income_band",
+     "region",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "poisson",
+    "response": "purchase_events",
+    "terms": [
+     "age_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "poisson",
+    "response": "purchase_events",
+    "terms": [
+     "device_os"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "poisson",
+    "response": "purchase_events",
+    "terms": [
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "poisson",
+    "response": "purchase_events",
+    "terms": [
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "poisson",
+    "response": "purchase_events",
+    "terms": [
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "poisson",
+    "response": "purchase_events",
+    "terms": [
+     "age_band",
+     "device_os"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "poisson",
+    "response": "purchase_events",
+    "terms": [
+     "age_band",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "poisson",
+    "response": "purchase_events",
+    "terms": [
+     "age_band",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "poisson",
+    "response": "purchase_events",
+    "terms": [
+     "age_band",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "poisson",
+    "response": "purchase_events",
+    "terms": [
+     "device_os",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "poisson",
+    "response": "purchase_events",
+    "terms": [
+     "device_os",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "poisson",
+    "response": "purchase_events",
+    "terms": [
+     "device_os",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "poisson",
+    "response": "purchase_events",
+    "terms": [
+     "income_band",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "poisson",
+    "response": "purchase_events",
+    "terms": [
+     "income_band",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "poisson",
+    "response": "purchase_events",
+    "terms": [
+     "region",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "poisson",
+    "response": "purchase_events",
+    "terms": [
+     "age_band",
+     "device_os",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "poisson",
+    "response": "purchase_events",
+    "terms": [
+     "age_band",
+     "device_os",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "poisson",
+    "response": "purchase_events",
+    "terms": [
+     "age_band",
+     "device_os",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "poisson",
+    "response": "purchase_events",
+    "terms": [
+     "age_band",
+     "income_band",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "poisson",
+    "response": "purchase_events",
+    "terms": [
+     "age_band",
+     "income_band",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "poisson",
+    "response": "purchase_events",
+    "terms": [
+     "age_band",
+     "region",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "poisson",
+    "response": "purchase_events",
+    "terms": [
+     "device_os",
+     "income_band",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "poisson",
+    "response": "purchase_events",
+    "terms": [
+     "device_os",
+     "income_band",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "poisson",
+    "response": "purchase_events",
+    "terms": [
+     "device_os",
+     "region",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "poisson",
+    "response": "purchase_events",
+    "terms": [
+     "income_band",
+     "region",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "gaussian",
+    "response": "total_spend_gbp",
+    "terms": [
+     "age_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "gaussian",
+    "response": "total_spend_gbp",
+    "terms": [
+     "device_os"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "gaussian",
+    "response": "total_spend_gbp",
+    "terms": [
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "gaussian",
+    "response": "total_spend_gbp",
+    "terms": [
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "gaussian",
+    "response": "total_spend_gbp",
+    "terms": [
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "gaussian",
+    "response": "total_spend_gbp",
+    "terms": [
+     "age_band",
+     "device_os"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "gaussian",
+    "response": "total_spend_gbp",
+    "terms": [
+     "age_band",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "gaussian",
+    "response": "total_spend_gbp",
+    "terms": [
+     "age_band",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "gaussian",
+    "response": "total_spend_gbp",
+    "terms": [
+     "age_band",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "gaussian",
+    "response": "total_spend_gbp",
+    "terms": [
+     "device_os",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "gaussian",
+    "response": "total_spend_gbp",
+    "terms": [
+     "device_os",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "gaussian",
+    "response": "total_spend_gbp",
+    "terms": [
+     "device_os",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "gaussian",
+    "response": "total_spend_gbp",
+    "terms": [
+     "income_band",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "gaussian",
+    "response": "total_spend_gbp",
+    "terms": [
+     "income_band",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "gaussian",
+    "response": "total_spend_gbp",
+    "terms": [
+     "region",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "gaussian",
+    "response": "total_spend_gbp",
+    "terms": [
+     "age_band",
+     "device_os",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "gaussian",
+    "response": "total_spend_gbp",
+    "terms": [
+     "age_band",
+     "device_os",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "gaussian",
+    "response": "total_spend_gbp",
+    "terms": [
+     "age_band",
+     "device_os",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "gaussian",
+    "response": "total_spend_gbp",
+    "terms": [
+     "age_band",
+     "income_band",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "gaussian",
+    "response": "total_spend_gbp",
+    "terms": [
+     "age_band",
+     "income_band",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "gaussian",
+    "response": "total_spend_gbp",
+    "terms": [
+     "age_band",
+     "region",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "gaussian",
+    "response": "total_spend_gbp",
+    "terms": [
+     "device_os",
+     "income_band",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "gaussian",
+    "response": "total_spend_gbp",
+    "terms": [
+     "device_os",
+     "income_band",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "gaussian",
+    "response": "total_spend_gbp",
+    "terms": [
+     "device_os",
+     "region",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "donor_spend",
+    "family": "gaussian",
+    "response": "total_spend_gbp",
+    "terms": [
+     "income_band",
+     "region",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_rating"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "contains_lootboxes"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "device_os"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "event_type"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "genre"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_band",
+     "age_rating"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_band",
+     "contains_lootboxes"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_band",
+     "device_os"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_band",
+     "event_type"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_band",
+     "genre"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_band",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_band",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_band",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_band",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_rating",
+     "contains_lootboxes"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_rating",
+     "device_os"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_rating",
+     "event_type"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_rating",
+     "genre"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_rating",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_rating",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_rating",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_rating",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "contains_lootboxes",
+     "device_os"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "contains_lootboxes",
+     "event_type"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "contains_lootboxes",
+     "genre"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "contains_lootboxes",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "contains_lootboxes",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "contains_lootboxes",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "contains_lootboxes",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "device_os",
+     "event_type"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "device_os",
+     "genre"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "device_os",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "device_os",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "device_os",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "device_os",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "event_type",
+     "genre"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "event_type",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "event_type",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "event_type",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "event_type",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "genre",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "genre",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "genre",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "genre",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "income_band",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "income_band",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "income_band",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "price_tier",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "price_tier",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "region",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_band",
+     "age_rating",
+     "contains_lootboxes"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_band",
+     "age_rating",
+     "device_os"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_band",
+     "age_rating",
+     "event_type"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_band",
+     "age_rating",
+     "genre"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_band",
+     "age_rating",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_band",
+     "age_rating",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_band",
+     "age_rating",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_band",
+     "age_rating",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_band",
+     "contains_lootboxes",
+     "device_os"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_band",
+     "contains_lootboxes",
+     "event_type"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_band",
+     "contains_lootboxes",
+     "genre"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_band",
+     "contains_lootboxes",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_band",
+     "contains_lootboxes",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_band",
+     "contains_lootboxes",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_band",
+     "contains_lootboxes",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_band",
+     "device_os",
+     "event_type"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_band",
+     "device_os",
+     "genre"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_band",
+     "device_os",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_band",
+     "device_os",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_band",
+     "device_os",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_band",
+     "device_os",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_band",
+     "event_type",
+     "genre"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_band",
+     "event_type",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_band",
+     "event_type",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_band",
+     "event_type",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_band",
+     "event_type",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_band",
+     "genre",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_band",
+     "genre",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_band",
+     "genre",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_band",
+     "genre",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_band",
+     "income_band",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_band",
+     "income_band",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_band",
+     "income_band",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_band",
+     "price_tier",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_band",
+     "price_tier",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_band",
+     "region",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_rating",
+     "contains_lootboxes",
+     "device_os"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_rating",
+     "contains_lootboxes",
+     "event_type"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_rating",
+     "contains_lootboxes",
+     "genre"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_rating",
+     "contains_lootboxes",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_rating",
+     "contains_lootboxes",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_rating",
+     "contains_lootboxes",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_rating",
+     "contains_lootboxes",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_rating",
+     "device_os",
+     "event_type"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_rating",
+     "device_os",
+     "genre"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_rating",
+     "device_os",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_rating",
+     "device_os",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_rating",
+     "device_os",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_rating",
+     "device_os",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_rating",
+     "event_type",
+     "genre"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_rating",
+     "event_type",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_rating",
+     "event_type",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_rating",
+     "event_type",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_rating",
+     "event_type",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_rating",
+     "genre",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_rating",
+     "genre",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_rating",
+     "genre",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_rating",
+     "genre",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_rating",
+     "income_band",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_rating",
+     "income_band",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_rating",
+     "income_band",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_rating",
+     "price_tier",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_rating",
+     "price_tier",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "age_rating",
+     "region",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "contains_lootboxes",
+     "device_os",
+     "event_type"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "contains_lootboxes",
+     "device_os",
+     "genre"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "contains_lootboxes",
+     "device_os",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "contains_lootboxes",
+     "device_os",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "contains_lootboxes",
+     "device_os",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "contains_lootboxes",
+     "device_os",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "contains_lootboxes",
+     "event_type",
+     "genre"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "contains_lootboxes",
+     "event_type",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "contains_lootboxes",
+     "event_type",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "contains_lootboxes",
+     "event_type",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "contains_lootboxes",
+     "event_type",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "contains_lootboxes",
+     "genre",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "contains_lootboxes",
+     "genre",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "contains_lootboxes",
+     "genre",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "contains_lootboxes",
+     "genre",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "contains_lootboxes",
+     "income_band",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "contains_lootboxes",
+     "income_band",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "contains_lootboxes",
+     "income_band",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "contains_lootboxes",
+     "price_tier",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "contains_lootboxes",
+     "price_tier",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "contains_lootboxes",
+     "region",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "device_os",
+     "event_type",
+     "genre"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "device_os",
+     "event_type",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "device_os",
+     "event_type",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "device_os",
+     "event_type",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "device_os",
+     "event_type",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "device_os",
+     "genre",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "device_os",
+     "genre",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "device_os",
+     "genre",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "device_os",
+     "genre",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "device_os",
+     "income_band",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "device_os",
+     "income_band",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "device_os",
+     "income_band",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "device_os",
+     "price_tier",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "device_os",
+     "price_tier",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "device_os",
+     "region",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "event_type",
+     "genre",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "event_type",
+     "genre",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "event_type",
+     "genre",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "event_type",
+     "genre",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "event_type",
+     "income_band",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "event_type",
+     "income_band",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "event_type",
+     "income_band",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "event_type",
+     "price_tier",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "event_type",
+     "price_tier",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "event_type",
+     "region",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "genre",
+     "income_band",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "genre",
+     "income_band",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "genre",
+     "income_band",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "genre",
+     "price_tier",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "genre",
+     "price_tier",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "genre",
+     "region",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "income_band",
+     "price_tier",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "income_band",
+     "price_tier",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "income_band",
+     "region",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "amount_gbp",
+    "terms": [
+     "price_tier",
+     "region",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_rating"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "device_os"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "event_type"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "genre"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_band",
+     "age_rating"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_band",
+     "device_os"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_band",
+     "event_type"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_band",
+     "genre"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_band",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_band",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_band",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_band",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_rating",
+     "device_os"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_rating",
+     "event_type"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_rating",
+     "genre"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_rating",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_rating",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_rating",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_rating",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "device_os",
+     "event_type"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "device_os",
+     "genre"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "device_os",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "device_os",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "device_os",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "device_os",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "event_type",
+     "genre"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "event_type",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "event_type",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "event_type",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "event_type",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "genre",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "genre",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "genre",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "genre",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "income_band",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "income_band",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "income_band",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "price_tier",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "price_tier",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "region",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_band",
+     "age_rating",
+     "device_os"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_band",
+     "age_rating",
+     "event_type"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_band",
+     "age_rating",
+     "genre"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_band",
+     "age_rating",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_band",
+     "age_rating",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_band",
+     "age_rating",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_band",
+     "age_rating",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_band",
+     "device_os",
+     "event_type"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_band",
+     "device_os",
+     "genre"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_band",
+     "device_os",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_band",
+     "device_os",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_band",
+     "device_os",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_band",
+     "device_os",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_band",
+     "event_type",
+     "genre"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_band",
+     "event_type",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_band",
+     "event_type",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_band",
+     "event_type",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_band",
+     "event_type",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_band",
+     "genre",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_band",
+     "genre",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_band",
+     "genre",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_band",
+     "genre",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_band",
+     "income_band",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_band",
+     "income_band",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_band",
+     "income_band",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_band",
+     "price_tier",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_band",
+     "price_tier",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_band",
+     "region",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_rating",
+     "device_os",
+     "event_type"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_rating",
+     "device_os",
+     "genre"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_rating",
+     "device_os",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_rating",
+     "device_os",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_rating",
+     "device_os",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_rating",
+     "device_os",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_rating",
+     "event_type",
+     "genre"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_rating",
+     "event_type",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_rating",
+     "event_type",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_rating",
+     "event_type",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_rating",
+     "event_type",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_rating",
+     "genre",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_rating",
+     "genre",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_rating",
+     "genre",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_rating",
+     "genre",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_rating",
+     "income_band",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_rating",
+     "income_band",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_rating",
+     "income_band",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_rating",
+     "price_tier",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_rating",
+     "price_tier",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "age_rating",
+     "region",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "device_os",
+     "event_type",
+     "genre"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "device_os",
+     "event_type",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "device_os",
+     "event_type",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "device_os",
+     "event_type",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "device_os",
+     "event_type",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "device_os",
+     "genre",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "device_os",
+     "genre",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "device_os",
+     "genre",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "device_os",
+     "genre",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "device_os",
+     "income_band",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "device_os",
+     "income_band",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "device_os",
+     "income_band",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "device_os",
+     "price_tier",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "device_os",
+     "price_tier",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "device_os",
+     "region",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "event_type",
+     "genre",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "event_type",
+     "genre",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "event_type",
+     "genre",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "event_type",
+     "genre",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "event_type",
+     "income_band",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "event_type",
+     "income_band",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "event_type",
+     "income_band",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "event_type",
+     "price_tier",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "event_type",
+     "price_tier",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "event_type",
+     "region",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "genre",
+     "income_band",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "genre",
+     "income_band",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "genre",
+     "income_band",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "genre",
+     "price_tier",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "genre",
+     "price_tier",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "genre",
+     "region",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "income_band",
+     "price_tier",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "income_band",
+     "price_tier",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "income_band",
+     "region",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "binomial",
+    "response": "contains_lootboxes",
+    "terms": [
+     "price_tier",
+     "region",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_rating"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "contains_lootboxes"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "device_os"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "event_type"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "genre"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_band",
+     "age_rating"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_band",
+     "contains_lootboxes"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_band",
+     "device_os"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_band",
+     "event_type"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_band",
+     "genre"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_band",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_band",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_band",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_band",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_rating",
+     "contains_lootboxes"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_rating",
+     "device_os"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_rating",
+     "event_type"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_rating",
+     "genre"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_rating",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_rating",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_rating",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_rating",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "contains_lootboxes",
+     "device_os"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "contains_lootboxes",
+     "event_type"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "contains_lootboxes",
+     "genre"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "contains_lootboxes",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "contains_lootboxes",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "contains_lootboxes",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "contains_lootboxes",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "device_os",
+     "event_type"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "device_os",
+     "genre"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "device_os",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "device_os",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "device_os",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "device_os",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "event_type",
+     "genre"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "event_type",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "event_type",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "event_type",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "event_type",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "genre",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "genre",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "genre",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "genre",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "income_band",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "income_band",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "income_band",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "price_tier",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "price_tier",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "region",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_band",
+     "age_rating",
+     "contains_lootboxes"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_band",
+     "age_rating",
+     "device_os"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_band",
+     "age_rating",
+     "event_type"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_band",
+     "age_rating",
+     "genre"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_band",
+     "age_rating",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_band",
+     "age_rating",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_band",
+     "age_rating",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_band",
+     "age_rating",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_band",
+     "contains_lootboxes",
+     "device_os"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_band",
+     "contains_lootboxes",
+     "event_type"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_band",
+     "contains_lootboxes",
+     "genre"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_band",
+     "contains_lootboxes",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_band",
+     "contains_lootboxes",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_band",
+     "contains_lootboxes",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_band",
+     "contains_lootboxes",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_band",
+     "device_os",
+     "event_type"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_band",
+     "device_os",
+     "genre"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_band",
+     "device_os",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_band",
+     "device_os",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_band",
+     "device_os",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_band",
+     "device_os",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_band",
+     "event_type",
+     "genre"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_band",
+     "event_type",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_band",
+     "event_type",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_band",
+     "event_type",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_band",
+     "event_type",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_band",
+     "genre",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_band",
+     "genre",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_band",
+     "genre",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_band",
+     "genre",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_band",
+     "income_band",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_band",
+     "income_band",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_band",
+     "income_band",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_band",
+     "price_tier",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_band",
+     "price_tier",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_band",
+     "region",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_rating",
+     "contains_lootboxes",
+     "device_os"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_rating",
+     "contains_lootboxes",
+     "event_type"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_rating",
+     "contains_lootboxes",
+     "genre"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_rating",
+     "contains_lootboxes",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_rating",
+     "contains_lootboxes",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_rating",
+     "contains_lootboxes",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_rating",
+     "contains_lootboxes",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_rating",
+     "device_os",
+     "event_type"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_rating",
+     "device_os",
+     "genre"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_rating",
+     "device_os",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_rating",
+     "device_os",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_rating",
+     "device_os",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_rating",
+     "device_os",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_rating",
+     "event_type",
+     "genre"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_rating",
+     "event_type",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_rating",
+     "event_type",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_rating",
+     "event_type",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_rating",
+     "event_type",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_rating",
+     "genre",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_rating",
+     "genre",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_rating",
+     "genre",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_rating",
+     "genre",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_rating",
+     "income_band",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_rating",
+     "income_band",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_rating",
+     "income_band",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_rating",
+     "price_tier",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_rating",
+     "price_tier",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "age_rating",
+     "region",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "contains_lootboxes",
+     "device_os",
+     "event_type"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "contains_lootboxes",
+     "device_os",
+     "genre"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "contains_lootboxes",
+     "device_os",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "contains_lootboxes",
+     "device_os",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "contains_lootboxes",
+     "device_os",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "contains_lootboxes",
+     "device_os",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "contains_lootboxes",
+     "event_type",
+     "genre"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "contains_lootboxes",
+     "event_type",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "contains_lootboxes",
+     "event_type",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "contains_lootboxes",
+     "event_type",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "contains_lootboxes",
+     "event_type",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "contains_lootboxes",
+     "genre",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "contains_lootboxes",
+     "genre",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "contains_lootboxes",
+     "genre",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "contains_lootboxes",
+     "genre",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "contains_lootboxes",
+     "income_band",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "contains_lootboxes",
+     "income_band",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "contains_lootboxes",
+     "income_band",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "contains_lootboxes",
+     "price_tier",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "contains_lootboxes",
+     "price_tier",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "contains_lootboxes",
+     "region",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "device_os",
+     "event_type",
+     "genre"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "device_os",
+     "event_type",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "device_os",
+     "event_type",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "device_os",
+     "event_type",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "device_os",
+     "event_type",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "device_os",
+     "genre",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "device_os",
+     "genre",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "device_os",
+     "genre",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "device_os",
+     "genre",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "device_os",
+     "income_band",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "device_os",
+     "income_band",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "device_os",
+     "income_band",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "device_os",
+     "price_tier",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "device_os",
+     "price_tier",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "device_os",
+     "region",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "event_type",
+     "genre",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "event_type",
+     "genre",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "event_type",
+     "genre",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "event_type",
+     "genre",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "event_type",
+     "income_band",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "event_type",
+     "income_band",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "event_type",
+     "income_band",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "event_type",
+     "price_tier",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "event_type",
+     "price_tier",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "event_type",
+     "region",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "genre",
+     "income_band",
+     "price_tier"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "genre",
+     "income_band",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "genre",
+     "income_band",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "genre",
+     "price_tier",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "genre",
+     "price_tier",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "genre",
+     "region",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "income_band",
+     "price_tier",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "income_band",
+     "price_tier",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "income_band",
+     "region",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "spend",
+    "family": "gaussian",
+    "response": "ingame_currency",
+    "terms": [
+     "price_tier",
+     "region",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "igds_score",
+    "terms": [
+     "age_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "igds_score",
+    "terms": [
+     "device_os"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "igds_score",
+    "terms": [
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "igds_score",
+    "terms": [
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "igds_score",
+    "terms": [
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "igds_score",
+    "terms": [
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "igds_score",
+    "terms": [
+     "age_band",
+     "device_os"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "igds_score",
+    "terms": [
+     "age_band",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "igds_score",
+    "terms": [
+     "age_band",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "igds_score",
+    "terms": [
+     "age_band",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "igds_score",
+    "terms": [
+     "age_band",
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "igds_score",
+    "terms": [
+     "device_os",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "igds_score",
+    "terms": [
+     "device_os",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "igds_score",
+    "terms": [
+     "device_os",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "igds_score",
+    "terms": [
+     "device_os",
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "igds_score",
+    "terms": [
+     "income_band",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "igds_score",
+    "terms": [
+     "income_band",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "igds_score",
+    "terms": [
+     "income_band",
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "igds_score",
+    "terms": [
+     "region",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "igds_score",
+    "terms": [
+     "region",
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "igds_score",
+    "terms": [
+     "sex",
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "igds_score",
+    "terms": [
+     "age_band",
+     "device_os",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "igds_score",
+    "terms": [
+     "age_band",
+     "device_os",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "igds_score",
+    "terms": [
+     "age_band",
+     "device_os",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "igds_score",
+    "terms": [
+     "age_band",
+     "device_os",
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "igds_score",
+    "terms": [
+     "age_band",
+     "income_band",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "igds_score",
+    "terms": [
+     "age_band",
+     "income_band",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "igds_score",
+    "terms": [
+     "age_band",
+     "income_band",
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "igds_score",
+    "terms": [
+     "age_band",
+     "region",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "igds_score",
+    "terms": [
+     "age_band",
+     "region",
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "igds_score",
+    "terms": [
+     "age_band",
+     "sex",
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "igds_score",
+    "terms": [
+     "device_os",
+     "income_band",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "igds_score",
+    "terms": [
+     "device_os",
+     "income_band",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "igds_score",
+    "terms": [
+     "device_os",
+     "income_band",
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "igds_score",
+    "terms": [
+     "device_os",
+     "region",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "igds_score",
+    "terms": [
+     "device_os",
+     "region",
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "igds_score",
+    "terms": [
+     "device_os",
+     "sex",
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "igds_score",
+    "terms": [
+     "income_band",
+     "region",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "igds_score",
+    "terms": [
+     "income_band",
+     "region",
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "igds_score",
+    "terms": [
+     "income_band",
+     "sex",
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "igds_score",
+    "terms": [
+     "region",
+     "sex",
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "monthly_spend_selfreport",
+    "terms": [
+     "age_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "monthly_spend_selfreport",
+    "terms": [
+     "device_os"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "monthly_spend_selfreport",
+    "terms": [
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "monthly_spend_selfreport",
+    "terms": [
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "monthly_spend_selfreport",
+    "terms": [
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "monthly_spend_selfreport",
+    "terms": [
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "monthly_spend_selfreport",
+    "terms": [
+     "age_band",
+     "device_os"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "monthly_spend_selfreport",
+    "terms": [
+     "age_band",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "monthly_spend_selfreport",
+    "terms": [
+     "age_band",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "monthly_spend_selfreport",
+    "terms": [
+     "age_band",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "monthly_spend_selfreport",
+    "terms": [
+     "age_band",
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "monthly_spend_selfreport",
+    "terms": [
+     "device_os",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "monthly_spend_selfreport",
+    "terms": [
+     "device_os",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "monthly_spend_selfreport",
+    "terms": [
+     "device_os",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "monthly_spend_selfreport",
+    "terms": [
+     "device_os",
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "monthly_spend_selfreport",
+    "terms": [
+     "income_band",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "monthly_spend_selfreport",
+    "terms": [
+     "income_band",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "monthly_spend_selfreport",
+    "terms": [
+     "income_band",
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "monthly_spend_selfreport",
+    "terms": [
+     "region",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "monthly_spend_selfreport",
+    "terms": [
+     "region",
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "monthly_spend_selfreport",
+    "terms": [
+     "sex",
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "monthly_spend_selfreport",
+    "terms": [
+     "age_band",
+     "device_os",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "monthly_spend_selfreport",
+    "terms": [
+     "age_band",
+     "device_os",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "monthly_spend_selfreport",
+    "terms": [
+     "age_band",
+     "device_os",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "monthly_spend_selfreport",
+    "terms": [
+     "age_band",
+     "device_os",
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "monthly_spend_selfreport",
+    "terms": [
+     "age_band",
+     "income_band",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "monthly_spend_selfreport",
+    "terms": [
+     "age_band",
+     "income_band",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "monthly_spend_selfreport",
+    "terms": [
+     "age_band",
+     "income_band",
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "monthly_spend_selfreport",
+    "terms": [
+     "age_band",
+     "region",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "monthly_spend_selfreport",
+    "terms": [
+     "age_band",
+     "region",
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "monthly_spend_selfreport",
+    "terms": [
+     "age_band",
+     "sex",
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "monthly_spend_selfreport",
+    "terms": [
+     "device_os",
+     "income_band",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "monthly_spend_selfreport",
+    "terms": [
+     "device_os",
+     "income_band",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "monthly_spend_selfreport",
+    "terms": [
+     "device_os",
+     "income_band",
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "monthly_spend_selfreport",
+    "terms": [
+     "device_os",
+     "region",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "monthly_spend_selfreport",
+    "terms": [
+     "device_os",
+     "region",
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "monthly_spend_selfreport",
+    "terms": [
+     "device_os",
+     "sex",
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "monthly_spend_selfreport",
+    "terms": [
+     "income_band",
+     "region",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "monthly_spend_selfreport",
+    "terms": [
+     "income_band",
+     "region",
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "monthly_spend_selfreport",
+    "terms": [
+     "income_band",
+     "sex",
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "monthly_spend_selfreport",
+    "terms": [
+     "region",
+     "sex",
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "pgsi_score",
+    "terms": [
+     "age_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "pgsi_score",
+    "terms": [
+     "device_os"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "pgsi_score",
+    "terms": [
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "pgsi_score",
+    "terms": [
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "pgsi_score",
+    "terms": [
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "pgsi_score",
+    "terms": [
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "pgsi_score",
+    "terms": [
+     "age_band",
+     "device_os"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "pgsi_score",
+    "terms": [
+     "age_band",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "pgsi_score",
+    "terms": [
+     "age_band",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "pgsi_score",
+    "terms": [
+     "age_band",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "pgsi_score",
+    "terms": [
+     "age_band",
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "pgsi_score",
+    "terms": [
+     "device_os",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "pgsi_score",
+    "terms": [
+     "device_os",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "pgsi_score",
+    "terms": [
+     "device_os",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "pgsi_score",
+    "terms": [
+     "device_os",
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "pgsi_score",
+    "terms": [
+     "income_band",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "pgsi_score",
+    "terms": [
+     "income_band",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "pgsi_score",
+    "terms": [
+     "income_band",
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "pgsi_score",
+    "terms": [
+     "region",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "pgsi_score",
+    "terms": [
+     "region",
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "pgsi_score",
+    "terms": [
+     "sex",
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "pgsi_score",
+    "terms": [
+     "age_band",
+     "device_os",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "pgsi_score",
+    "terms": [
+     "age_band",
+     "device_os",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "pgsi_score",
+    "terms": [
+     "age_band",
+     "device_os",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "pgsi_score",
+    "terms": [
+     "age_band",
+     "device_os",
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "pgsi_score",
+    "terms": [
+     "age_band",
+     "income_band",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "pgsi_score",
+    "terms": [
+     "age_band",
+     "income_band",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "pgsi_score",
+    "terms": [
+     "age_band",
+     "income_band",
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "pgsi_score",
+    "terms": [
+     "age_band",
+     "region",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "pgsi_score",
+    "terms": [
+     "age_band",
+     "region",
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "pgsi_score",
+    "terms": [
+     "age_band",
+     "sex",
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "pgsi_score",
+    "terms": [
+     "device_os",
+     "income_band",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "pgsi_score",
+    "terms": [
+     "device_os",
+     "income_band",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "pgsi_score",
+    "terms": [
+     "device_os",
+     "income_band",
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "pgsi_score",
+    "terms": [
+     "device_os",
+     "region",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "pgsi_score",
+    "terms": [
+     "device_os",
+     "region",
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "pgsi_score",
+    "terms": [
+     "device_os",
+     "sex",
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "pgsi_score",
+    "terms": [
+     "income_band",
+     "region",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "pgsi_score",
+    "terms": [
+     "income_band",
+     "region",
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "pgsi_score",
+    "terms": [
+     "income_band",
+     "sex",
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "pgsi_score",
+    "terms": [
+     "region",
+     "sex",
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "wemwbs_score",
+    "terms": [
+     "age_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "wemwbs_score",
+    "terms": [
+     "device_os"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "wemwbs_score",
+    "terms": [
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "wemwbs_score",
+    "terms": [
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "wemwbs_score",
+    "terms": [
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "wemwbs_score",
+    "terms": [
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "wemwbs_score",
+    "terms": [
+     "age_band",
+     "device_os"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "wemwbs_score",
+    "terms": [
+     "age_band",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "wemwbs_score",
+    "terms": [
+     "age_band",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "wemwbs_score",
+    "terms": [
+     "age_band",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "wemwbs_score",
+    "terms": [
+     "age_band",
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "wemwbs_score",
+    "terms": [
+     "device_os",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "wemwbs_score",
+    "terms": [
+     "device_os",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "wemwbs_score",
+    "terms": [
+     "device_os",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "wemwbs_score",
+    "terms": [
+     "device_os",
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "wemwbs_score",
+    "terms": [
+     "income_band",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "wemwbs_score",
+    "terms": [
+     "income_band",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "wemwbs_score",
+    "terms": [
+     "income_band",
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "wemwbs_score",
+    "terms": [
+     "region",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "wemwbs_score",
+    "terms": [
+     "region",
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "wemwbs_score",
+    "terms": [
+     "sex",
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "wemwbs_score",
+    "terms": [
+     "age_band",
+     "device_os",
+     "income_band"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "wemwbs_score",
+    "terms": [
+     "age_band",
+     "device_os",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "wemwbs_score",
+    "terms": [
+     "age_band",
+     "device_os",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "wemwbs_score",
+    "terms": [
+     "age_band",
+     "device_os",
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "wemwbs_score",
+    "terms": [
+     "age_band",
+     "income_band",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "wemwbs_score",
+    "terms": [
+     "age_band",
+     "income_band",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "wemwbs_score",
+    "terms": [
+     "age_band",
+     "income_band",
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "wemwbs_score",
+    "terms": [
+     "age_band",
+     "region",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "wemwbs_score",
+    "terms": [
+     "age_band",
+     "region",
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "wemwbs_score",
+    "terms": [
+     "age_band",
+     "sex",
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "wemwbs_score",
+    "terms": [
+     "device_os",
+     "income_band",
+     "region"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "wemwbs_score",
+    "terms": [
+     "device_os",
+     "income_band",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "wemwbs_score",
+    "terms": [
+     "device_os",
+     "income_band",
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "wemwbs_score",
+    "terms": [
+     "device_os",
+     "region",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "wemwbs_score",
+    "terms": [
+     "device_os",
+     "region",
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "wemwbs_score",
+    "terms": [
+     "device_os",
+     "sex",
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "wemwbs_score",
+    "terms": [
+     "income_band",
+     "region",
+     "sex"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "wemwbs_score",
+    "terms": [
+     "income_band",
+     "region",
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "wemwbs_score",
+    "terms": [
+     "income_band",
+     "sex",
+     "wave"
+    ],
+    "tool": "glm"
+   },
+   {
+    "dataset": "wellbeing",
+    "family": "gaussian",
+    "response": "wemwbs_score",
+    "terms": [
+     "region",
+     "sex",
+     "wave"
+    ],
+    "tool": "glm"
+   }
+  ]
+ },
+ "skeleton_version": 1
+}
