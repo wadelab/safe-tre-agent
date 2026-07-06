@@ -134,7 +134,9 @@ def main():
         for r in rows:
             fh.write(",".join(str(x) for x in r) + "\n")
     print(f"results -> {out}")
+    return all(r[5] for r in rows)
 
 
 if __name__ == "__main__":
-    main()
+    # nonzero exit on any failed check, so CI can gate on the red-team
+    sys.exit(0 if main() else 1)

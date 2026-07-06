@@ -27,7 +27,44 @@ jobs:
         run: uv sync --all-extras --frozen
       - name: Tests
         run: uv run pytest -q
+      - name: Red-team (gateway off vs on)
+        run: uv run python redteam/run_redteam.py
+      - name: Docs build (strict)
+        run: uv run --group docs mkdocs build --strict
       - name: SAST (bandit)
         run: uv run bandit -q -r safetre safetre_web
       - name: Dependency audit (CVEs)
         run: uv run pip-audit            # relax to advisory (continue-on-error) if it blocks on an unfixable transitive CVE
+
+  accessibility:
+    # pa11y (WCAG 2AA) against the four demo states, using the runner's Chrome.
+    # SAFETRE_LLM=mock: CI has no local model, and the mock planner is the
+    # explicit tests/CI opt-in (never a silent fallback).
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+      - name: Sync (frozen — exactly uv.lock)
+        run: uv sync --all-extras --frozen
+      - name: Start the demo server (mock planner, synthetic data)
+        run: |
+          SAFETRE_LLM=mock nohup uv run uvicorn safetre_web.app:app \
+            --host 127.0.0.1 --port 8800 > /tmp/web.log 2>&1 &
+          for i in $(seq 1 60); do
+            curl -fsS http://127.0.0.1:8800/healthz > /dev/null && exit 0
+            sleep 0.5
+          done
+          echo "server did not become healthy; log follows" >&2
+          cat /tmp/web.log >&2
+          exit 1
+      - name: pa11y (WCAG 2AA) on home, released, redacted, denied
+        env:
+          PUPPETEER_SKIP_DOWNLOAD: "1"
+        run: |
+          printf '%s' '{"chromeLaunchConfig": {"executablePath": "/usr/bin/google-chrome", "args": ["--no-sandbox"]}}' > /tmp/pa11y.json
+          npx -y pa11y --config /tmp/pa11y.json --wait 3000 "http://127.0.0.1:8800/"
+          npx -y pa11y --config /tmp/pa11y.json --wait 4000 "http://127.0.0.1:8800/#q=mean%20spend%20by%20age%20band"
+          npx -y pa11y --config /tmp/pa11y.json --wait 4000 "http://127.0.0.1:8800/#q=mean%20spend%20by%20age%20band,%20region%20and%20device%20os"
+          npx -y pa11y --config /tmp/pa11y.json --wait 4000 "http://127.0.0.1:8800/#q=report%20wellbeing%20per%20donor"
