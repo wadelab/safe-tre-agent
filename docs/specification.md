@@ -73,9 +73,11 @@ running nothing.
 read-only SQL over public views, and execute it under fixed resource caps
 (memory, threads, row cap).
 
-**R4** — The system MUST support exactly four measures: `count`, `mean`, `sum`,
-and Pearson `corr`. A correlation result MUST carry its two-sided p-value and
-its `n`.
+**R4** — The system MUST support exactly the aggregate measures registered in
+the procedure registry: `count`, `mean`, `sum`, `sum_sq`, and Pearson `corr`.
+A correlation result MUST carry its two-sided p-value and its `n`. *(Amended
+with the procedure framework: the registry, not this sentence, is the
+enumerated source of truth — see R14.)*
 
 **R5** — The gateway MUST apply, to every result: a minimum distinct-donor
 threshold, contributor dominance (the p%-rule) for `sum`/`mean`, single-donor
@@ -111,6 +113,27 @@ suite with the gateway off and on and reports what leaked in each case.
 MUST fail loudly; it MUST NOT silently fall back to the deterministic mock
 planner (which would quietly degrade result quality). The mock is opt-in for
 tests and CI.
+
+**R14** — Every statistical procedure MUST be implemented as a registered
+procedure object that declares and discharges its obligations — admissibility,
+compilation safety, an influence control or cell-vetting inheritance, lineage
+identity, an **output contract** (released columns with their disclosure
+classes), and a **finite skeleton export** — before it is reachable from any
+request. The registry MUST be the sole dispatch point for validation,
+compilation, execution, and disclosure classification; an unregistered function
+MUST fail loudly, never fall through to another procedure's behaviour.
+
+**R15** — The system MUST support generalized linear models (`gaussian`,
+`binomial`, `poisson` families; canonical links only; categorical terms only)
+fitted **exclusively from gateway-finalized design-cell aggregates**. A model
+release MUST carry the coefficient table (term, level, estimate, std_error,
+statistic, p_value), the model summary block (family, link, rounded n,
+df_resid, deviance), and the vetted cell table it was fitted from, so the
+analyst can reproduce the fit from released data alone.
+
+**R16** — Every registered procedure MUST export its finite request skeleton as
+data, and CI MUST both check the committed formal model against that export
+(generation drift fails the build) and run the bounded model check.
 
 ## Prohibitions — what it MUST NOT do
 
@@ -182,6 +205,32 @@ exhausted budget denies first.
 
 **P18** — MUST NOT render any data table on a denial.
 
+**P19** — MUST NOT fit or release a model over an incomplete vetted cell table.
+If any design cell of any underlying aggregate is suppressed by the gateway, or
+absent from the full grid of observed levels, the whole model MUST be denied —
+loudly, with no category merging and no cell dropping. *(A level with no data
+anywhere is omitted from the design and is visibly absent from the released
+cell table; that is an omission the release itself shows, not a silent repair.)*
+
+**P20** — MUST NOT release per-observation model outputs: residuals, fitted
+values, leverage, influence scores, or per-donor predictions. Only the fixed
+coefficient table, the model summary block, and the vetted cell table leave the
+gateway. *(Extends P2 to model procedures.)*
+
+**P21** — Model outputs MUST be a deterministic function of the finalized
+(post-rounding, post-suppression) vetted cell tables alone. The fitter MUST NOT
+read row-level data, internal views, or unfinalized aggregates. *(Machine-checked:
+refitting from the released artifacts reproduces the released coefficients
+exactly.)*
+
+**P22** — A model refusal MUST be decidable from the vetted cell decisions and
+released-equivalent quantities alone — the same information the equivalent
+aggregate queries would reveal — and refusal messages MUST stay non-numeric
+about any private quantity. *(P10/P11-style: a model denial discloses nothing an
+analyst could not already learn from permitted queries. Estimability refusals
+may name the aliased or separated term, because rank and separation are
+computable from the released cell table itself.)*
+
 ## Non-goals — what it does NOT claim
 
 Stated so the claim is not over-read. Several are roadmap items, not permanent
@@ -229,7 +278,14 @@ with a documented limitation.
 | P16 concurrency serialisation | `session.py`, `app.py` | `test_hardening.py` | Implemented |
 | P17 budget short-circuit | `service.py`, `disclosure.py` | `test_hardening.py` | Implemented |
 | P18 no table on denial | `_result.html`, `service.py` | `test_web.py` | Implemented |
+| P19 deny on incomplete cell table | `service.py` (`_handle_model`) | `test_glm.py`, red-team | Planned |
+| P20 no per-observation model output | `glm.py` (output contract), `analyst.py` (intent) | `test_glm.py`, conformance suite | Planned |
+| P21 fitter noninterference | `stats.py`, `glm.py` (pure fit) | reproducibility meta-test, AST noninterference test, Alloy `P21_flow` | Planned |
+| P22 refusals from released-equivalent data | `glm.py` (`preconditions`), `service.py` | `test_glm.py` (non-numeric refusals) | Planned |
 | R5 complementary suppression | `disclosure.py` (`_secondary_suppress`) | `test_disclosure.py` | Partial (single-dim exact, multi-dim conservative) |
+| R14 procedure registry | `procedures.py` | `test_procedure_conformance.py` | Planned |
+| R15 GLM from vetted cells | `glm.py`, `stats.py`, `service.py` | `test_glm.py`, `test_formal_glm_enumeration.py` | Planned |
+| R16 skeleton export + model check | `procedures.py`, `formal/` | `test_skeleton_sync.py`, CI `formal` job | Planned |
 
 The red-team suite (`redteam/run_redteam.py`, R12) exercises P1–P6 and P10–P11
 end to end, off gateway versus on.
