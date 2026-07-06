@@ -491,6 +491,28 @@ def test_audit_chain_and_tamper(tmp_path, tables):
     assert log.verify() is False
 
 
+@pytest.mark.parametrize("col, bad", [
+    ("spec", "NOT_JSON{"),         # malformed JSON in a chained column
+    ("findings", "oops"),
+    ("output_shape", "["),
+    ("spec", None),                # column nulled out
+    ("mac", None),                 # MAC itself corrupted to a non-string
+])
+def test_audit_verify_fails_closed_on_malformed_row(tmp_path, tables, col, bad):
+    # A tamperer who can write the DB might corrupt a row into non-JSON or a
+    # non-string MAC. verify() must fail CLOSED (return False), never raise — a
+    # raised exception would 500 the /api/audit/verify endpoint instead of
+    # reporting the tamper (P15).
+    log = AuditLog(str(tmp_path / "audit.db"), key=b"unit-test-key")
+    svc = QueryService(tables)
+    for req in ["mean spend by age band", "mean spend by region"]:
+        svc.handle(req, MockPlanner(), audit_log=log, user="alice")
+    assert log.verify() is True
+    log.con.execute(f"UPDATE records SET {col}=? WHERE id=1", (bad,))
+    log.con.commit()
+    assert log.verify() is False          # detected, and did not raise
+
+
 def test_audit_tamper_with_wrong_key_still_fails(tmp_path, tables):
     path = str(tmp_path / "audit.db")
     AuditLog(path, key=b"real-key").append(
