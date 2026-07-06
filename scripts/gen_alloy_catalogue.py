@@ -74,7 +74,7 @@ def alloy_block() -> str:
                 pairs_by_family[fam].append(f"{ds_names[ds]} -> {_atom(col)}")
     for fam in ("gaussian", "binomial", "poisson"):
         rel = " + ".join(pairs_by_family[fam]) or "none -> none"
-        lines.append(f"  allowedResponse[{fam.capitalize()}] = {rel}")
+        lines.append(f"  Cat.allowedResponse[{fam.capitalize()}] = {rel}")
     lines.append("}")
     lines.append(MARK_END)
     return "\n".join(lines) + "\n"
