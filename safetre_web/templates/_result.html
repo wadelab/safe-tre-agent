@@ -1,41 +1,84 @@
 <div class="result-card status-{{ r.status }}" data-status="{{ r.status }}"
      data-stages="{% for step in r.trace %}{{ step.split(':', 1)[0] }}{% if not loop.last %},{% endif %}{% endfor %}">
-  <div class="result-head">
-    <div class="result-meta">
-      <span class="status-badge">{{ r.status | upper }}</span>
-      <span class="latency"></span>
-    </div>
-    <span class="budget">Budget {{ budget_left }}</span>
+
+  {% if r.status == 'denied' %}
+  <div class="error-summary">
+    <h2 class="error-summary__title">The query was denied</h2>
+    {% if r.message %}<p>{{ r.message }}</p>{% endif %}
+    {% if r.findings %}
+    <ul class="error-summary__list">
+      {% for f in r.findings %}
+      <li><strong>{{ f.rule }}</strong> &mdash; {{ f.detail }}</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
   </div>
-  {% if r.message %}<p class="status-msg">{{ r.message }}</p>{% endif %}
+
+  {% elif r.status == 'review' %}
+  <div class="notification-banner">
+    <div class="notification-banner__header">
+      <h2 class="notification-banner__title">Important</h2>
+    </div>
+    <div class="notification-banner__content">
+      <p class="notification-banner__heading">Escalated to a human output checker</p>
+      {% if r.message %}<p>{{ r.message }}</p>{% endif %}
+    </div>
+  </div>
+
+  {% elif r.status == 'redacted' %}
+  <div class="notification-banner">
+    <div class="notification-banner__header">
+      <h2 class="notification-banner__title">Important</h2>
+    </div>
+    <div class="notification-banner__content">
+      <p class="notification-banner__heading">Released with redactions</p>
+      <p>Some cells were suppressed to protect confidentiality.</p>
+    </div>
+  </div>
+
+  {% else %}
+  <div class="notification-banner notification-banner--success">
+    <div class="notification-banner__header">
+      <h2 class="notification-banner__title">Success</h2>
+    </div>
+    <div class="notification-banner__content">
+      <p class="notification-banner__heading">Query released</p>
+      <p>The result passed every disclosure check.</p>
+    </div>
+  </div>
+  {% endif %}
+
+  <p class="hint result-meta"><span class="latency"></span>Query budget remaining: {{ budget_left }}</p>
 
   {% if table_html %}
   <div class="table-wrap">{{ table_html | safe }}</div>
   {% endif %}
 
-  {% if r.findings %}
-  <div class="findings">
-    {% for f in r.findings %}
-    <div class="finding sev-{{ f.severity }}">
-      <strong>{{ f.rule }}</strong>
-      <span>{{ f.detail }}</span>
-    </div>
-    {% endfor %}
+  {% if r.findings and r.status != 'denied' %}
+  {% for f in r.findings %}
+  <div class="warning-text">
+    <span class="warning-text__icon" aria-hidden="true">!</span>
+    <span class="visually-hidden">Warning:</span>
+    <strong>{{ f.rule }}</strong>
+    <span>{{ f.detail }}</span>
   </div>
+  {% endfor %}
   {% endif %}
 
-  <div class="detail-grid">
-    {% if r.spec %}
-    {% set rejected = r.findings | selectattr("rule", "equalto", "spec_rejected") | list %}
-    <details class="spec" open>
-      <summary>{% if rejected %}Rejected QuerySpec{% else %}Validated QuerySpec{% endif %}</summary>
+  {% if r.spec %}
+  {% set rejected = r.findings | selectattr("rule", "equalto", "spec_rejected") | list %}
+  <details class="spec">
+    <summary>{% if rejected %}View the rejected query{% else %}View the validated query{% endif %}</summary>
+    <div class="details-text">
       <pre class="spec-code">{{ r.spec | tojson(indent=2) }}</pre>
-    </details>
-    {% endif %}
+    </div>
+  </details>
+  {% endif %}
 
-    <details class="trace">
-      <summary>Pipeline trace</summary>
+  <details class="trace">
+    <summary>View the pipeline trace</summary>
+    <div class="details-text">
       <ol>{% for step in r.trace %}<li>{{ step }}</li>{% endfor %}</ol>
-    </details>
-  </div>
+    </div>
+  </details>
 </div>

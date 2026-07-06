@@ -134,3 +134,16 @@ def test_rate_limiter_per_user():
     assert all(rl.allow("alice") for _ in range(3))
     assert rl.allow("alice") is False          # bucket exhausted
     assert rl.allow("bob") is True             # independent per user
+
+
+def test_index_accessibility_contract():
+    """The GOV.UK restyle's accessibility invariants (docs/govuk-ui-plan.md)."""
+    r = client.get("/").text
+    assert 'class="skip-link"' in r                 # first focusable element
+    assert 'role="status"' in r and 'aria-live="polite"' in r   # results announced
+    assert 'lang="en"' in r
+    # the codebook is real content, not title-attribute tooltips (which
+    # keyboards and touchscreens cannot reach)
+    assert "title=" not in r
+    # step state is text in a tag, never colour alone
+    assert r.count("step-status") >= 7

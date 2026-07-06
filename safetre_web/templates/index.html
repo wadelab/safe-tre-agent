@@ -3,176 +3,157 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>safe-tre-agent</title>
+  <title>Run a safe aggregate query &ndash; Safe outputs gateway</title>
   <link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
-<div class="aurora" aria-hidden="true"></div>
-<div class="gridlines" aria-hidden="true"></div>
+<a href="#main-content" class="skip-link">Skip to main content</a>
 
-<main class="shell">
-  <header class="topbar">
-    <div class="brand">
-      <svg class="mark" viewBox="0 0 46 46" aria-hidden="true">
-        <defs>
-          <linearGradient id="mg" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stop-color="#2dd4bf"/>
-            <stop offset="1" stop-color="#818cf8"/>
-          </linearGradient>
-        </defs>
-        <polygon points="23,3 40,13 40,33 23,43 6,33 6,13"
-                 fill="none" stroke="url(#mg)" stroke-width="2.4" stroke-linejoin="round"/>
-        <path d="M14 23h12M22 17l6 6-6 6" fill="none" stroke="url(#mg)"
-              stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-        <circle cx="34" cy="23" r="2.2" fill="#2dd4bf"/>
-      </svg>
-      <div>
-        <p class="eyebrow">Trusted Research Environment &middot; Safe Outputs Gateway</p>
-        <h1>Analysis workspace</h1>
-      </div>
-    </div>
-    <div class="identity {% if allowed %}is-allowed{% else %}is-denied{% endif %}">
-      <span class="avatar">{{ user[:1] }}</span>
-      <div>
-        <span class="identity-label">Signed in</span>
-        <strong>{{ user }}</strong>
-        {% if allowed %}<span class="state">Safe People</span>
-        {% else %}<span class="state">Not allowlisted</span>{% endif %}
-      </div>
-    </div>
-  </header>
+<header class="app-header" role="banner">
+  <div class="width-container">
+    <a href="/" class="header-service">Safe outputs gateway</a>
+    <span class="header-account">
+      Signed in as <strong>{{ user }}</strong>
+      {% if allowed %}<strong class="tag tag--green">Safe People</strong>
+      {% else %}<strong class="tag tag--red">Not allowlisted</strong>{% endif %}
+    </span>
+  </div>
+</header>
 
-  <div class="grid">
-    <section class="query-surface" aria-labelledby="query-title">
-      <div class="surface-head">
-        <div>
-          <h2 id="query-title">New aggregate request</h2>
-          <p class="muted">Validated allowlist catalogue &middot; read-only engine</p>
-        </div>
-        <a class="manifest-link" href="/api/manifest">{{ manifest.manifest_sha256[:10] }} &middot; manifest</a>
-      </div>
-
-      <form id="qform" autocomplete="off">
-        <label for="q">Research question</label>
-        <textarea id="q" name="q" maxlength="500"
-                  placeholder="mean spend by age band" required></textarea>
-        <div class="actions">
-          <span id="charcount" class="count">0 / 500</span>
-          <button id="runbtn" type="submit">Run query</button>
-        </div>
-      </form>
-
-      <div class="examples" aria-label="Example queries">
-        <button type="button" data-query="mean spend by age band">mean spend by age band</button>
-        <button type="button" data-query="mean wellbeing by region">wellbeing by region</button>
-        <button type="button" data-query="correlation between age and spend">age&ndash;spend correlation</button>
-        <button type="button" data-query="mean spend by region and device os">stress: region &times; device</button>
-        <button type="button" data-query="show mean wellbeing per donor">per-donor (attack)</button>
-      </div>
-
-      <div class="pipeline" id="pipeline" aria-label="Gateway pipeline">
-        <div class="pipe-node" data-stage="vetting"><span class="pipe-dot"></span><span class="pipe-label">Vetting</span></div>
-        <div class="pipe-link"></div>
-        <div class="pipe-node" data-stage="planner"><span class="pipe-dot"></span><span class="pipe-label">Planner</span></div>
-        <div class="pipe-link"></div>
-        <div class="pipe-node" data-stage="validation"><span class="pipe-dot"></span><span class="pipe-label">Validate</span></div>
-        <div class="pipe-link"></div>
-        <div class="pipe-node" data-stage="engine"><span class="pipe-dot"></span><span class="pipe-label">Engine</span></div>
-        <div class="pipe-link"></div>
-        <div class="pipe-node" data-stage="auditor"><span class="pipe-dot"></span><span class="pipe-label">Auditor</span></div>
-        <div class="pipe-link"></div>
-        <div class="pipe-node" data-stage="gateway"><span class="pipe-dot"></span><span class="pipe-label">Gateway</span></div>
-        <div class="pipe-link"></div>
-        <div class="pipe-node" data-stage="hitl"><span class="pipe-dot"></span><span class="pipe-label">Review</span></div>
-      </div>
-
-      <div id="result" class="result">
-        <div class="empty-state">
-          <span class="beacon"></span>
-          <div>
-            <strong>Standing by</strong>
-            <p>Results appear here after safepod validation. Try an example.</p>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <aside class="side-rail" aria-label="Available analysis catalogue">
-      <section class="rail-section">
-        <div class="rail-title">
-          <h2>Available tools</h2>
-          <span>{{ manifest.tools | length }}</span>
-        </div>
-        {% for tool in manifest.tools %}
-        <div class="tool-row">
-          <strong>{{ tool.id }}</strong>
-          <span>{{ tool.status }}</span>
-        </div>
-        {% endfor %}
-      </section>
-
-      <section class="rail-section">
-        <div class="rail-title">
-          <h2>Datasets</h2>
-          <span>{{ schema.datasets | length }}</span>
-        </div>
-        <p class="rail-note">Schema codebook &middot; <a href="/api/schema">/api/schema</a></p>
-        {% for ds, info in schema.datasets.items() %}
-        <details class="dataset" {% if loop.first %}open{% endif %}>
-          <summary>{{ ds }}</summary>
-          <dl>
-            <dt>Dimensions</dt>
-            <dd class="cols">
-              {% for name, d in info.dimensions.items() %}
-              <span class="col role-{{ d.role }}"
-                    title="{{ d.role_label }} &middot; {{ d.type }}{% if d.description %} &mdash; {{ d.description }}{% endif %}{% if d.domain %}&#10;values: {{ d.domain | join(', ') }}{% endif %}">
-                {{ name }}<em>{{ d.role }}</em>
-              </span>
-              {% endfor %}
-            </dd>
-            <dt>Measures</dt>
-            <dd class="cols">
-              {% for name, m in info.measures.items() %}
-              <span class="col role-{{ m.role }}"
-                    title="{{ m.role_label }} &middot; {{ m.type }}{% if m.description %} &mdash; {{ m.description }}{% endif %}">
-                {{ name }}<em>{{ m.role }}</em>
-              </span>
-              {% endfor %}
-            </dd>
-          </dl>
-        </details>
-        {% endfor %}
-        <div class="role-legend">
-          <span class="role-QI">QI quasi-identifier</span>
-          <span class="role-S">S sensitive</span>
-          <span class="role-R">R reference</span>
-        </div>
-      </section>
-
-      <section class="rail-section compact">
-        <div class="metric">
-          <span>Min cell</span>
-          <strong>10</strong>
-        </div>
-        <div class="metric">
-          <span>Rounding</span>
-          <strong>5</strong>
-        </div>
-        <div class="metric">
-          <span>Raw rows</span>
-          <strong>0</strong>
-        </div>
-      </section>
-    </aside>
+<div class="width-container">
+  <div class="phase-banner">
+    <strong class="tag tag--blue">Alpha</strong>
+    <span>This is a research prototype. All data is synthetic.</span>
   </div>
 
-  <footer>
-    <span>Hash-chained audit log</span>
-    <span>Disclosure-checked outputs</span>
-    <span>Session differencing audit</span>
-    <span>Restricted channel</span>
-  </footer>
-</main>
+  <main id="main-content" class="main-wrapper" role="main">
+    <div class="grid-row">
+      <div class="col-two-thirds">
+        <h1 class="heading-xl">Run a safe aggregate query</h1>
+        <p class="lead">Describe the analysis you need. An AI planner proposes a
+          query, the safepod validates it against the allowlist, runs it
+          read-only, and checks every output before release.</p>
+
+        <form id="qform" autocomplete="off">
+          <div class="form-group">
+            <label class="label" for="q">Research question</label>
+            <div id="q-hint" class="hint">For example, &ldquo;mean spend by age
+              band&rdquo; or &ldquo;correlation between age and spend&rdquo;.</div>
+            <textarea id="q" name="q" class="textarea" rows="3" maxlength="500"
+                      aria-describedby="q-hint q-info" required></textarea>
+            <div id="q-info" class="hint count-message" aria-live="polite">
+              You have 500 characters remaining</div>
+          </div>
+          <button id="runbtn" class="button" type="submit">Run query</button>
+        </form>
+
+        <details>
+          <summary>Example queries</summary>
+          <div class="details-text">
+            <ul>
+              <li><button type="button" class="link-button" data-query="mean spend by age band">Mean spend by age band</button></li>
+              <li><button type="button" class="link-button" data-query="mean wellbeing by region">Mean wellbeing by region</button></li>
+              <li><button type="button" class="link-button" data-query="correlation between age and spend">Correlation between age and spend</button></li>
+              <li><button type="button" class="link-button" data-query="mean spend by region and device os">Mean spend by region and device (triggers suppression)</button></li>
+              <li><button type="button" class="link-button" data-query="show mean wellbeing per donor">Wellbeing per donor (rejected by validation)</button></li>
+            </ul>
+          </div>
+        </details>
+
+        <h2 class="heading-m">Gateway checks</h2>
+        <ol class="steps" id="pipeline">
+          <li class="step" data-stage="vetting"><span class="step-circle" aria-hidden="true">1</span>
+            <span class="step-name">Vetting</span>
+            <strong class="tag tag--grey step-status">Not run</strong></li>
+          <li class="step" data-stage="planner"><span class="step-circle" aria-hidden="true">2</span>
+            <span class="step-name">Planner</span>
+            <strong class="tag tag--grey step-status">Not run</strong></li>
+          <li class="step" data-stage="validation"><span class="step-circle" aria-hidden="true">3</span>
+            <span class="step-name">Validation</span>
+            <strong class="tag tag--grey step-status">Not run</strong></li>
+          <li class="step" data-stage="engine"><span class="step-circle" aria-hidden="true">4</span>
+            <span class="step-name">Engine</span>
+            <strong class="tag tag--grey step-status">Not run</strong></li>
+          <li class="step" data-stage="auditor"><span class="step-circle" aria-hidden="true">5</span>
+            <span class="step-name">Session auditor</span>
+            <strong class="tag tag--grey step-status">Not run</strong></li>
+          <li class="step" data-stage="gateway"><span class="step-circle" aria-hidden="true">6</span>
+            <span class="step-name">Safe outputs</span>
+            <strong class="tag tag--grey step-status">Not run</strong></li>
+          <li class="step" data-stage="hitl"><span class="step-circle" aria-hidden="true">7</span>
+            <span class="step-name">Human review</span>
+            <strong class="tag tag--grey step-status">Not run</strong></li>
+        </ol>
+
+        <h2 class="heading-m">Result</h2>
+        <div id="result" class="result" role="status" aria-live="polite">
+          <p class="hint">Results appear here after the gateway releases them.</p>
+        </div>
+      </div>
+
+      <aside class="col-one-third sidebar" aria-label="Available data and policy">
+        <h2 class="heading-s">Available tools</h2>
+        <ul class="tool-list">
+          {% for tool in manifest.tools %}
+          <li><code>{{ tool.id }}</code>
+            <strong class="tag tag--green">{{ tool.status | capitalize }}</strong></li>
+          {% endfor %}
+        </ul>
+
+        <h2 class="heading-s">Datasets</h2>
+        {% for ds, info in schema.datasets.items() %}
+        <details class="dataset">
+          <summary>{{ ds }}</summary>
+          <div class="details-text">
+            <h3 class="visually-hidden">Dimensions in {{ ds }}</h3>
+            {% for name, d in info.dimensions.items() %}
+            <div class="codebook-row">
+              <p class="codebook-name"><code>{{ name }}</code>
+                <strong class="tag tag--{{ 'yellow' if d.role == 'QI' else 'red' if d.role == 'S' else 'grey' }}">{{ d.role_label }}</strong></p>
+              {% if d.description %}<p class="hint">{{ d.description }}</p>{% endif %}
+              {% if d.domain %}<p class="hint">Values: {{ d.domain | join(', ') }}</p>{% endif %}
+            </div>
+            {% endfor %}
+            <h3 class="visually-hidden">Measures in {{ ds }}</h3>
+            {% for name, m in info.measures.items() %}
+            <div class="codebook-row">
+              <p class="codebook-name"><code>{{ name }}</code>
+                <strong class="tag tag--{{ 'red' if m.role == 'S' else 'grey' }}">{{ m.role_label }}</strong></p>
+              {% if m.description %}<p class="hint">{{ m.description }}</p>{% endif %}
+            </div>
+            {% endfor %}
+          </div>
+        </details>
+        {% endfor %}
+
+        <h2 class="heading-s">Disclosure policy</h2>
+        <dl class="summary-list">
+          <div><dt>Minimum cell size</dt><dd>10</dd></div>
+          <div><dt>Counts rounded to</dt><dd>5</dd></div>
+          <div><dt>Raw rows released</dt><dd>Never</dd></div>
+        </dl>
+
+        <h2 class="heading-s">About this service</h2>
+        <ul class="sidebar-links">
+          <li><a href="/api/schema">Data dictionary (JSON)</a></li>
+          <li><a href="/api/manifest">Tool manifest {{ manifest.manifest_sha256[:10] }}</a></li>
+        </ul>
+      </aside>
+    </div>
+  </main>
+</div>
+
+<footer class="app-footer" role="contentinfo">
+  <div class="width-container">
+    <ul>
+      <li>Hash-chained audit log</li>
+      <li>Disclosure-checked outputs</li>
+      <li>Session differencing audit</li>
+      <li>Restricted channel</li>
+    </ul>
+    <p>Research prototype &middot; synthetic data only &middot; not a government service</p>
+  </div>
+</footer>
 <script src="/static/app.js"></script>
 </body>
 </html>

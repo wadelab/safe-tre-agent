@@ -1,79 +1,74 @@
-// Minimal vanilla JS keeps CSP at script-src 'self'. No inline styles are ever
-// written into the DOM as attributes: visual state is class toggling plus CSSOM
-// custom properties (element.style.setProperty), which style-src permits.
+// Minimal vanilla JS keeps CSP at script-src 'self'. No decorative animation
+// (GOV.UK design language); state changes are class/text swaps only, and the
+// result region is an aria-live landmark so outcomes are announced.
 document.addEventListener("DOMContentLoaded", () => {
   const form = document.getElementById("qform");
   const input = document.getElementById("q");
   const result = document.getElementById("result");
   const button = document.getElementById("runbtn");
-  const counter = document.getElementById("charcount");
-  const pipeline = document.getElementById("pipeline");
-  const nodes = pipeline ? [...pipeline.querySelectorAll(".pipe-node")] : [];
-  let scanTimer = null;
+  const countMsg = document.getElementById("q-info");
+  const steps = [...document.querySelectorAll("#pipeline .step")];
+
+  /* --- character count (GOV.UK character-count behaviour) ------------------- */
 
   const updateCount = () => {
-    counter.textContent = `${input.value.length} / ${input.maxLength}`;
+    const remaining = input.maxLength - input.value.length;
+    countMsg.textContent = remaining === 1
+      ? "You have 1 character remaining"
+      : `You have ${remaining} characters remaining`;
   };
 
-  const emptyState = (title, msg) => `
-    <div class="empty-state">
-      <span class="beacon"></span>
-      <div><strong>${title}</strong><p>${msg}</p></div>
-    </div>`;
+  /* --- gateway checks step list ---------------------------------------------
+     Step state is text in a tag, never colour alone. Final states come from
+     the server's own trace: the result card carries the ordered stage names
+     that ran (data-stages) and the outcome (data-status). */
 
-  /* --- pipeline ----------------------------------------------------------- */
-
-  const resetPipeline = () => {
-    clearInterval(scanTimer);
-    pipeline.classList.remove("running");
-    nodes.forEach((n) => n.classList.remove("active", "ok", "warn", "fail"));
+  const STATES = {
+    notrun:   { label: "Not run",   cls: "tag--grey" },
+    checking: { label: "Checking",  cls: "tag--blue" },
+    done:     { label: "Completed", cls: "tag--green" },
+    stopped:  { label: "Stopped",   cls: "tag--red" },
+    redacted: { label: "Redacted",  cls: "tag--yellow" },
+    review:   { label: "Review",    cls: "tag--yellow" },
   };
 
-  const startScan = () => {
-    resetPipeline();
-    pipeline.classList.add("running");
-    let i = 0;
-    nodes[0].classList.add("active");
-    scanTimer = setInterval(() => {
-      i = (i + 1) % nodes.length;
-      nodes.forEach((n) => n.classList.remove("active"));
-      nodes[i].classList.add("active");
-    }, 260);
+  const setStep = (step, state) => {
+    const tag = step.querySelector(".step-status");
+    tag.textContent = STATES[state].label;
+    tag.className = `tag step-status ${STATES[state].cls}`;
   };
 
-  // Final stage states come from the server's own trace: the card carries the
-  // ordered stage names that actually ran (data-stages) and the outcome
-  // (data-status). Stages that never ran stay dark.
-  const finishPipeline = (card) => {
-    resetPipeline();
+  const resetSteps = () => steps.forEach((s) => setStep(s, "notrun"));
+
+  const finishSteps = (card) => {
+    resetSteps();
     const status = card.dataset.status;
     const stages = (card.dataset.stages || "").split(",").filter(Boolean);
     const ran = new Set(stages);
     const last = stages[stages.length - 1];
-    nodes.forEach((n) => {
-      const s = n.dataset.stage;
+    steps.forEach((step) => {
+      const s = step.dataset.stage;
       if (!ran.has(s)) return;
-      if (s === last && status === "denied") n.classList.add("fail");
-      else if (s === last && status === "review") n.classList.add("warn");
-      else if (s === "gateway" && status === "redacted") n.classList.add("warn");
-      else n.classList.add("ok");
+      if (s === last && status === "denied") setStep(step, "stopped");
+      else if (s === last && status === "review") setStep(step, "review");
+      else if (s === "gateway" && status === "redacted") setStep(step, "redacted");
+      else setStep(step, "done");
     });
   };
 
-  /* --- table decoration ----------------------------------------------------
-     Redaction drops whole rows, so a NaN in a released table means "not
-     computable"; those cells get a labelled hatch. Numeric columns
-     right-align; the released `value` column gets a single-hue magnitude bar
-     (skipped when any value is negative, e.g. correlations). */
+  /* --- table decoration ------------------------------------------------------
+     Numeric columns right-align; a NaN in a released table means the value was
+     suppressed or not computable, shown as "[c]" (the ONS convention) with a
+     footnote. */
 
   const NUMERIC = /^-?\d[\d,]*(\.\d+)?$/;
 
-  const decorateTables = (scope) => {
-    scope.querySelectorAll("table.agg").forEach((table) => {
+  const decorateTables = (card) => {
+    let anySuppressed = false;
+    card.querySelectorAll("table.agg").forEach((table) => {
       const heads = [...table.querySelectorAll("thead th")];
       const rows = [...table.querySelectorAll("tbody tr")];
       if (!heads.length || !rows.length) return;
-
       const cell = (row, c) => row.children[c];
       heads.forEach((th, c) => {
         const texts = rows.map((r) => cell(r, c)?.textContent.trim() ?? "");
@@ -81,43 +76,37 @@ document.addEventListener("DOMContentLoaded", () => {
           if (t === "NaN") {
             const td = cell(rows[i], c);
             td.classList.add("suppressed");
-            td.textContent = "n/a";
+            td.textContent = "[c]";
+            anySuppressed = true;
           }
         });
         const live = texts.filter((t) => t !== "NaN" && t !== "");
         if (live.length && live.every((t) => NUMERIC.test(t))) {
           th.classList.add("num");
           rows.forEach((r) => cell(r, c)?.classList.add("num"));
-          if (th.textContent.trim() === "value") {
-            const vals = live.map((t) => parseFloat(t.replace(/,/g, "")));
-            const max = Math.max(...vals);
-            if (max > 0 && vals.every((v) => v >= 0)) {
-              rows.forEach((r) => {
-                const td = cell(r, c);
-                const v = parseFloat(td.textContent.replace(/,/g, ""));
-                if (!Number.isNaN(v)) {
-                  td.classList.add("bar");
-                  td.style.setProperty("--w", `${((v / max) * 100).toFixed(1)}%`);
-                }
-              });
-            }
-          }
         }
       });
     });
+    if (anySuppressed) {
+      const wrap = card.querySelector(".table-wrap");
+      if (wrap) {
+        const note = document.createElement("p");
+        note.className = "table-footnote";
+        note.textContent = "[c] — value suppressed or not computable";
+        wrap.insertAdjacentElement("afterend", note);
+      }
+    }
   };
 
-  /* --- submit --------------------------------------------------------------- */
+  /* --- submit ------------------------------------------------------------------ */
 
   const run = async () => {
     const q = input.value.trim();
     if (!q) return;
 
     button.disabled = true;
-    button.classList.add("loading");
-    button.textContent = "Checking";
-    result.innerHTML = emptyState("Running", "Checking the request inside the safepod.");
-    startScan();
+    steps.forEach((s) => setStep(s, "checking"));
+    result.innerHTML = "<p class=\"hint\">Checking the request in the safepod.</p>";
     const t0 = performance.now();
 
     try {
@@ -129,21 +118,22 @@ document.addEventListener("DOMContentLoaded", () => {
       result.innerHTML = await resp.text();
       const card = result.querySelector(".result-card");
       if (card) {
-        finishPipeline(card);
+        finishSteps(card);
         const latency = card.querySelector(".latency");
-        if (latency) latency.textContent = `${Math.round(performance.now() - t0)} ms`;
+        if (latency) {
+          latency.textContent =
+            `Completed in ${Math.round(performance.now() - t0)}ms · `;
+        }
         decorateTables(card);
       } else {
-        resetPipeline();
+        resetSteps();
       }
     } catch (err) {
-      resetPipeline();
-      result.innerHTML = emptyState("Request failed",
-        "Try again or contact the TRE operator.");
+      resetSteps();
+      result.innerHTML =
+        "<p class=\"hint\">The request failed. Try again or contact the TRE operator.</p>";
     } finally {
       button.disabled = false;
-      button.classList.remove("loading");
-      button.textContent = "Run query";
     }
   };
 
