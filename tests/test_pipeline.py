@@ -11,7 +11,7 @@ from safetre.disclosure import DisclosurePolicy, SessionAuditor
 from safetre.guards import run_in_sandbox, static_check
 from safetre.llm import MockLLM
 from safetre import synth
-from safetre.synth import INJECTION
+from safetre.synth import INJECTION, POISON_DONORS, SEX_OVERRIDES
 
 
 @pytest.fixture(scope="module")
@@ -29,6 +29,41 @@ def test_synthetic_data_contains_single_prompt_injection_row(tables):
     assert len(injected) == 1
     assert injected["donor_id"].iloc[0] in set(tables["donors"]["donor_id"])
     assert int(injected["wave"].iloc[0]) == 2
+
+
+def test_sex_includes_prefer_not_to_say_and_other(tables):
+    sexes = set(tables["donors"]["sex"])
+    assert {"NS", "Other"} <= sexes                       # beyond the sampled F/M/X
+    assert set(SEX_OVERRIDES.values()) <= sexes
+
+
+def test_polluted_donor_rows_present_in_raw_but_inert_in_secure_path(tables):
+    from safetre.engine import QueryEngine
+
+    donors = tables["donors"]
+    # 1) the adversarial payloads are present verbatim in the raw donor table
+    #    (the analyst sandbox / a human opening donors.csv would meet them).
+    for p in POISON_DONORS:
+        row = donors[donors["donor_id"].eq(p["donor_id"])]
+        assert len(row) == 1, f"missing poison row {p['donor_id']}"
+        for col, payload in p.items():
+            assert row[col].iloc[0] == payload
+    # the poison donors carry no events/survey, so they never reach spend/wellbeing
+    assert not set(donors[donors["donor_id"].str.startswith("D9")]["donor_id"]) \
+        & set(tables["survey"]["donor_id"])
+
+    # 2) in the secure path they are size-1 cells: every poisoned region/sex value
+    #    is suppressed (None) in the published donor marginals, never released.
+    pub = QueryEngine(tables).published_marginal_donor_counts(threshold=10, round_base=5)
+    region_marg = pub["donor_spend"]["region"]
+    for p in POISON_DONORS:
+        val = p.get("region")
+        # only the adversarial region strings are unique size-1 cells; a payload
+        # planted in another field may sit under a legitimate (large) region.
+        if val is not None and val not in synth.REGIONS and val in region_marg:
+            assert region_marg[val] is None, f"poison region {val!r} leaked"
+    for rare in ("X", "NS", "Other"):
+        assert pub["donor_spend"]["sex"].get(rare) is None   # small subgroup suppressed
 
 
 # --- happy path ---------------------------------------------------------------

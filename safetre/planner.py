@@ -78,13 +78,14 @@ class MockPlanner:
 
         region = re.search(r"\bregion\s*==\s*([A-Za-z]+)\b", request, re.I)
         if region:
+            # single-word aliases (the regex captures one word); multi-word
+            # regions can be spelled exactly in quotes-free text and pass through
             canonical = {
                 "london": "London",
-                "south east": "South East",
-                "north west": "North West",
                 "scotland": "Scotland",
                 "wales": "Wales",
-                "northern ireland": "Northern Ireland",
+                "yorkshire": "Yorkshire and The Humber",
+                "ireland": "Northern Ireland",
             }
             value = canonical.get(region.group(1).lower(), region.group(1))
             filters.append({"column": "region", "op": "==", "value": value})

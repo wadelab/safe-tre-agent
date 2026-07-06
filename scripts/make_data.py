@@ -12,7 +12,7 @@ from safetre import synth                     # noqa: E402
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--seed", type=int, default=7)
-    ap.add_argument("--donors", type=int, default=500)
+    ap.add_argument("--donors", type=int, default=800)
     ap.add_argument("--out", default="data")
     args = ap.parse_args()
 

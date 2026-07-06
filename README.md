@@ -115,10 +115,18 @@ The web layer is built security-first (the model is treated as untrusted):
 
 ## The dataset (synthetic)
 
-Four linked synthetic tables model loot-box / in-app-spend + psychometric data:
-`donors` (quasi-identifiers), `apps` (reference), `events` (spend behaviour),
-and `survey` (PGSI / wellbeing + free text). Column roles (DI/QI/S/R) drive the
+Four linked synthetic tables model a UK loot-box / in-app-spend donation study:
+`donors` (quasi-identifiers across all 12 UK ITL1 regions), `apps` (a named,
+genre-coherent catalogue — *Lucky Lorry Slots*, *Penalty Kings*, …), `events`
+(App-Store price-point spend with weekend/evening rhythm), and `survey`
+(two-wave PGSI / IGDS / WEMWBS + free text). Column roles (DI/QI/S/R) drive the
 disclosure rules. See `safetre/schema.py`.
+
+The data is not noise: a latent per-donor propensity makes the invited analyses
+find real effects (loot-box spend correlates with PGSI, total spend negatively
+with wellbeing, self-report under-reports observed spend), while deterministic
+disclosure anchors — Northern Ireland and sex `X` pinned below the min-cell
+threshold — keep the suppression and differencing demos honest across seeds.
 
 ## Threat model / red-team
 
