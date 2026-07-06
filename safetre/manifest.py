@@ -13,10 +13,14 @@ import hashlib
 import json
 from typing import Any
 
-from .query import CATALOGUE, MAX_FILTERS, MAX_GROUP_BY, MAX_IN_VALUES
+from .procedures import REGISTRY
+from .query import (
+    CATALOGUE, GLM_FAMILIES, MAX_FILTERS, MAX_GROUP_BY, MAX_IN_VALUES,
+    MAX_MODEL_TERMS,
+)
 from .schema import ROLE_LABELS, column_description, declared_domain, role_of
 
-MANIFEST_VERSION = "2026-07-06.aggregate.v3"
+MANIFEST_VERSION = "2026-07-07.aggregate+glm.v4"
 
 
 def public_schema() -> dict[str, Any]:
@@ -87,12 +91,12 @@ def public_manifest() -> dict[str, Any]:
         "tools": [
             {
                 "id": "aggregate_query",
-                "version": "3",
+                "version": "4",
                 "status": "available",
-                "description": "Disclosure-checked count, mean, sum, or Pearson correlation over an allowlisted dataset.",
+                "description": "Disclosure-checked count, mean, sum, sum of squares, or Pearson correlation over an allowlisted dataset.",
                 "request_schema": "QuerySpec",
                 "measures": {
-                    "functions": ["count", "mean", "sum", "corr"],
+                    "functions": sorted(REGISTRY),
                     "count_column": None,
                     "corr_columns": "x and y must be two distinct allowed measure columns from one dataset",
                 },
@@ -113,13 +117,45 @@ def public_manifest() -> dict[str, Any]:
                     "subject_to_session_audit": True,
                 },
             },
-        ],
-        "planned_tool_classes": [
             {
                 "id": "glm",
-                "status": "planned",
-                "note": "Future fixed-function GLM tool; not executable until present in tools[].",
+                "version": "1",
+                "status": "available",
+                "description": (
+                    "Generalized linear model over allowlisted categorical terms, "
+                    "fitted exclusively from disclosure-checked design-cell "
+                    "aggregates (never row-level data)."),
+                "request_schema": "GLMSpec",
+                "model": {
+                    "families": list(GLM_FAMILIES),
+                    "links": "canonical only (identity / logit / log)",
+                    "responses": {
+                        dataset: {col: sorted(fams) for col, fams
+                                  in sorted(info.get("glm_responses", {}).items())}
+                        for dataset, info in sorted(CATALOGUE.items())
+                    },
+                    "terms": "allowlisted categorical dimensions of the dataset",
+                },
+                "constraints": {
+                    "max_terms": MAX_MODEL_TERMS,
+                    "max_filters": MAX_FILTERS - 1,
+                    "interactions_allowed": False,
+                    "continuous_predictors_allowed": False,
+                    "per_observation_outputs": False,
+                },
+                "release": {
+                    "coefficient_outputs": ["term", "level", "estimate",
+                                            "std_error", "statistic", "p_value"],
+                    "model_outputs": ["family", "link", "response", "n", "n_cells",
+                                      "params", "df_resid", "deviance", "r_squared"],
+                    "cell_table_released": True,
+                    "denied_if_any_design_cell_suppressed": True,
+                    "fitted_from_finalized_aggregates_only": True,
+                    "subject_to_session_audit": True,
+                },
             },
+        ],
+        "planned_tool_classes": [
             {
                 "id": "anova",
                 "status": "planned",
@@ -128,7 +164,7 @@ def public_manifest() -> dict[str, Any]:
             {
                 "id": "regression",
                 "status": "planned",
-                "note": "Future fixed-function regression family; not executable until present in tools[].",
+                "note": "Continuous-predictor regression (moment cells, L2); not executable until present in tools[].",
             },
         ],
     }

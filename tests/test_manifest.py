@@ -32,12 +32,27 @@ def test_only_available_tools_are_executable():
     manifest = public_manifest()
     available = {tool["id"] for tool in manifest["tools"] if tool["status"] == "available"}
     planned = {tool["id"] for tool in manifest["planned_tool_classes"]}
-    assert available == {"aggregate_query"}
-    assert manifest["tools"][0]["version"] == "3"
-    assert manifest["tools"][0]["measures"]["functions"] == ["count", "mean", "sum", "corr"]
+    assert available == {"aggregate_query", "glm"}
+    assert manifest["tools"][0]["version"] == "4"
+    assert manifest["tools"][0]["measures"]["functions"] == [
+        "corr", "count", "mean", "sum", "sum_sq"]
     assert manifest["tools"][0]["release"]["corr_outputs"] == ["value", "p_value", "n"]
     assert not (available & planned)
     assert all(tool["status"] == "planned" for tool in manifest["planned_tool_classes"])
+
+
+def test_glm_tool_contract_is_published():
+    glm = next(t for t in public_manifest()["tools"] if t["id"] == "glm")
+    assert glm["request_schema"] == "GLMSpec"
+    assert glm["model"]["families"] == ["gaussian", "binomial", "poisson"]
+    assert glm["constraints"]["max_terms"] == 3
+    assert glm["constraints"]["per_observation_outputs"] is False
+    assert glm["release"]["denied_if_any_design_cell_suppressed"] is True
+    assert glm["release"]["fitted_from_finalized_aggregates_only"] is True
+    assert glm["release"]["cell_table_released"] is True
+    # responses published per dataset must mirror the catalogue allowlist
+    assert glm["model"]["responses"]["donor_spend"]["purchase_events"] == ["poisson"]
+    assert "glm" not in {t["id"] for t in public_manifest()["planned_tool_classes"]}
 
 
 def test_manifest_says_planner_is_untrusted():
