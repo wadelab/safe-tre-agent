@@ -13,7 +13,6 @@ Security properties:
 
 from __future__ import annotations
 
-import math
 import re
 from dataclasses import dataclass
 from typing import Any
@@ -22,6 +21,7 @@ import duckdb
 import pandas as pd
 
 from .query import CATALOGUE, QuerySpec
+from .stats import pearson_p_value
 
 _IDENT = re.compile(r"^[a-z_][a-z0-9_]*$")
 ROW_CAP = 10_000          # backstop against pathological cross-products
@@ -105,72 +105,6 @@ class SQLPlan:
 
 
 _FILTER_OPS = {"==", "!=", "<", "<=", ">", ">=", "in"}
-_BETA_EPS = 3e-14
-_BETA_FPMIN = 1e-300
-_BETA_MAX_ITER = 200
-
-
-def _betacf(a: float, b: float, x: float) -> float:
-    """Continued fraction for the incomplete beta function."""
-    qab = a + b
-    qap = a + 1.0
-    qam = a - 1.0
-    c = 1.0
-    d = 1.0 - qab * x / qap
-    if abs(d) < _BETA_FPMIN:
-        d = _BETA_FPMIN
-    d = 1.0 / d
-    h = d
-    for m in range(1, _BETA_MAX_ITER + 1):
-        m2 = 2 * m
-        aa = m * (b - m) * x / ((qam + m2) * (a + m2))
-        d = 1.0 + aa * d
-        if abs(d) < _BETA_FPMIN:
-            d = _BETA_FPMIN
-        c = 1.0 + aa / c
-        if abs(c) < _BETA_FPMIN:
-            c = _BETA_FPMIN
-        d = 1.0 / d
-        h *= d * c
-        aa = -(a + m) * (qab + m) * x / ((a + m2) * (qap + m2))
-        d = 1.0 + aa * d
-        if abs(d) < _BETA_FPMIN:
-            d = _BETA_FPMIN
-        c = 1.0 + aa / c
-        if abs(c) < _BETA_FPMIN:
-            c = _BETA_FPMIN
-        d = 1.0 / d
-        delta = d * c
-        h *= delta
-        if abs(delta - 1.0) < _BETA_EPS:
-            break
-    return h
-
-
-def _regularized_beta(x: float, a: float, b: float) -> float:
-    if x <= 0.0:
-        return 0.0
-    if x >= 1.0:
-        return 1.0
-    bt = math.exp(
-        math.lgamma(a + b) - math.lgamma(a) - math.lgamma(b)
-        + a * math.log(x) + b * math.log1p(-x)
-    )
-    if x < (a + 1.0) / (a + b + 2.0):
-        return bt * _betacf(a, b, x) / a
-    return 1.0 - bt * _betacf(b, a, 1.0 - x) / b
-
-
-def _pearson_p_value(r: float, n: int) -> float:
-    """Two-sided p-value for Pearson r using Student's t distribution."""
-    if n < 3 or not math.isfinite(r):
-        return float("nan")
-    abs_r = min(abs(r), 1.0)
-    if abs_r >= 1.0:
-        return 0.0
-    df = n - 2
-    p = _regularized_beta(1.0 - abs_r * abs_r, df / 2.0, 0.5)
-    return max(0.0, min(1.0, p))
 
 
 def _where_triples(filters) -> tuple[str, tuple[Any, ...]]:
@@ -368,78 +302,6 @@ def compile_donor_count_query(spec: QuerySpec) -> SQLPlan:
     )
 
 
-def _dim_value_set(universe: set, predicates: list) -> set:
-    """The set of a dimension's values selected by a list of (op, value) predicates."""
-    s = set(universe)
-    for op, value in predicates:
-        if op == "==":
-            s &= {value}
-        elif op == "!=":
-            s -= {value}
-        elif op == "in":
-            s &= set(value)
-        elif op == "<":
-            s = {u for u in s if u < value}
-        elif op == "<=":
-            s = {u for u in s if u <= value}
-        elif op == ">":
-            s = {u for u in s if u > value}
-        elif op == ">=":
-            s = {u for u in s if u >= value}
-    return s
-
-
-ALLOW_SENTINEL = 10 ** 9
-
-
-def simulatable_cohort_bound(marginals: dict, dataset: str,
-                             filters_a: tuple, filters_b: tuple) -> int:
-    """A simulatable upper bound on |A △ B|, from published donor marginals only.
-
-    The session auditor must not decide releases from the live donor sets, or the
-    refusal itself leaks (Kenthapadi–Mishra–Nissim, *simulatable auditing*, 2005).
-    This decides from `marginals` — a donor-frequency table per (dataset, dim,
-    value) that is itself disclosure-safe metadata — so an analyst holding the
-    same public marginals could reproduce every decision, and a refusal reveals
-    nothing new.
-
-    For two cohorts that differ on exactly one dimension, the whole-population
-    donor marginal of the differing values is an *upper* bound on the symmetric
-    difference. So a denial (bound < threshold) is always sound, and this catches
-    the canonical attack: isolating a globally-rare category by adding or
-    removing one predicate ("exclude age 69", "exclude sex X").
-
-    Being an upper bound, it does NOT catch differencing that isolates a small
-    group through the *interaction* of a common category with an otherwise-narrow
-    cohort (e.g. the over-50s within one small region): the marginal is then
-    large even though the real symmetric difference is small. That residual is
-    the price of simulatability; it is largely covered by the per-cell donor
-    threshold (a narrow cohort's cells are suppressed anyway) and fully by a DP
-    accountant. Cohorts differing on more than one dimension return a sentinel
-    that never denies and rely on the query-budget and total-delta checks.
-    """
-    dmap = marginals.get(dataset, {})
-
-    def by_dim(filters: tuple) -> dict:
-        grouped: dict = {}
-        for column, op, value in filters:
-            grouped.setdefault(column, []).append((op, value))
-        return grouped
-
-    a, b = by_dim(filters_a), by_dim(filters_b)
-    differing = []
-    for dim in set(a) | set(b):
-        universe = set(dmap.get(dim, {}))
-        sa = _dim_value_set(universe, a.get(dim, []))
-        sb = _dim_value_set(universe, b.get(dim, []))
-        if sa != sb:
-            differing.append((dim, sa ^ sb))
-    if len(differing) != 1:
-        return ALLOW_SENTINEL
-    dim, symdiff_values = differing[0]
-    return sum(dmap[dim].get(v, 0) for v in symdiff_values)
-
-
 class QueryEngine:
     def __init__(self, tables: dict[str, pd.DataFrame]):
         self.con = duckdb.connect(database=":memory:")
@@ -461,7 +323,7 @@ class QueryEngine:
         elif spec.measure.fn == "corr":
             result["value"] = result["value"].round(4)
             p_values = [
-                _pearson_p_value(float(r), int(n))
+                pearson_p_value(float(r), int(n))
                 for r, n in zip(result["value"], result["n"], strict=True)
             ]
             result.insert(result.columns.get_loc("value") + 1, "p_value", p_values)
@@ -520,7 +382,7 @@ class QueryEngine:
         the internal unit views. This is a donor-frequency table — itself
         releasable under the threshold rule — and it is the only data the session
         auditor's differencing decision depends on, which is what makes that
-        decision *simulatable* (see `simulatable_cohort_bound`). Computed once
+        decision *simulatable* (see `disclosure.simulatable_cohort_bound`). Computed once
         and cached. Only the < threshold comparison is used downstream, so a
         production build can publish the sparse-flagged, rounded version.
         """

@@ -29,6 +29,7 @@ dev = [
     "pytest>=8.0",
     "hypothesis>=6.100",
     "matplotlib>=3.7",  # write-up figure
+    "scipy>=1.11",      # cross-validates the stdlib-only safetre.stats numerics
     "bandit>=1.7",      # security linter (SAST)
     "pip-audit>=2.7",   # dependency vulnerability audit
 ]

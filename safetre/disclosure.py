@@ -217,6 +217,79 @@ class DisclosurePolicy:
         return self._finalize(df), "release", findings
 
 
+def _dim_value_set(universe: set, predicates: list) -> set:
+    """The set of a dimension's values selected by a list of (op, value) predicates."""
+    s = set(universe)
+    for op, value in predicates:
+        if op == "==":
+            s &= {value}
+        elif op == "!=":
+            s -= {value}
+        elif op == "in":
+            s &= set(value)
+        elif op == "<":
+            s = {u for u in s if u < value}
+        elif op == "<=":
+            s = {u for u in s if u <= value}
+        elif op == ">":
+            s = {u for u in s if u > value}
+        elif op == ">=":
+            s = {u for u in s if u >= value}
+    return s
+
+
+ALLOW_SENTINEL = 10 ** 9
+
+
+def simulatable_cohort_bound(marginals: dict, dataset: str,
+                             filters_a: tuple, filters_b: tuple) -> int:
+    """A simulatable upper bound on |A △ B|, from published donor marginals only.
+
+    The session auditor must not decide releases from the live donor sets, or the
+    refusal itself leaks (Kenthapadi–Mishra–Nissim, *simulatable auditing*, 2005).
+    This decides from `marginals` — a donor-frequency table per (dataset, dim,
+    value) that is itself disclosure-safe metadata (see
+    `engine.QueryEngine.marginal_donor_counts`) — so an analyst holding the
+    same public marginals could reproduce every decision, and a refusal reveals
+    nothing new.
+
+    For two cohorts that differ on exactly one dimension, the whole-population
+    donor marginal of the differing values is an *upper* bound on the symmetric
+    difference. So a denial (bound < threshold) is always sound, and this catches
+    the canonical attack: isolating a globally-rare category by adding or
+    removing one predicate ("exclude age 69", "exclude sex X").
+
+    Being an upper bound, it does NOT catch differencing that isolates a small
+    group through the *interaction* of a common category with an otherwise-narrow
+    cohort (e.g. the over-50s within one small region): the marginal is then
+    large even though the real symmetric difference is small. That residual is
+    the price of simulatability; it is largely covered by the per-cell donor
+    threshold (a narrow cohort's cells are suppressed anyway) and fully by a DP
+    accountant. Cohorts differing on more than one dimension return a sentinel
+    that never denies and rely on the query-budget and total-delta checks.
+    """
+    dmap = marginals.get(dataset, {})
+
+    def by_dim(filters: tuple) -> dict:
+        grouped: dict = {}
+        for column, op, value in filters:
+            grouped.setdefault(column, []).append((op, value))
+        return grouped
+
+    a, b = by_dim(filters_a), by_dim(filters_b)
+    differing = []
+    for dim in set(a) | set(b):
+        universe = set(dmap.get(dim, {}))
+        sa = _dim_value_set(universe, a.get(dim, []))
+        sb = _dim_value_set(universe, b.get(dim, []))
+        if sa != sb:
+            differing.append((dim, sa ^ sb))
+    if len(differing) != 1:
+        return ALLOW_SENTINEL
+    dim, symdiff_values = differing[0]
+    return sum(dmap[dim].get(v, 0) for v in symdiff_values)
+
+
 @dataclass
 class SessionAuditor:
     """Tracks released aggregates to catch differencing/triangulation.
@@ -281,7 +354,7 @@ class SessionAuditor:
         cohorts. The caller injects a *simulatable* bound computed from published
         donor marginals, not the live donor sets. The refusal reveals only the one
         bit "too similar to a prior release", not the numeric bound (see
-        engine.simulatable_cohort_bound and docs/security.md on simulatability).
+        `simulatable_cohort_bound` above and docs/security.md on simulatability).
         Cost is bounded by the session budget: at most `budget` prior cohorts.
         """
         for prev_dataset, prev_filters in self._cohorts:

@@ -7,7 +7,8 @@ from pydantic import ValidationError
 from safetre import synth
 from safetre.audit import AuditLog
 from safetre.disclosure import DisclosurePolicy, SessionAuditor
-from safetre.engine import QueryEngine, _pearson_p_value
+from safetre.engine import QueryEngine
+from safetre.stats import pearson_p_value
 from safetre.planner import MockPlanner
 from safetre.query import Filter, Measure, QuerySpec
 from safetre.service import QueryService
@@ -187,9 +188,9 @@ def test_service_suppresses_cell_with_many_rows_but_few_donors(tables):
 
 
 def test_pearson_p_value_bounds():
-    assert _pearson_p_value(0.0, 20) == pytest.approx(1.0)
-    assert _pearson_p_value(1.0, 20) == pytest.approx(0.0)
-    assert _pearson_p_value(-1.0, 20) == pytest.approx(0.0)
+    assert pearson_p_value(0.0, 20) == pytest.approx(1.0)
+    assert pearson_p_value(1.0, 20) == pytest.approx(0.0)
+    assert pearson_p_value(-1.0, 20) == pytest.approx(0.0)
 
 
 def test_cohort_size_and_symdiff(tables):
@@ -315,7 +316,7 @@ class _ScriptedPlanner:
 
 
 def test_simulatable_cohort_bound(tables):
-    from safetre.engine import ALLOW_SENTINEL, simulatable_cohort_bound
+    from safetre.disclosure import ALLOW_SENTINEL, simulatable_cohort_bound
     marg = QueryEngine(tables).marginal_donor_counts()
     n_ni = int((tables["donors"]["region"] == "Northern Ireland").sum())
 

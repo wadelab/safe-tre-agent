@@ -95,7 +95,7 @@ construction.
 
 **Status: implemented (round 2h).** The auditor now decides from a published
 donor-frequency table (`engine.marginal_donor_counts`) via a pure bound function
-(`engine.simulatable_cohort_bound`); the service no longer calls the live
+(`disclosure.simulatable_cohort_bound`); the service no longer calls the live
 `cohort_symdiff` on the decision path. For two cohorts differing on one
 dimension, the whole-population marginal of the differing values is an upper
 bound on the symmetric difference, so a denial is sound and the refusal is

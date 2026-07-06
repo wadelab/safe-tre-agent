@@ -13,7 +13,8 @@ from pydantic import ValidationError
 
 from . import disclosure as D
 from .analyst import vet_request
-from .engine import QueryEngine, simulatable_cohort_bound
+from .disclosure import simulatable_cohort_bound
+from .engine import QueryEngine
 from .query import QuerySpec
 
 
@@ -85,7 +86,7 @@ class QueryService:
         # The bound is computed from PUBLISHED donor marginals, not the live
         # donor sets, so the deny/allow decision is simulatable — an analyst with
         # the same public marginals could reproduce it, and a refusal leaks
-        # nothing (see engine.simulatable_cohort_bound).
+        # nothing (see disclosure.simulatable_cohort_bound).
         cohort = spec.normalized_filters()
         marginals = self.engine.marginal_donor_counts()
         audit_findings += auditor.observe_cohort(
