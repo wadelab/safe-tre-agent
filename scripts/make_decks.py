@@ -210,17 +210,24 @@ def build_overview(shots: str, out: str) -> None:
                "‘Wellbeing per donor’ is rejected at validation; no data table is rendered.",
                os.path.join(shots, "denied.png"), accent=RGBColor(0xD4, 0x35, 0x1C))
 
+    bullets_slide(prs, "Statistical models, same guarantee (new)", [
+        "GLMs (gaussian / logistic / Poisson) now run behind the gateway as registered procedures.",
+        "Cells-first: a model is fitted ONLY from disclosure-vetted cell tables — never rows.",
+        "If any design cell would be suppressed, the whole model is refused, loudly.",
+        "Every release ships the vetted cell table it was fitted from: the analyst can reproduce it.",
+    ], accent=GREEN)
+
     bullets_slide(prs, "Evidence", [
-        "Red-team: 8/8 attacks blocked with the gateway on; 4/10 leak row-level data with it off.",
-        "Specification: 13 requirements, 18 prohibitions, each traced to code and a test.",
-        "Planner evaluation: the local model plans usefully (67% accepted) but rarely refuses —",
+        "Red-team: 17/17 attacks blocked with the gateway on; 7/20 leak row-level data with it off.",
+        "Specification: 16 requirements, 22 prohibitions, each traced to code and a test.",
+        "Planner evaluation: the local model plans usefully but rarely refuses —",
         "   so refusal must come from the boundary, not the model.",
-        "233+ tests, red-team, strict docs build and pa11y all run in CI.",
+        "360+ tests, red-team, an Alloy model check, strict docs build and pa11y all run in CI.",
     ])
 
     bullets_slide(prs, "What’s next", [
         "1. Integrate ACRO for production-grade statistical disclosure control.",
-        "2. Machine-check the specification’s prohibitions over the finite query space.",
+        "2. Extend the machine-checked model from the GLM path to the full query boundary.",
         "3. A differential-privacy accountant to close the simulatability residual.",
         "4. Cross-session and cross-user lineage.",
     ], accent=GREEN)
@@ -263,7 +270,7 @@ def build_technical(shots: str, out: str) -> None:
 
     bullets_slide(prs, "The QuerySpec boundary", [
         "A finite catalogue: 3 datasets, typed dimensions and measures, bounded group-by/filters.",
-        "Measures: count, mean, sum, Pearson correlation (with p-value and n) — nothing else.",
+        "Registered procedures only: count, mean, sum, sum of squares, Pearson correlation.",
         "Direct identifiers, free text and raw timestamps are in no allowlist, so no valid query names them.",
         "The query space is finite and enumerable — which is what makes it testable and provable.",
     ], accent=GREEN)
@@ -273,6 +280,14 @@ def build_technical(shots: str, out: str) -> None:
         "Dominance (p%-rule) for sums and means; leave-one-out influence for correlations.",
         "Primary and complementary suppression so a margin cannot reconstruct a suppressed cell.",
         "Fail closed: an unresolved safety statistic is treated as unsafe and suppressed.",
+    ], accent=GREEN)
+
+    bullets_slide(prs, "Models behind the same gateway (GLM, new)", [
+        "GLMs (gaussian / logistic / Poisson over categorical terms) fit ONLY on gateway-vetted cell tables.",
+        "Any suppressed design cell denies the whole model — no merging, no dropping, no silent repair.",
+        "A release carries the vetted cell table: refitting from it reproduces the coefficients bit-for-bit.",
+        "So the disclosure claim is inherited from the gateway — not re-argued per statistic.",
+        "Machine-checked: exhaustive 718-point skeleton, refit-equality meta-test, Alloy model in CI.",
     ], accent=GREEN)
 
     bullets_slide(prs, "Simulatable session auditing", [
@@ -287,9 +302,10 @@ def build_technical(shots: str, out: str) -> None:
                os.path.join(shots, "denied.png"), accent=RED)
 
     bullets_slide(prs, "Verification", [
-        "Normative specification: 13 requirements, 18 prohibitions, each traced to code and a test.",
-        "Property-based tests sample the query space; exhaustive enumeration checks the skeleton.",
-        "Red-team harness replays 10 scenarios, gateway off vs on — a CI gate.",
+        "Normative specification: 16 requirements, 22 prohibitions, each traced to code and a test.",
+        "Property-based tests sample the query space; exhaustive enumeration checks both skeletons.",
+        "Red-team harness replays 20 scenarios, gateway off vs on — a CI gate.",
+        "A bounded Alloy model (generated from the committed skeleton) checks P19/P21/P4 in CI.",
         "Strict docs build and pa11y (WCAG 2.2 AA) also run in CI.",
     ])
 
