@@ -20,9 +20,9 @@ from typing import Any
 import duckdb
 import pandas as pd
 
+from .procedures import get_procedure
 from .query import CATALOGUE, QuerySpec
 from .schema import declared_domain
-from .stats import pearson_p_value
 
 _IDENT = re.compile(r"^[a-z_][a-z0-9_]*$")
 ROW_CAP = 10_000          # backstop against pathological cross-products
@@ -141,9 +141,8 @@ def _uses_internal_source(spec: QuerySpec) -> bool:
     internal_measures = set(cat.get("internal_measures", set()))
     if any(f.column in internal_filters for f in spec.filters):
         return True
-    if spec.measure.fn == "corr":
-        return bool({spec.measure.x, spec.measure.y} & internal_measures)
-    return False
+    touched = get_procedure(spec.measure.fn).measure_columns(spec.measure)
+    return bool(set(touched) & internal_measures)
 
 
 def _source_view(spec: QuerySpec) -> str:
@@ -151,24 +150,16 @@ def _source_view(spec: QuerySpec) -> str:
 
 
 def compile_query(spec: QuerySpec) -> SQLPlan:
-    """Compile a validated QuerySpec into the public read-only aggregate SQL."""
-    extra: tuple[str, ...] = ()
-    select = [_ident(g) for g in spec.group_by]
-    if spec.measure.fn == "count":
-        # A count's payload IS the row count, released as `n` alone. It used to
-        # ride along duplicated as `COUNT(*) AS value`, which the gateway does
-        # not recognise as a count column — so the exact count left beside the
-        # rounded one, defeating count rounding entirely (hardening #16).
-        pass
-    elif spec.measure.fn in ("mean", "sum"):
-        # fn is a Literal allowlist; column is allowlist- and regex-validated
-        select.append(f"{spec.measure.fn.upper()}({_ident(spec.measure.column)}) AS value")
-    else:
-        x = _ident(spec.measure.x)
-        y = _ident(spec.measure.y)
-        extra = (f"{x} IS NOT NULL", f"{y} IS NOT NULL")
-        select.append(f"CORR({x}, {y}) AS value")
-    select.append("COUNT(*) AS n")
+    """Compile a validated QuerySpec into the public read-only aggregate SQL.
+
+    The registered procedure supplies only its aggregate SELECT fragments and
+    NOT-NULL guards (O2); the SafeSQL *shape* — one SELECT over one declared
+    view, bound parameters only, `ORDER BY n DESC LIMIT` cap — is fixed here,
+    so no procedure can deviate from it.
+    """
+    proc = get_procedure(spec.measure.fn)
+    fragments, extra = proc.select_exprs(spec.measure)
+    select = [_ident(g) for g in spec.group_by] + fragments + ["COUNT(*) AS n"]
 
     where, params = _where(spec, extra)
     source = _source_view(spec)
@@ -176,11 +167,10 @@ def compile_query(spec: QuerySpec) -> SQLPlan:
     if spec.group_by:
         sql += " GROUP BY " + ", ".join(_ident(g) for g in spec.group_by)
     sql += f" ORDER BY n DESC LIMIT {ROW_CAP}"
-    payload = ("n",) if spec.measure.fn == "count" else ("value", "n")
     return SQLPlan(
         sql=sql,
         params=params,
-        output_columns=tuple(spec.group_by) + payload,
+        output_columns=tuple(spec.group_by) + proc.payload_columns(spec.measure),
         source_view=source,
     )
 
@@ -284,10 +274,10 @@ def compile_influence_query(spec: QuerySpec) -> SQLPlan:
     )
 
 
-def _corr_not_null(spec: QuerySpec) -> tuple[str, ...]:
-    if spec.measure.fn != "corr":
-        return ()
-    return (f"{_ident(spec.measure.x)} IS NOT NULL", f"{_ident(spec.measure.y)} IS NOT NULL")
+def _measure_guards(spec: QuerySpec) -> tuple[str, ...]:
+    """The procedure's NOT-NULL guard clauses (e.g. corr's operand guards), so
+    internal safety queries see exactly the rows the public query saw."""
+    return get_procedure(spec.measure.fn).select_exprs(spec.measure)[1]
 
 
 def compile_donor_count_query(spec: QuerySpec) -> SQLPlan:
@@ -301,7 +291,7 @@ def compile_donor_count_query(spec: QuerySpec) -> SQLPlan:
     enforce the threshold on donors. The count is a disclosure helper and is
     dropped before release.
     """
-    where, params = _where(spec, _corr_not_null(spec))
+    where, params = _where(spec, _measure_guards(spec))
     unit = _ident(f"_{spec.dataset}_u")
     gsel = ", ".join(_ident(g) for g in spec.group_by)
     gpre = (gsel + ", ") if spec.group_by else ""
@@ -329,56 +319,45 @@ class QueryEngine:
         self._marginals: dict | None = None
 
     def run(self, spec: QuerySpec) -> pd.DataFrame:
+        proc = get_procedure(spec.measure.fn)
         plan = compile_query(spec)
         result = self.con.execute(plan.sql, plan.params).df()
+        result = proc.postprocess(result, spec)
 
-        if spec.measure.fn in ("mean", "sum"):
-            result["value"] = result["value"].round(2)
-            result = self._attach_dominance(spec, compile_dominance_query(spec), result)
-        elif spec.measure.fn == "corr":
-            result["value"] = result["value"].round(4)
-            p_values = [
-                pearson_p_value(float(r), int(n))
-                for r, n in zip(result["value"], result["n"], strict=True)
-            ]
-            result.insert(result.columns.get_loc("value") + 1, "p_value", p_values)
-            result["p_value"] = result["p_value"].round(3)
-            result = self._attach_influence(spec, compile_influence_query(spec), result)
+        # every procedure that reads individual values attaches its declared
+        # influence witness (O3) — dominance for sums/means, leave-one-out for
+        # corr — which the gateway suppresses on and drops before release.
+        for witness in proc.witness_plans(spec):
+            result = self._attach_witness(spec, witness.plan, witness.column, result)
 
         # every result carries an internal distinct-donor count so the gateway
         # enforces the frequency threshold on individuals, not rows.
         result = self._attach_donor_count(spec, compile_donor_count_query(spec), result)
         return result
 
-    def _attach_dominance(self, spec: QuerySpec, plan: SQLPlan, result: pd.DataFrame):
-        """Largest single donor's contribution / cell total, per group.
+    def _attach_witness(self, spec: QuerySpec, plan: SQLPlan, column: str,
+                        result: pd.DataFrame) -> pd.DataFrame:
+        """Merge an internal safety-witness column onto the result, per group.
 
-        A missing/unresolved dominance is filled with +inf, not 0.0: an unresolved
-        safety check must fail **closed** (be suppressed), never default to "safe".
+        A missing/unresolved witness value is filled with +inf, not 0.0: an
+        unresolved safety check must fail **closed** (be suppressed), never
+        default to "safe". (For corr this covers e.g. every leave-one-out
+        dropping below the 3-row floor.)
         """
-        dom = self.con.execute(plan.sql, plan.params).df()
+        witness = self.con.execute(plan.sql, plan.params).df()
         if spec.group_by:
-            result = result.merge(dom, on=spec.group_by, how="left")
+            result = result.merge(witness, on=spec.group_by, how="left")
         else:
-            result = result.assign(dominance=(dom["dominance"].iloc[0]
-                                              if len(dom) else float("inf")))
-        result["dominance"] = result["dominance"].fillna(float("inf"))
+            result = result.assign(**{column: (witness[column].iloc[0]
+                                               if len(witness) else float("inf"))})
+        result[column] = result[column].fillna(float("inf"))
         return result
+
+    def _attach_dominance(self, spec: QuerySpec, plan: SQLPlan, result: pd.DataFrame):
+        return self._attach_witness(spec, plan, "dominance", result)
 
     def _attach_influence(self, spec: QuerySpec, plan: SQLPlan, result: pd.DataFrame):
-        """Max single-donor leave-one-out |Δr| per group (for corr cells).
-
-        Filled with +inf when unresolved (e.g. every leave-one-out drops below the
-        3-row floor) so an uncomputed influence is suppressed, not released.
-        """
-        inf = self.con.execute(plan.sql, plan.params).df()
-        if spec.group_by:
-            result = result.merge(inf, on=spec.group_by, how="left")
-        else:
-            result = result.assign(influence=(inf["influence"].iloc[0]
-                                             if len(inf) else float("inf")))
-        result["influence"] = result["influence"].fillna(float("inf"))
-        return result
+        return self._attach_witness(spec, plan, "influence", result)
 
     def _attach_donor_count(self, spec: QuerySpec, plan: SQLPlan, result: pd.DataFrame):
         """Distinct donors per cell (internal); a missing cell means zero donors."""

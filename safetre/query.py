@@ -101,33 +101,16 @@ class QuerySpec(BaseModel):
 
     @model_validator(mode="after")
     def _check_allowlist(self):
+        # late import: procedures type-imports Measure/QuerySpec from here
+        from .procedures import get_procedure
+
         cat = CATALOGUE[self.dataset]
         dims = cat["dims"]
-        measures = cat["measures"]
         internal_filters = cat.get("internal_filters", {})
-        internal_measures = cat.get("internal_measures", set())
-        corr_measures = measures | internal_measures
 
-        # measure
-        if self.measure.fn == "count":
-            if self.measure.column is not None or self.measure.x is not None or self.measure.y is not None:
-                raise ValueError("count takes no column")
-        elif self.measure.fn in ("mean", "sum"):
-            if self.measure.x is not None or self.measure.y is not None:
-                raise ValueError(f"{self.measure.fn} takes one column, not x/y")
-            if self.measure.column not in measures:
-                raise ValueError(
-                    f"measure column {self.measure.column!r} not allowed for "
-                    f"dataset {self.dataset!r} (allowed: {sorted(measures)})")
-        elif self.measure.fn == "corr":
-            if self.measure.column is not None:
-                raise ValueError("corr takes x and y, not column")
-            if self.measure.x not in corr_measures or self.measure.y not in corr_measures:
-                raise ValueError(
-                    f"corr x/y must be approved analysis measure columns for dataset "
-                    f"{self.dataset!r} (allowed: {sorted(corr_measures)})")
-            if self.measure.x == self.measure.y:
-                raise ValueError("corr requires two distinct measure columns")
+        # measure: the registered procedure owns its admissibility check (O1);
+        # an unregistered fn fails loudly here even if the Literal grows (R14)
+        get_procedure(self.measure.fn).validate_measure(self.measure, cat, self.dataset)
 
         # group-by must be allowlisted dimensions
         for g in self.group_by:

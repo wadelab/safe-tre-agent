@@ -29,6 +29,7 @@ from safetre.disclosure import (
     COUNT_COLUMNS, ROUND_BASE, DisclosurePolicy, leak_detector,
 )
 from safetre.engine import ROW_CAP, QueryEngine, compile_query
+from safetre.procedures import REGISTRY
 from safetre.query import CATALOGUE, Measure, QuerySpec
 from safetre.schema import identifier_columns, sensitive_columns
 
@@ -74,6 +75,35 @@ def test_every_supported_fn_has_a_declared_obligation():
         f"{SUPPORTED_FNS - set(PROCEDURES)}; "
         f"stale obligations: {set(PROCEDURES) - SUPPORTED_FNS}"
     )
+
+
+def test_registry_is_the_schema_and_matches_declared_obligations():
+    # R14: the registry is the sole dispatch point, so it must cover exactly
+    # the schema's fns, and each procedure's self-declared obligation must
+    # match the one declared (independently) in this suite.
+    assert set(REGISTRY) == SUPPORTED_FNS
+    for fn, obligation in PROCEDURES.items():
+        proc = REGISTRY[fn]
+        assert proc.fn == fn
+        assert proc.reads_individual_values == obligation["reads_individual_values"]
+        assert proc.influence_control == obligation["influence_control"]
+
+
+@pytest.mark.parametrize("fn", sorted(PROCEDURES))
+def test_procedure_declares_a_complete_output_contract(fn):
+    # R14: every released payload column must carry a declared disclosure
+    # class — the gateway's treatment of an output is declared, not inferred
+    # from column names (the gap behind hardening #25).
+    proc = REGISTRY[fn]
+    spec = _representative_spec(fn, group_by=["region"])
+    contract = proc.output_contract(spec.measure)
+    for column in proc.payload_columns(spec.measure):
+        assert column in contract, f"{fn}: payload column {column!r} unclassified"
+    assert all(v in {"cell_key", "count", "magnitude", "statistic", "p_value"}
+               for v in contract.values())
+    # frequency payloads must be declared as counts so rounding covers them
+    if fn == "count":
+        assert contract["n"] == "count"
 
 
 @pytest.mark.parametrize("fn", sorted(PROCEDURES))

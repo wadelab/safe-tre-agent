@@ -122,10 +122,17 @@ The refactor is mechanical and behaviour-preserving; its value is that the
 to register a procedure that reads individual values without providing an
 `influence_plan`, because the type says so and the pipeline calls it.
 
-> **Status.** This registry refactor is proposed, not yet done — it touches
-> boundary files and should land as a reviewed PR. The obligation it encodes is
-> already enforced *from outside* by the conformance suite below, so the safety
-> property holds today; the refactor makes it structural rather than tested.
+> **Status.** Implemented in `safetre/procedures.py` (a CODEOWNERS boundary
+> file), with one deliberate refinement over the sketch above: a procedure
+> supplies only its aggregate *select-expression fragments* and witness plans —
+> the proven SafeSQL shape (single SELECT over one declared view, bound
+> parameters, `ORDER BY n DESC LIMIT` cap) stays centralised in
+> `engine.compile_query`, so a procedure cannot deviate from the shape, only
+> inject `_ident`-checked expressions. Each procedure also declares an **output
+> contract** (released columns with disclosure classes — see spec R14) and a
+> finite skeleton export (`measure_configs`). The conformance suite below still
+> enforces the obligations *from outside*, and now additionally cross-checks
+> its declarations against the registry's.
 
 ### 3.2 The conformance suite (implemented — the executable first step)
 

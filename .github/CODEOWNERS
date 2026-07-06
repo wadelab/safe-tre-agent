@@ -6,6 +6,7 @@
 
 /safetre/query.py          @wadelab
 /safetre/engine.py         @wadelab
+/safetre/procedures.py     @wadelab
 /safetre/disclosure.py     @wadelab
 /safetre/audit.py          @wadelab
 /safetre_web/identity.py   @wadelab
