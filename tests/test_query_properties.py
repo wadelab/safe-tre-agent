@@ -72,7 +72,7 @@ def valid_queryspec_dicts(draw) -> dict:
     dims = sorted(CATALOGUE[dataset]["dims"])
     measures = sorted(CATALOGUE[dataset]["measures"])
     corr_measures = sorted(CATALOGUE[dataset]["measures"] | CATALOGUE[dataset].get("internal_measures", set()))
-    fn = draw(st.sampled_from(["count", "mean", "sum", "corr"]))
+    fn = draw(st.sampled_from(["count", "mean", "sum", "sum_sq", "corr"]))
     if fn == "count":
         measure = {"fn": fn}
     elif fn == "corr":
@@ -184,10 +184,10 @@ def test_compiled_public_sql_has_safe_shape(raw):
 
 @given(valid_queryspec_dicts())
 @settings(max_examples=200, deadline=None)
-def test_dominance_sql_is_internal_and_only_for_sum_or_mean(raw):
+def test_dominance_sql_is_internal_and_only_for_donor_additive(raw):
     spec = QuerySpec(**raw)
 
-    if spec.measure.fn not in ("mean", "sum"):
+    if spec.measure.fn not in ("mean", "sum", "sum_sq"):
         with pytest.raises(ValueError):
             compile_dominance_query(spec)
         return

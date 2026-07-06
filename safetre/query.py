@@ -63,7 +63,7 @@ MAX_IN_VALUES = 50      # cap `in` lists to bound query cost (DoS)
 
 class Measure(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    fn: Literal["count", "mean", "sum", "corr"]
+    fn: Literal["count", "mean", "sum", "sum_sq", "corr"]
     column: str | None = None
     x: str | None = None
     y: str | None = None

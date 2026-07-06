@@ -39,10 +39,11 @@ from safetre.schema import identifier_columns, sensitive_columns
 # influence_control: the internal helper column that bounds single-donor
 #   influence and MUST be dropped before release (None if not applicable).
 PROCEDURES = {
-    "count": {"reads_individual_values": False, "influence_control": None},
-    "mean":  {"reads_individual_values": True,  "influence_control": "dominance"},
-    "sum":   {"reads_individual_values": True,  "influence_control": "dominance"},
-    "corr":  {"reads_individual_values": True,  "influence_control": "influence"},
+    "count":  {"reads_individual_values": False, "influence_control": None},
+    "mean":   {"reads_individual_values": True,  "influence_control": "dominance"},
+    "sum":    {"reads_individual_values": True,  "influence_control": "dominance"},
+    "sum_sq": {"reads_individual_values": True,  "influence_control": "dominance"},
+    "corr":   {"reads_individual_values": True,  "influence_control": "influence"},
 }
 
 SUPPORTED_FNS = set(get_args(Measure.model_fields["fn"].annotation))

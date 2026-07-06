@@ -43,6 +43,7 @@ def _measure_configs(dataset):
     for m in measures:
         yield {"fn": "mean", "column": m}
         yield {"fn": "sum", "column": m}
+        yield {"fn": "sum_sq", "column": m}
     for x, y in itertools.combinations(corr_pool, 2):
         yield {"fn": "corr", "x": x, "y": y}
 

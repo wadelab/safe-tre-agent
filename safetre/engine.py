@@ -176,17 +176,20 @@ def compile_query(spec: QuerySpec) -> SQLPlan:
 
 
 def compile_dominance_query(spec: QuerySpec) -> SQLPlan:
-    """Compile the internal donor-level dominance query for sum/mean specs."""
-    if spec.measure.fn not in ("mean", "sum"):
-        raise ValueError("dominance is only defined for mean/sum measures")
+    """Compile the internal donor-level dominance query for donor-additive
+    measures (sum/mean on the raw scale; sum_sq on the squared scale, so the
+    p%-rule bounds the largest contributor's share of the released total)."""
+    if spec.measure.fn not in ("mean", "sum", "sum_sq"):
+        raise ValueError("dominance is only defined for donor-additive measures")
 
     where, params = _where(spec)
     col = _ident(spec.measure.column)
+    contribution = f"{col} * {col}" if spec.measure.fn == "sum_sq" else col
     unit = _ident(f"_{spec.dataset}_u")
     gsel = ", ".join(_ident(g) for g in spec.group_by)
     gpre = (gsel + ", ") if spec.group_by else ""
     inner = (
-        f"SELECT {gpre}donor_id, SUM({col}) AS c FROM {unit}{where} "  # nosec
+        f"SELECT {gpre}donor_id, SUM({contribution}) AS c FROM {unit}{where} "  # nosec
         f"GROUP BY {gpre}donor_id"
     )
     sql = (

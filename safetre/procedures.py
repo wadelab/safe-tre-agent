@@ -188,6 +188,25 @@ class Sum(_ColumnAggregate):
     fn = "sum"
 
 
+class SumSq(_ColumnAggregate):
+    """Sum of squares — the second-moment cell aggregate.
+
+    Exists so a gaussian GLM's dispersion (and, later, L2 moment-cell
+    procedures generalizing `corr`) is computable from *ordinary vetted
+    aggregates*: every underlying model input stays a QuerySpec, inheriting
+    P5–P7, rounding, lineage, and budget literally rather than by analogy.
+    The dominance witness runs on the squared per-donor contribution; for the
+    non-negative squared scale the largest contributor's share is what the
+    p%-rule bounds, exactly as for `sum`.
+    """
+
+    fn = "sum_sq"
+
+    def select_exprs(self, m: Measure) -> tuple[list[str], tuple[str, ...]]:
+        col = _ident(m.column)
+        return [f"SUM({col} * {col}) AS value"], ()
+
+
 class Corr(AggregateProcedure):
     fn = "corr"
     reads_individual_values = True
@@ -240,7 +259,7 @@ class Corr(AggregateProcedure):
 
 
 REGISTRY: dict[str, AggregateProcedure] = {
-    p.fn: p for p in (Count(), Mean(), Sum(), Corr())
+    p.fn: p for p in (Count(), Mean(), Sum(), SumSq(), Corr())
 }
 
 
