@@ -12,7 +12,7 @@ import pandas as pd
 from pydantic import ValidationError
 
 from . import disclosure as D
-from .analyst import vet_request
+from .analyst import check_grouping_coherence, vet_request
 from .disclosure import simulatable_cohort_bound
 from .engine import QueryEngine
 from .query import QuerySpec
@@ -77,6 +77,18 @@ class QueryService:
             return Result("denied", message=f"query rejected: {msg}",
                           spec=raw, findings=f, trace=trace)
         trace.append(f"validation: ok ({spec.measure_key()}, group_by={spec.group_by})")
+
+        # Fidelity gate: the spec validated, but does it answer the question that
+        # was asked? Refuse when the planner grouped by a dimension the request
+        # did not ask for, or asked for a breakdown this dataset cannot provide,
+        # rather than silently returning an answer to a substituted question.
+        gok, gwhy = check_grouping_coherence(request, spec.dataset, spec.group_by)
+        trace.append(f"grouping: {gwhy}")
+        if not gok:
+            f = [D.Finding("high", "grouping_mismatch", gwhy)]
+            record("denied", spec.model_dump(), f, None)
+            return Result("denied", message=gwhy, spec=spec.model_dump(),
+                          findings=f, trace=trace)
 
         df = self.engine.run(spec)
         trace.append(f"engine: {len(df)} aggregate row(s) computed")

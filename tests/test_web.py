@@ -6,6 +6,9 @@ import tempfile
 os.environ.setdefault("SAFETRE_AUDIT_DB", os.path.join(tempfile.mkdtemp(), "audit.db"))
 os.environ.setdefault("SAFETRE_AUDIT_KEY", "web-test-key")
 os.environ.setdefault("SAFETRE_RESTRICTED_CHANNEL", "1")
+# The app now always uses the real LLM planner unless SAFETRE_LLM=mock is set
+# explicitly. These tests have no live model, so pin the deterministic stub.
+os.environ["SAFETRE_LLM"] = "mock"
 
 from fastapi.testclient import TestClient  # noqa: E402
 

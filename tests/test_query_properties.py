@@ -5,17 +5,30 @@ from __future__ import annotations
 import string
 
 import pytest
-from hypothesis import given, settings, strategies as st
+from hypothesis import assume, given, settings, strategies as st
 from pydantic import ValidationError
 
 from safetre import synth
+from safetre.analyst import _dims_mentioned, check_grouping_coherence
 from safetre.disclosure import COUNT_COLUMNS, ROUND_BASE, DisclosurePolicy, leak_detector
 from safetre.engine import ROW_CAP, QueryEngine, compile_dominance_query, compile_query
 from safetre.query import CATALOGUE, CAT_OPS, MAX_FILTERS, MAX_GROUP_BY, NUM_OPS, QuerySpec
 from safetre.schema import identifier_columns, sensitive_columns
+from safetre.service import QueryService
 
 _ASCII_TEXT = string.ascii_letters + string.digits + " _-:;.'\"/()[]{}"
-_ENGINE = QueryEngine(synth.generate(seed=17))
+_TABLES = synth.generate(seed=17)
+_ENGINE = QueryEngine(_TABLES)
+_SERVICE = QueryService(_TABLES)
+
+# A natural-language phrase that unambiguously names each catalogue dimension,
+# for building fuzzed requests to exercise the grouping-fidelity gate.
+_DIM_PHRASE = {
+    "age_band": "age band", "sex": "sex", "region": "region",
+    "income_band": "income band", "device_os": "device os", "genre": "genre",
+    "contains_lootboxes": "lootbox", "price_tier": "price tier",
+    "event_type": "event type", "age_rating": "age rating", "wave": "wave",
+}
 _FORBIDDEN_COLUMNS = sorted(
     identifier_columns()
     | {
@@ -267,3 +280,58 @@ def test_duplicate_group_by_dimensions_are_rejected(dataset):
 
     with pytest.raises(ValidationError):
         QuerySpec(dataset=dataset, measure={"fn": "count"}, group_by=[column, column])
+
+
+# --- fuzzing the grouping-fidelity gate --------------------------------------
+# The planner is untrusted and can propose a validating-but-unfaithful spec
+# (group by a dimension the request never named, or a breakdown the dataset
+# cannot provide). These fuzz the deterministic gate that refuses such specs.
+
+class _FixedPlanner:
+    def __init__(self, spec):
+        self._spec = spec
+
+    def plan(self, request):
+        return self._spec
+
+
+@given(data=st.data())
+@settings(max_examples=200, deadline=None)
+def test_grouping_gate_accepts_faithful_requests(data):
+    dataset = data.draw(st.sampled_from(sorted(CATALOGUE)))
+    dims = sorted(CATALOGUE[dataset]["dims"])
+    k = data.draw(st.integers(min_value=1, max_value=min(MAX_GROUP_BY, len(dims))))
+    chosen = data.draw(st.lists(st.sampled_from(dims), min_size=k, max_size=k, unique=True))
+    request = "mean value by " + " and ".join(_DIM_PHRASE[d] for d in chosen)
+    ok, why = check_grouping_coherence(request, dataset, chosen)
+    assert ok, (request, dataset, chosen, why)
+
+
+@given(data=st.data())
+@settings(max_examples=200, deadline=None)
+def test_grouping_gate_denies_dimension_the_request_never_named(data):
+    dataset = data.draw(st.sampled_from(sorted(CATALOGUE)))
+    dims = sorted(CATALOGUE[dataset]["dims"])
+    requested, grouped = data.draw(
+        st.lists(st.sampled_from(dims), min_size=2, max_size=2, unique=True))
+    request = f"mean value by {_DIM_PHRASE[requested]}"
+    # skip the rare synonym overlap (e.g. "age rating" also names age_band)
+    assume(grouped not in _dims_mentioned(request))
+    ok, why = check_grouping_coherence(request, dataset, [grouped])
+    assert not ok, (request, dataset, grouped)
+
+
+@given(data=st.data())
+@settings(max_examples=60, deadline=None)
+def test_service_denies_hallucinated_grouping_end_to_end(data):
+    dataset = data.draw(st.sampled_from(sorted(CATALOGUE)))
+    dims = sorted(CATALOGUE[dataset]["dims"])
+    requested, grouped = data.draw(
+        st.lists(st.sampled_from(dims), min_size=2, max_size=2, unique=True))
+    request = f"mean value by {_DIM_PHRASE[requested]}"
+    assume(grouped not in _dims_mentioned(request))
+    spec = {"dataset": dataset, "measure": {"fn": "count"}, "group_by": [grouped]}
+    result = _SERVICE.handle(request, _FixedPlanner(spec))
+    assert result.status == "denied"
+    assert result.output is None
+    assert any(f.rule == "grouping_mismatch" for f in result.findings)

@@ -22,7 +22,10 @@ from safetre.analyst import Analyst           # noqa: E402
 from safetre.disclosure import (              # noqa: E402
     DisclosurePolicy, SessionAuditor, leak_detector,
 )
+from safetre.engine import QueryEngine        # noqa: E402
 from safetre.llm import MockLLM               # noqa: E402
+from safetre.query import QuerySpec           # noqa: E402
+from safetre.service import QueryService      # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -53,14 +56,53 @@ def run_guarded(tables, requests):
     return final, status, controls
 
 
+class _ScriptedPlanner:
+    """Replays the pre-baked (untrusted) specs an attack proposes, in order."""
+
+    def __init__(self, specs):
+        self._specs = list(specs)
+
+    def plan(self, request):
+        return self._specs.pop(0)
+
+
+def run_service_unguarded(tables, steps):
+    """What the proposed spec would return with no fidelity/disclosure gate."""
+    engine = QueryEngine(tables)
+    out = None
+    for step in steps:
+        try:
+            out = engine.run(QuerySpec(**step["spec"]))
+        except Exception:                       # noqa: BLE001 - off-guard baseline
+            out = None
+    return out
+
+
+def run_service_guarded(tables, steps):
+    """The production QuerySpec pipeline: request + untrusted planner spec."""
+    svc = QueryService(tables)
+    auditor = SessionAuditor()
+    planner = _ScriptedPlanner([step["spec"] for step in steps])
+    final, status, controls = None, None, set()
+    for step in steps:
+        r = svc.handle(step["request"], planner, auditor=auditor)
+        final, status = r.output, r.status
+        controls.update(f.rule for f in r.findings)
+    return final, status, controls
+
+
 def main():
     tables = synth.load_csvs() if os.path.isdir("data") and os.listdir("data") else synth.generate()
     attacks = yaml.safe_load(open(os.path.join(HERE, "attacks.yaml")))
 
     rows = []
     for atk in attacks:
-        off = leaked(run_unguarded(tables, atk["requests"]))
-        final_on, status_on, controls = run_guarded(tables, atk["requests"])
+        if atk.get("path") == "service":
+            off = leaked(run_service_unguarded(tables, atk["steps"]))
+            final_on, status_on, controls = run_service_guarded(tables, atk["steps"])
+        else:
+            off = leaked(run_unguarded(tables, atk["requests"]))
+            final_on, status_on, controls = run_guarded(tables, atk["requests"])
         on = leaked(final_on)
         expect_block = atk.get("expect_block", True)
         if expect_block:
@@ -79,8 +121,8 @@ def main():
         print(f"{name.ljust(nw)}  {typ:15s}  {str(off):8s}  {status:10s}  "
               f"{controls.ljust(cw)}  {'PASS' if ok else 'FAIL'}")
 
-    n_attacks = sum(1 for r in rows if r[0] != "benign_baseline")
-    blocked = sum(1 for r in rows if r[5] and r[0] != "benign_baseline")
+    n_attacks = sum(1 for r in rows if r[1] != "benign")
+    blocked = sum(1 for r in rows if r[5] and r[1] != "benign")
     leaked_off = sum(1 for r in rows if r[2])
     print(f"\nattacks neutralised with gateway ON : {blocked}/{n_attacks}")
     print(f"row-level leaks with gateway OFF     : {leaked_off}/{len(rows)}")

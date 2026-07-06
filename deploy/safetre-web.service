@@ -14,7 +14,12 @@ Wants=network-online.target
 Type=simple
 WorkingDirectory=/probox/raid/toolbox/git/safe-tre-agent
 Environment=PYTHONPATH=/probox/raid/toolbox/git/safe-tre-agent
-Environment=SAFETRE_LLM=mock
+# Real local model (no data egress). The IPAddress* sandbox below permits only
+# loopback, so this must point at an in-safepod model, not a remote provider.
+# Point BASE_URL/MODEL at your served model; keep it local to preserve no-egress.
+Environment=SAFETRE_LLM=real
+Environment=SAFETRE_LLM_BASE_URL=http://127.0.0.1:8000/v1
+Environment=SAFETRE_LLM_MODEL=local-120b
 Environment=SAFETRE_AUDIT_DB=/var/lib/safetre/audit.db
 Environment=SAFETRE_REQUIRE_IDENTITY=1
 Environment=SAFETRE_RESTRICTED_CHANNEL=1

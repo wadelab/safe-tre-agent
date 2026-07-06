@@ -297,12 +297,88 @@ def test_service_short_aggregate_requests_pass_vetting(tables, req):
 
 @pytest.mark.parametrize("req", [
     "summarise the free-text comments",
-    "report wellbeing per donor",                # planner proposes donor_id -> rejected
+    "report wellbeing per donor",                # per-donor intent -> blocked at vetting
     "give me the row-level records for spenders", # intent vetting
 ])
 def test_service_attacks_denied_no_data(tables, req):
     r = QueryService(tables).handle(req, MockPlanner())
     assert r.status == "denied" and r.output is None
+
+
+@pytest.mark.parametrize("req", [
+    "show mean wellbeing per donor by row",
+    "mean wellbeing per donor",
+    "wellbeing for each donor",
+    "one row per participant",
+    "spend per respondent",
+])
+def test_per_individual_intent_blocked_at_vetting(req):
+    from safetre.analyst import vet_request
+    ok, why = vet_request(req)
+    assert not ok and "intent blocked" in why
+
+
+class _SanitizingPlanner:
+    """A capable planner that drops the disallowed per-donor dimension and
+    'repairs' the request into a permitted overall aggregate — the silent
+    downgrade an online model can perform where the mock proposed donor_id."""
+
+    def plan(self, request):
+        return {"dataset": "wellbeing", "measure": {"fn": "mean", "column": "wemwbs_score"}}
+
+
+def test_row_level_request_denied_not_silently_downgraded(tables):
+    # the user asked for per-donor / row-level output. A planner that quietly
+    # substitutes an overall mean must NOT produce a release: the deterministic
+    # intent gate denies before the planner is ever consulted.
+    r = QueryService(tables).handle("show mean wellbeing per donor by row",
+                                    _SanitizingPlanner())
+    assert r.status == "denied"
+    assert r.output is None
+    assert r.spec is None                              # never reached the planner
+    assert any(f.rule == "intent_block" for f in r.findings)
+
+
+class _FixedSpecPlanner:
+    """A loose planner that always proposes one (validating) spec, standing in
+    for a capable model that 'repairs' a request into a permitted-but-different
+    query."""
+
+    def __init__(self, spec):
+        self._spec = spec
+
+    def plan(self, request):
+        return self._spec
+
+
+def test_grouping_unsupported_breakdown_denied(tables):
+    # 'lootbox' is not a wellbeing dimension. Asked to break wellbeing down by
+    # it, a loose planner substitutes group_by=['age_band']; the fidelity gate
+    # refuses rather than answer a different question.
+    planner = _FixedSpecPlanner(
+        {"dataset": "wellbeing", "measure": {"fn": "mean", "column": "wemwbs_score"},
+         "group_by": ["age_band"]})
+    r = QueryService(tables).handle("show mean wellbeing per lootbox", planner)
+    assert r.status == "denied" and r.output is None
+    assert any(f.rule == "grouping_mismatch" for f in r.findings)
+    assert "lootbox" in r.message.lower()
+
+
+def test_grouping_substituted_dimension_denied(tables):
+    # asked to break down by region; the planner grouped by age_band instead.
+    planner = _FixedSpecPlanner(
+        {"dataset": "wellbeing", "measure": {"fn": "mean", "column": "wemwbs_score"},
+         "group_by": ["age_band"]})
+    r = QueryService(tables).handle("mean wellbeing by region", planner)
+    assert r.status == "denied" and r.output is None
+    assert any(f.rule == "grouping_mismatch" for f in r.findings)
+
+
+def test_grouping_faithful_request_released(tables):
+    # a request whose grouping matches the proposed spec is unaffected by the gate.
+    r = QueryService(tables).handle("mean spend by age band", MockPlanner())
+    assert r.status in ("released", "redacted")
+    assert not any(f.rule == "grouping_mismatch" for f in r.findings)
 
 
 class _ScriptedPlanner:
@@ -389,7 +465,10 @@ def test_service_lineage_ignores_denied_queries(tables):
         {**spec, "group_by": ["donor_id"]},           # rejected at validation
         spec,
     )
-    first = svc.handle("per-donor sums in London", planner, auditor=auditor)
+    # request text passes vetting; it is the proposed donor_id spec that is
+    # denied at *validation* (the property under test: a validation-denied query
+    # released nothing, so it must not poison later lineage).
+    first = svc.handle("sum spend in London", planner, auditor=auditor)
     second = svc.handle("sum spend by age band in London", planner, auditor=auditor)
     assert first.status == "denied"
     assert second.status in ("released", "redacted")

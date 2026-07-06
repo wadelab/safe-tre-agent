@@ -10,12 +10,14 @@ checks — used by the red-team to measure what the controls actually prevent.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 
 import pandas as pd
 
 from . import disclosure as D
 from .guards import run_in_sandbox, static_check
+from .query import CATALOGUE
 from .schema import schema_for_prompt
 
 SYSTEM_PROMPT = f"""You are a data analyst working INSIDE a Trusted Research Environment.
@@ -38,11 +40,26 @@ Return ONLY the Python code.
 # pre-filter, NOT the security boundary — the QuerySpec allowlist is. Cues are
 # broad paraphrases of "give me the microdata"; the real guarantee is that
 # identifiers/free-text/raw-age are not expressible in a QuerySpec at all.
-BLOCKED_INTENT = ["row-level", "row level", "line level", "line-level",
-                  "individual record", "individual-level", "unit record",
-                  "microdata", "micro-data", "raw row", "raw record",
-                  "raw event", "raw data row", "record-level", "record level",
-                  "deanonymise", "deanonymize", "re-identify", "reidentify"]
+BLOCKED_INTENT = [
+    # microdata / re-identification paraphrases
+    "row-level", "row level", "line level", "line-level",
+    "individual record", "individual-level", "unit record",
+    "microdata", "micro-data", "raw row", "raw record",
+    "raw event", "raw data row", "record-level", "record level",
+    "deanonymise", "deanonymize", "re-identify", "reidentify",
+    # per-individual / one-row-per-subject enumeration. The safe interface only
+    # exposes per-donor results as AGGREGATES over grouped dimensions, never a
+    # row per subject. This is caught deterministically here, BEFORE the planner,
+    # so a capable model cannot quietly "repair" a disclosive request into a
+    # permitted overall aggregate and release that instead — a silent downgrade
+    # in which the user asked for row-level data and got a single number with no
+    # signal their request was refused. Fail loudly instead.
+    "per donor", "per-donor", "per participant", "per-participant",
+    "per respondent", "per-respondent", "per individual", "per-individual",
+    "each donor", "each participant", "each respondent", "each individual",
+    "by row", "one row per", "row per donor", "row per participant",
+    "row per respondent",
+]
 BLOCKED_TEXT_INTENT = [
     "free-text", "free text", "raw text", "verbatim",
     "open-ended", "open ended", "qualitative response",
@@ -88,6 +105,101 @@ def vet_request(request: str) -> tuple[bool, str]:
     if not (has_analysis_cue and has_domain_cue):
         return False, "request is outside the supported aggregate-analysis scope"
     return True, "ok"
+
+
+# Phrases that introduce a grouping/breakdown in a request.
+GROUPING_KEYWORDS = [
+    "broken down by", "break down by", "grouped by", "group by", "split by",
+    "breakdown by", "breakdown of", "for each ", " per ", " by ", " across ",
+]
+
+# Natural-language term -> the catalogue dimension it names. Longer, more
+# specific phrases are matched first so "age band" wins over "age", etc.
+DIMENSION_SYNONYMS = {
+    "age band": "age_band", "age group": "age_band", "age bracket": "age_band",
+    "age range": "age_band", "age": "age_band",
+    "gender": "sex", "sex": "sex",
+    "region": "region", "area": "region", "location": "region",
+    "nation": "region", "country": "region",
+    "income band": "income_band", "income bracket": "income_band",
+    "income": "income_band", "earnings": "income_band", "salary": "income_band",
+    "device os": "device_os", "operating system": "device_os",
+    "device": "device_os", "platform": "device_os", "os": "device_os",
+    "genre": "genre", "game type": "genre",
+    "lootbox": "contains_lootboxes", "lootboxes": "contains_lootboxes",
+    "loot box": "contains_lootboxes", "loot boxes": "contains_lootboxes",
+    "loot-box": "contains_lootboxes", "crate": "contains_lootboxes",
+    "price tier": "price_tier", "price": "price_tier", "pricing": "price_tier",
+    "event type": "event_type",
+    "age rating": "age_rating", "content rating": "age_rating", "pegi": "age_rating",
+    "survey wave": "wave", "wave": "wave", "timepoint": "wave",
+}
+
+
+def _dims_mentioned(text: str) -> set[str]:
+    """Catalogue dimensions named (by synonym, whole-word) anywhere in `text`."""
+    low = text.lower()
+    found = set()
+    for term, dim in DIMENSION_SYNONYMS.items():
+        if re.search(rf"(?<!\w){re.escape(term)}(?:s|es)?(?!\w)", low):
+            found.add(dim)
+    return found
+
+
+def _grouping_clause(request: str) -> str | None:
+    """Text following the last grouping keyword, or None if the request asks
+    for no explicit breakdown."""
+    low = f" {request.lower()} "
+    end = -1
+    for kw in GROUPING_KEYWORDS:
+        idx = low.rfind(kw)
+        if idx != -1:
+            end = max(end, idx + len(kw))
+    return low[end:] if end != -1 else None
+
+
+def check_grouping_coherence(request: str, dataset: str,
+                             group_by: list[str]) -> tuple[bool, str]:
+    """Deterministic request<->spec fidelity check for grouping.
+
+    The untrusted planner can emit a spec that VALIDATES (every group_by dim is
+    on the dataset's allowlist) yet answers a *different* question than the one
+    asked — e.g. "mean wellbeing per lootbox" (lootbox is not a wellbeing
+    dimension) is quietly turned into group_by=['age_band']. Rather than release
+    an answer to a substituted question, refuse. Runs after validation, before
+    the engine, and is independent of the (untrusted) planner.
+
+    Lenient by design: it only fires when the request names a groupable concept,
+    so it does not flag differencing follow-ups ("same, excluding ...") or
+    requests with no explicit breakdown.
+    """
+    dims = CATALOGUE[dataset]["dims"]
+    clause = _grouping_clause(request)
+    if clause is None:
+        return True, "no explicit grouping requested"
+    clause_dims = _dims_mentioned(clause)
+    if not clause_dims:
+        return True, "no recognised grouping dimension in request"
+
+    # Rule A: a requested breakdown this dataset cannot provide.
+    unsupported = sorted(d for d in clause_dims if d not in dims)
+    if unsupported:
+        where = "; ".join(
+            f"{d!r} is available on "
+            f"{', '.join(sorted(ds for ds, i in CATALOGUE.items() if d in i['dims'])) or 'no dataset'}"
+            for d in unsupported)
+        return False, (
+            f"cannot break {dataset!r} down by {', '.join(unsupported)}: {where}. "
+            f"valid breakdowns for {dataset!r}: {', '.join(sorted(dims))}")
+
+    # Rule B: the planner grouped by a dimension the request never mentioned.
+    referenced = _dims_mentioned(request)
+    hallucinated = sorted(g for g in group_by if g not in referenced)
+    if hallucinated:
+        return False, (
+            f"query groups by {', '.join(hallucinated)}, which was not part of the "
+            f"request; valid breakdowns for {dataset!r}: {', '.join(sorted(dims))}")
+    return True, "grouping matches request"
 
 
 def _measure_and_total(df: pd.DataFrame) -> tuple[str, float]:
