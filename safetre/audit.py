@@ -114,13 +114,21 @@ class AuditLog:
         for ts, user, request, spec, status, findings, shape, prev_mac, mac in rows:
             if prev_mac != prev:
                 return False
-            body = {
-                "ts": ts, "user": user, "request": request,
-                "spec": json.loads(spec), "status": status,
-                "findings": json.loads(findings), "output_shape": json.loads(shape),
-                "prev_mac": prev_mac,
-            }
-            if not hmac.compare_digest(self._mac(body), mac):
+            # A tamperer who can write the DB can corrupt a row into malformed
+            # JSON or a non-string MAC. Reconstructing the body must therefore
+            # fail CLOSED: any decode/type error means the row cannot be
+            # authenticated, which is exactly a verification failure (P15) — not
+            # an exception that 500s the /api/audit/verify endpoint.
+            try:
+                body = {
+                    "ts": ts, "user": user, "request": request,
+                    "spec": json.loads(spec), "status": status,
+                    "findings": json.loads(findings), "output_shape": json.loads(shape),
+                    "prev_mac": prev_mac,
+                }
+                if not isinstance(mac, str) or not hmac.compare_digest(self._mac(body), mac):
+                    return False
+            except (ValueError, TypeError):
                 return False
             prev = mac
         if expected_head is not None and not hmac.compare_digest(prev, expected_head):
