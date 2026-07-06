@@ -144,6 +144,35 @@ def shot_slide(prs, title, caption, image, accent=BLUE):
               [(f"[missing screenshot: {os.path.basename(image)}]", 16, GREY, False)])
 
 
+def table_slide(prs, title, headers, rows, accent=BLUE, col_widths=None):
+    s = prs.slides.add_slide(prs.slide_layouts[6])
+    _bg(s, WHITE)
+    _bar(s, accent)
+    _text(s, Inches(0.9), Inches(0.5), Inches(11.5), Inches(1),
+          [(title, 30, INK, True)])
+    n_rows, n_cols = len(rows) + 1, len(headers)
+    gt = s.shapes.add_table(n_rows, n_cols, Inches(0.9), Inches(1.7),
+                            Inches(11.5), Inches(0.4 * n_rows)).table
+    if col_widths:
+        for c, w in enumerate(col_widths):
+            gt.columns[c].width = Inches(w)
+    for c, h in enumerate(headers):
+        cell = gt.cell(0, c)
+        cell.fill.solid(); cell.fill.fore_color.rgb = accent
+        p = cell.text_frame.paragraphs[0]
+        r = p.add_run(); r.text = h
+        r.font.size = Pt(13); r.font.bold = True; r.font.color.rgb = WHITE
+        r.font.name = "Arial"
+    for ri, row in enumerate(rows, start=1):
+        for c, val in enumerate(row):
+            cell = gt.cell(ri, c)
+            cell.fill.solid()
+            cell.fill.fore_color.rgb = WHITE if ri % 2 else PANEL
+            p = cell.text_frame.paragraphs[0]
+            r = p.add_run(); r.text = val
+            r.font.size = Pt(12); r.font.color.rgb = INK; r.font.name = "Arial"
+
+
 # --- decks --------------------------------------------------------------------
 
 def build_overview(shots: str, out: str) -> None:
@@ -200,6 +229,125 @@ def build_overview(shots: str, out: str) -> None:
     print(f"deck -> {out}")
 
 
+AMBER = RGBColor(0xB1, 0x8A, 0x00)
+RED = RGBColor(0xD4, 0x35, 0x1C)
+
+
+def build_technical(shots: str, out: str) -> None:
+    prs = Presentation()
+    prs.slide_width = SLIDE_W
+    prs.slide_height = SLIDE_H
+
+    title_slide(prs, "Safe outputs gateway — technical",
+                "The boundary, the disclosure controls, and how they are verified")
+
+    bullets_slide(prs, "Request lifecycle", [
+        "Natural-language request → intent vetting (defence in depth).",
+        "Planner (untrusted LLM) proposes a QuerySpec — the only executable output.",
+        "Validation: Pydantic allowlist, extra=forbid — reject before running anything.",
+        "Engine: validated spec → parameterised, read-only DuckDB over public views.",
+        "Safe-outputs gateway → session auditor → human-in-the-loop → HMAC-chained log.",
+    ])
+
+    table_slide(prs, "Threat model (selected)",
+                ["#", "Threat", "Control"],
+                [["1", "Arbitrary code / RCE", "model writes no code; only a typed QuerySpec"],
+                 ["2", "SQL injection", "bound parameters; identifiers regex-checked"],
+                 ["3", "Identifier / free-text egress", "absent from every allowlist and view"],
+                 ["4", "Small-cell / dominance", "min donor count, p%-rule, influence bound"],
+                 ["5", "Differencing / triangulation", "simulatable session auditor + budget"],
+                 ["6", "Prompt injection via data", "model can only emit a QuerySpec"],
+                 ["9", "Tamper with the audit record", "HMAC-keyed chain, off-box anchor"],
+                 ["17", "Fail-open suppression", "unresolved check → +inf → suppressed"]],
+                col_widths=[0.7, 4.3, 6.5])
+
+    bullets_slide(prs, "The QuerySpec boundary", [
+        "A finite catalogue: 3 datasets, typed dimensions and measures, bounded group-by/filters.",
+        "Measures: count, mean, sum, Pearson correlation (with p-value and n) — nothing else.",
+        "Direct identifiers, free text and raw timestamps are in no allowlist, so no valid query names them.",
+        "The query space is finite and enumerable — which is what makes it testable and provable.",
+    ], accent=GREEN)
+
+    bullets_slide(prs, "The disclosure gateway", [
+        "Minimum cell size counted over distinct individuals, not rows.",
+        "Dominance (p%-rule) for sums and means; leave-one-out influence for correlations.",
+        "Primary and complementary suppression so a margin cannot reconstruct a suppressed cell.",
+        "Fail closed: an unresolved safety statistic is treated as unsafe and suppressed.",
+    ], accent=GREEN)
+
+    bullets_slide(prs, "Simulatable session auditing", [
+        "Each released cohort is remembered by its normalised filter predicate.",
+        "A new cohort within a small symmetric difference of a prior one is denied (differencing).",
+        "The decision uses only published donor marginals — reproducible by the analyst.",
+        "Refusals carry no numbers; the residual (sub-threshold isolation) is what DP closes.",
+    ], accent=GREEN)
+
+    shot_slide(prs, "The pipeline, made legible",
+               "Each gateway stage reports a text status; a denial stops the request and renders no data.",
+               os.path.join(shots, "denied.png"), accent=RED)
+
+    bullets_slide(prs, "Verification", [
+        "Normative specification: 13 requirements, 18 prohibitions, each traced to code and a test.",
+        "Property-based tests sample the query space; exhaustive enumeration checks the skeleton.",
+        "Red-team harness replays 10 scenarios, gateway off vs on — a CI gate.",
+        "Strict docs build and pa11y (WCAG 2.2 AA) also run in CI.",
+    ])
+
+    prs.save(out)
+    print(f"deck -> {out}")
+
+
+def build_best_practice(shots: str, out: str) -> None:
+    prs = Presentation()
+    prs.slide_width = SLIDE_W
+    prs.slide_height = SLIDE_H
+
+    title_slide(prs, "Safe outputs gateway — best practice",
+                "Conformance with TRE and AI-security guidance")
+
+    table_slide(prs, "Mapped to the Five Safes",
+                ["Safe", "In this system"],
+                [["Safe Projects", "intent vetting rejects blocked purposes pre-planning"],
+                 ["Safe People", "identity allowlist behind the restricted channel"],
+                 ["Safe Settings", "local model in the safepod; read-only engine, no egress"],
+                 ["Safe Data", "synthetic; identifiers and free text never queryable"],
+                 ["Safe Outputs", "disclosure gateway + session auditor + human review"]],
+                col_widths=[3.0, 8.5])
+
+    bullets_slide(prs, "Where it already follows best practice", [
+        "The untrusted-model boundary is the published Action-Selector pattern (Beurer-Kellner 2025).",
+        "The posture matches OWASP LLM Top-10: validation, least privilege, output checks, red-team.",
+        "The SDC rules mirror the ACRO check set and the SDC Handbook.",
+        "A frequency threshold of 10 is at or above the handbook's 3–5 and OpenSAFELY's redact-≤7.",
+        "Governance is honest: synthetic-only, HMAC-chained audit, stated limitations.",
+    ], accent=GREEN)
+
+    table_slide(prs, "Known deviations, stated openly",
+                ["#", "Deviation", "Status"],
+                [["D1", "Auditor simulatability", "fixed — decides from published marginals"],
+                 ["D2", "Cumulative disclosure bound", "roadmap — differential-privacy accountant"],
+                 ["D5", "One checker vs two humans", "human-in-the-loop present; reviewer queue planned"],
+                 ["D6", "Influence threshold unvalidated", "documented; ACRO integration supersedes"]],
+                col_widths=[0.7, 5.3, 5.5], accent=AMBER)
+
+    bullets_slide(prs, "Grounded in existing infrastructure", [
+        "OpenSAFELY (Bennett Institute, Oxford) — the code-to-data, outputs-checked TRE model.",
+        "ACRO / SACRO (DARE UK) — the target production-grade disclosure-control dependency.",
+        "Five Safes — the governance framing.",
+        "This project adds the agent-aware layer above that established practice.",
+    ])
+
+    bullets_slide(prs, "What not to overclaim", [
+        "These are statistical disclosure controls, not differential privacy — no epsilon budget yet.",
+        "The auditor does not defend across sessions or colluding users.",
+        "The disclosure engine is a stand-in for ACRO.",
+        "The legacy code-execution path is a red-team narrative, not a secure sandbox.",
+    ], accent=RED)
+
+    prs.save(out)
+    print(f"deck -> {out}")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--out-dir", default=os.path.join(ROOT, "artifacts"))
@@ -218,6 +366,10 @@ def main() -> int:
     os.makedirs(args.out_dir, exist_ok=True)
     build_overview(args.shots_dir,
                    os.path.join(args.out_dir, "safe-tre-agent-overview.pptx"))
+    build_technical(args.shots_dir,
+                    os.path.join(args.out_dir, "safe-tre-agent-technical.pptx"))
+    build_best_practice(args.shots_dir,
+                        os.path.join(args.out_dir, "safe-tre-agent-best-practice.pptx"))
     return 0
 
 
