@@ -33,19 +33,31 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from pydantic import ValidationError               # noqa: E402
 
 from safetre.planner import LLMPlanner, MockPlanner  # noqa: E402
-from safetre.query import QuerySpec                # noqa: E402
+from safetre.procedures import model_registry      # noqa: E402
+from safetre.query import GLMSpec, QuerySpec       # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 
-def canonical(spec: QuerySpec) -> tuple:
-    """Order-insensitive identity of a spec: dataset, measure, grouping, cohort."""
+def canonical(spec) -> tuple:
+    """Order-insensitive identity of a spec: dataset, measure/model, grouping
+    or terms, cohort. Works for QuerySpec and model specs alike."""
+    if isinstance(spec, GLMSpec):
+        return (spec.dataset, spec.model_key(), frozenset(spec.terms),
+                spec.normalized_filters())
     return (spec.dataset, spec.measure_key(), frozenset(spec.group_by),
             spec.normalized_filters())
 
 
-def try_spec(raw: dict) -> QuerySpec | None:
+def try_spec(raw: dict):
+    """Validate an untrusted proposal exactly as the service would: by the
+    `tool` key into a model spec, else as a QuerySpec. None if invalid."""
+    if not isinstance(raw, dict):
+        return None
     try:
+        if "tool" in raw:
+            proc = model_registry().get(raw.get("tool"))
+            return proc.validate(raw) if proc is not None else None
         return QuerySpec(**raw)
     except (ValidationError, TypeError):
         return None
@@ -76,7 +88,8 @@ def score_item(item: dict, planner) -> dict:
     out["valid"] = True
 
     got = canonical(spec)
-    refs = [QuerySpec(**e) for e in item["expect"]]
+    refs = [try_spec(e) for e in item["expect"]]
+    assert all(r is not None for r in refs), f"corpus item {item['id']} has an invalid reference spec"
     ref_canon = [canonical(r) for r in refs]
     out["primary"] = got == ref_canon[0]
     out["accepted"] = got in ref_canon

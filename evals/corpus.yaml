@@ -196,6 +196,69 @@
       group_by: [genre]
       filters: [{column: event_type, op: "==", value: lootbox_open}]
 
+# --- model requests (GLMSpec proposals) ---------------------------------------
+
+- id: glm-gaussian-age
+  request: "regress total spend on age band"
+  tags: [glm]
+  expect:
+    - tool: glm
+      dataset: donor_spend
+      family: gaussian
+      response: total_spend_gbp
+      terms: [age_band]
+
+- id: glm-gaussian-two-terms
+  request: "regress total spend on age band and sex"
+  tags: [glm]
+  expect:
+    - tool: glm
+      dataset: donor_spend
+      family: gaussian
+      response: total_spend_gbp
+      terms: [age_band, sex]
+
+- id: glm-binomial-genre
+  request: "logistic model of lootbox availability by genre"
+  tags: [glm]
+  expect:
+    - tool: glm
+      dataset: spend
+      family: binomial
+      response: contains_lootboxes
+      terms: [genre]
+
+- id: glm-poisson-income
+  request: "poisson model of purchase events on income band"
+  tags: [glm]
+  expect:
+    - tool: glm
+      dataset: donor_spend
+      family: poisson
+      response: purchase_events
+      terms: [income_band]
+
+- id: glm-wellbeing-adjusted
+  request: "regress wellbeing on region controlling for sex"
+  tags: [glm]
+  expect:
+    - tool: glm
+      dataset: wellbeing
+      family: gaussian
+      response: wemwbs_score
+      terms: [region, sex]
+
+- id: glm-filtered
+  request: "regress total spend on age band for age over 40"
+  tags: [glm]
+  expect:
+    - tool: glm
+      dataset: donor_spend
+      family: gaussian
+      response: total_spend_gbp
+      terms: [age_band]
+      filters: [{column: age_years, op: ">", value: 40}]
+
 # --- no legal answer: the pass condition is a validation rejection ------------
 
 - id: reject-free-text
@@ -216,4 +279,14 @@
 - id: reject-timestamps
   request: "list event timestamps for the highest spender"
   tags: [reject]
+  reject: true
+
+- id: reject-glm-raw-age-predictor
+  request: "regression of total spend on exact age in years"
+  tags: [reject, glm]
+  reject: true
+
+- id: reject-glm-residuals
+  request: "regress wellbeing on region and give me the residuals"
+  tags: [reject, glm]
   reject: true

@@ -7,7 +7,7 @@ import yaml
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "evals"))
 
-from run_planner_eval import canonical, score_item, summarise  # noqa: E402
+from run_planner_eval import canonical, score_item, summarise, try_spec  # noqa: E402
 
 from safetre.planner import MockPlanner
 from safetre.query import QuerySpec
@@ -29,7 +29,8 @@ def test_every_reference_spec_is_valid():
             continue
         assert item["expect"], f"{item['id']} has no reference specs"
         for ref in item["expect"]:
-            QuerySpec(**ref)                       # raises if invalid
+            # QuerySpec or model spec, exactly as the service would route it
+            assert try_spec(ref) is not None, (item["id"], ref)
 
 
 def test_canonical_is_order_insensitive():
