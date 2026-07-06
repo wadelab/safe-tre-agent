@@ -158,7 +158,10 @@ def test_compiled_public_sql_has_safe_shape(raw):
     plan = compile_query(spec)
 
     assert plan.source_view in {spec.dataset, f"_{spec.dataset}_u"}
-    assert plan.output_columns == tuple(spec.group_by) + ("value", "n")
+    # a count's payload is the (rounded) `n` itself; an unrounded duplicate
+    # `value` column would bypass count rounding (hardening #25)
+    payload = ("n",) if spec.measure.fn == "count" else ("value", "n")
+    assert plan.output_columns == tuple(spec.group_by) + payload
     assert plan.sql.startswith("SELECT ")
     assert f' FROM "{plan.source_view}"' in plan.sql
     assert plan.sql.endswith(f" ORDER BY n DESC LIMIT {ROW_CAP}")

@@ -3,6 +3,22 @@
 A dated record of self-red-team findings and the fixes applied. New findings get
 appended; the table is the quick index, the notes below give detail.
 
+## 2026-07-06 — round 4 (found while planning the GLM extension)
+
+| # | Finding | Sev | Status | Fix | Where |
+|---|---|---|---|---|---|
+| 25 | **Count rounding was a no-op.** `compile_query` emitted the cell count twice — rounded as `n` and exact as `COUNT(*) AS value`, a name the gateway's count-column vocabulary does not match — so every released count query carried the exact count beside the rounded one | **High** | **Fixed** | a count's payload is `n` alone; the duplicate `value` column is gone; regression test asserts every numeric column of a released count query is rounded | `safetre/engine.py`, `tests/test_hardening.py` |
+
+### Notes
+
+**#25 count rounding.** Found by inspection while planning the statistical-procedure
+framework, and exactly the class of gap that framework's *output contract* obligation
+(each procedure declares its released columns and their disclosure classes, rather
+than the gateway inferring them from column names) is designed to close. The
+donor-count threshold (`n_donors`) was unaffected — sub-threshold cells were still
+suppressed — so the leak was the exact count of released (≥ threshold) cells, which
+count rounding exists to blur.
+
 ## 2026-07-06 — round 3 (external red-team of the stateful controls)
 
 A full review focused on the components *around* the QuerySpec boundary — the

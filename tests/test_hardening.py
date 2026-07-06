@@ -61,6 +61,24 @@ def test_config_rejects_nonsense(tmp_path, monkeypatch):
         load_policy_config(str(tmp_path / "missing.yaml"))
 
 
+# --- #25: counts release once, rounded — no exact duplicate --------------------
+
+def test_count_release_has_no_unrounded_duplicate(tables):
+    # hardening #25: counts used to ride along twice — rounded as `n` and exact
+    # as `value` (a name the gateway does not recognise as a count column), so
+    # the exact cell count left beside the rounded one. A released count query
+    # must carry the count once, rounded.
+    policy = DisclosurePolicy()
+    q = QuerySpec(dataset="spend", measure=Measure(fn="count"), group_by=["age_band"])
+    df = QueryEngine(tables).run(q)
+    released, action, _ = policy.apply(df)
+    assert action in ("release", "redacted")
+    assert "value" not in released.columns
+    numeric = released.select_dtypes("number")
+    assert not numeric.empty                                   # `n` is present
+    assert (numeric % policy.round_base == 0).all().all()      # everything rounded
+
+
 # --- A3: leak_detector honours the configured threshold ------------------------
 
 def test_leak_detector_uses_passed_threshold():

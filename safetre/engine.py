@@ -155,7 +155,11 @@ def compile_query(spec: QuerySpec) -> SQLPlan:
     extra: tuple[str, ...] = ()
     select = [_ident(g) for g in spec.group_by]
     if spec.measure.fn == "count":
-        select.append("COUNT(*) AS value")
+        # A count's payload IS the row count, released as `n` alone. It used to
+        # ride along duplicated as `COUNT(*) AS value`, which the gateway does
+        # not recognise as a count column — so the exact count left beside the
+        # rounded one, defeating count rounding entirely (hardening #16).
+        pass
     elif spec.measure.fn in ("mean", "sum"):
         # fn is a Literal allowlist; column is allowlist- and regex-validated
         select.append(f"{spec.measure.fn.upper()}({_ident(spec.measure.column)}) AS value")
@@ -172,10 +176,11 @@ def compile_query(spec: QuerySpec) -> SQLPlan:
     if spec.group_by:
         sql += " GROUP BY " + ", ".join(_ident(g) for g in spec.group_by)
     sql += f" ORDER BY n DESC LIMIT {ROW_CAP}"
+    payload = ("n",) if spec.measure.fn == "count" else ("value", "n")
     return SQLPlan(
         sql=sql,
         params=params,
-        output_columns=tuple(spec.group_by) + ("value", "n"),
+        output_columns=tuple(spec.group_by) + payload,
         source_view=source,
     )
 
