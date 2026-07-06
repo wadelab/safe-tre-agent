@@ -59,6 +59,13 @@ BLOCKED_INTENT = [
     "each donor", "each participant", "each respondent", "each individual",
     "by row", "one row per", "row per donor", "row per participant",
     "row per respondent",
+    # per-observation model outputs (P20). Not expressible in a GLMSpec —
+    # models release only the fixed coefficient/summary/cell-table frames —
+    # but refuse the *request* loudly rather than answer a different question.
+    "residual", "residuals", "fitted value", "fitted values", "leverage",
+    "cook's distance", "cooks distance", "dfbeta", "influence score",
+    "per-donor prediction", "per donor prediction", "predicted value for each",
+    "prediction for each",
 ]
 BLOCKED_TEXT_INTENT = [
     "free-text", "free text", "raw text", "verbatim",
@@ -72,6 +79,10 @@ ANALYSIS_CUES = [
     "group", "grouped", " by ", " per ", "per-", "excluding", "exclude",
     "filter", "where", "compare", "comparison", "breakdown", "outlier", "top",
     "correlat", "relationship", "association",
+    # model requests (R15)
+    "regress", "regression", "model", "predict", "glm", "logistic", "poisson",
+    "as a function of", "controlling for", "adjusted for", "adjusting for",
+    "effect of", "odds",
 ]
 DOMAIN_CUES = [
     "spend", "spender", "spenders", "purchase", "purchases", "lootbox",
@@ -238,6 +249,109 @@ def check_grouping_coherence(request: str, dataset: str,
             f"query groups by {', '.join(hallucinated)}, which was not part of the "
             f"request; valid breakdowns for {dataset!r}: {', '.join(sorted(dims))}")
     return True, "grouping matches request"
+
+
+# Phrases that introduce a model's predictor list in a request.
+MODEL_TERM_KEYWORDS = [
+    " as a function of ", " controlling for ", " adjusted for ",
+    " adjusting for ", " regressed on ", " on ", " against ", " by ",
+]
+
+# Natural-language response name -> the model response column it names, per
+# dataset. Deliberately minimal and unambiguous: the check is lenient and only
+# fires when the request names a response we can recognise.
+RESPONSE_SYNONYMS = {
+    "spend": {
+        "in-game currency": "ingame_currency", "ingame currency": "ingame_currency",
+        "spend": "amount_gbp", "amount": "amount_gbp",
+    },
+    "donor_spend": {
+        "total spend": "total_spend_gbp", "spend": "total_spend_gbp",
+        "purchase events": "purchase_events", "purchases": "purchase_events",
+        "lootbox events": "lootbox_events", "lootbox opens": "lootbox_events",
+    },
+    "wellbeing": {
+        "wellbeing": "wemwbs_score", "wemwbs": "wemwbs_score",
+        "pgsi": "pgsi_score", "problem gambling": "pgsi_score",
+        "gambling": "pgsi_score",
+        "igds": "igds_score", "gaming disorder": "igds_score",
+        "self-reported spend": "monthly_spend_selfreport",
+        "self reported spend": "monthly_spend_selfreport",
+    },
+}
+
+
+def _term_clause(request: str) -> str | None:
+    """The predictor clause of a model request: text from the first term
+    keyword up to the next filter keyword (or end)."""
+    low = f" {request.lower()} "
+    start = None
+    for kw in MODEL_TERM_KEYWORDS:
+        idx = low.find(kw)
+        if idx != -1 and (start is None or idx < start[0]):
+            start = (idx, idx + len(kw))
+    if start is None:
+        return None
+    clause = low[start[1]:]
+    cut = len(clause)
+    for term in FILTER_TERMINATORS:
+        t = clause.find(term)
+        if t != -1:
+            cut = min(cut, t)
+    return clause[:cut]
+
+
+def check_term_coherence(request: str, dataset: str, response: str,
+                         terms: list[str]) -> tuple[bool, str]:
+    """Deterministic request<->spec fidelity check for model terms — the model
+    analogue of `check_grouping_coherence`, applying the same three rules to
+    the predictor list (A: unsupported, B: hallucinated, C: dropped), plus a
+    response check against a minimal synonym map. Lenient by design: rules
+    only fire on concepts the request recognisably names.
+    """
+    dims = CATALOGUE[dataset]["dims"]
+    low = f" {request.lower()} "
+
+    # Response: if the request names a response we recognise for this dataset
+    # and the spec models a different one, that answers a substituted question.
+    named = [col for phrase, col in
+             sorted(RESPONSE_SYNONYMS.get(dataset, {}).items(),
+                    key=lambda kv: len(kv[0]), reverse=True)
+             if f" {phrase} " in low or f" {phrase}," in low]
+    if named and response not in named:
+        return False, (
+            f"request asks to model {named[0]!r} but the query models "
+            f"{response!r} instead")
+
+    clause = _term_clause(request)
+    clause_dims = _dims_mentioned(clause) if clause is not None else set()
+    referenced = _dims_mentioned(request)
+    modelled = set(terms)
+
+    # Rule A: a predictor this dataset cannot provide.
+    unsupported = sorted(d for d in clause_dims if d not in dims)
+    if unsupported:
+        return False, (
+            f"cannot model {dataset!r} with predictor(s) {', '.join(unsupported)}; "
+            f"valid predictors: {', '.join(sorted(dims))}")
+
+    # Rule C: a requested, valid predictor the planner silently dropped.
+    missing = sorted(d for d in clause_dims if d in dims and d not in modelled
+                     and d != response)
+    if missing:
+        return False, (
+            f"request asks to model with {', '.join(missing)}, but the query "
+            f"{'omits it' if len(missing) == 1 else 'omits them'} "
+            f"(terms={sorted(modelled)})")
+
+    # Rule B: a predictor the request never mentioned.
+    hallucinated = sorted(t for t in modelled if t not in referenced)
+    if hallucinated:
+        return False, (
+            f"query models with {', '.join(hallucinated)}, which was not part "
+            f"of the request; valid predictors for {dataset!r}: "
+            f"{', '.join(sorted(dims))}")
+    return True, "model terms match request"
 
 
 def _measure_and_total(df: pd.DataFrame) -> tuple[str, float]:

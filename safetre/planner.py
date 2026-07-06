@@ -102,8 +102,59 @@ class MockPlanner:
                 filters.append({"column": "age_years", "op": op, "value": int(value)})
         return filters
 
+    @staticmethod
+    def _terms_from_text(u: str, candidates: tuple[tuple[str, str], ...]) -> list[str]:
+        return [dim for dim, cue in candidates if cue in u]
+
+    def _plan_model(self, request: str, u: str) -> dict:
+        """Deterministic GLMSpec proposals for model-shaped requests."""
+        filters = self._filters_from_text(request)
+        if "lootbox" in u or "logistic" in u:
+            terms = self._terms_from_text(u, (("genre", "genre"),
+                                              ("price_tier", "price"),
+                                              ("age_rating", "rating")))
+            return {"tool": "glm", "dataset": "spend", "family": "binomial",
+                    "response": "contains_lootboxes",
+                    "terms": terms or ["genre"], "filters": filters}
+        if "purchase" in u or "poisson" in u:
+            terms = self._terms_from_text(u, (("income_band", "income"),
+                                              ("age_band", "age"),
+                                              ("sex", "sex"),
+                                              ("region", "region"),
+                                              ("device_os", "device")))
+            return {"tool": "glm", "dataset": "donor_spend", "family": "poisson",
+                    "response": "purchase_events",
+                    "terms": terms or ["income_band"], "filters": filters}
+        if any(kw in u for kw in ("wellbeing", "wemwbs", "pgsi", "gambling", "igds")):
+            if "pgsi" in u or "gambling" in u:
+                response = "pgsi_score"
+            elif "igds" in u:
+                response = "igds_score"
+            else:
+                response = "wemwbs_score"
+            terms = self._terms_from_text(u, (("region", "region"),
+                                              ("sex", "sex"),
+                                              ("age_band", "age"),
+                                              ("income_band", "income"),
+                                              ("device_os", "device")))
+            return {"tool": "glm", "dataset": "wellbeing", "family": "gaussian",
+                    "response": response, "terms": terms or ["region"],
+                    "filters": filters}
+        terms = self._terms_from_text(u, (("age_band", "age"),
+                                          ("sex", "sex"),
+                                          ("region", "region"),
+                                          ("income_band", "income"),
+                                          ("device_os", "device")))
+        return {"tool": "glm", "dataset": "donor_spend", "family": "gaussian",
+                "response": "total_spend_gbp",
+                "terms": terms or ["age_band"], "filters": filters}
+
     def plan(self, request: str) -> dict:
         u = request.lower()
+
+        if any(kw in u for kw in ("regress", "as a function of", "logistic",
+                                  "poisson", "controlling for", "glm")):
+            return self._plan_model(request, u)
 
         if "region" in u and "device" in u:                 # over-granular -> small cells
             return {"dataset": "spend",

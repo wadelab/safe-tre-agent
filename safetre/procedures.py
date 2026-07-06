@@ -269,3 +269,60 @@ def get_procedure(fn: str) -> AggregateProcedure:
         return REGISTRY[fn]
     except KeyError:
         raise ValueError(f"no registered procedure for measure fn {fn!r}") from None
+
+
+class ModelProcedure:
+    """Base class for multi-query model procedures (spec R14/R15) — cells-first.
+
+    A model procedure never executes anything itself. It (1) validates the
+    untrusted proposal into a typed spec, (2) *plans* a list of ordinary
+    QuerySpecs — so O2 compilation safety, O3 influence witnesses, and O4
+    lineage identity are inherited from the aggregate registry, literally —
+    and (3) fits from the gateway-FINALIZED tables the service hands it, as a
+    pure function (P21). Any suppressed underlying cell means the service
+    never calls `fit` at all (P19).
+    """
+
+    tool: str
+
+    def validate(self, raw: dict):
+        """Parse + allowlist-check the untrusted proposal (O1). Raises."""
+        raise NotImplementedError
+
+    def plan_aggregates(self, spec) -> list:
+        """The design-cell QuerySpecs whose finalized outputs are the fit's
+        only input. Every element MUST be a valid QuerySpec."""
+        raise NotImplementedError
+
+    def preconditions(self, finalized: dict, spec) -> list[str]:
+        """Estimability refusals, decidable from the finalized tables alone
+        (P22): may name terms, never private quantities."""
+        raise NotImplementedError
+
+    def fit(self, finalized: dict, spec):
+        """Pure fit from finalized tables -> (output_df, artifacts). P21:
+        implementations must not touch the engine, views, or row-level data."""
+        raise NotImplementedError
+
+    def output_contract(self, spec) -> dict[str, dict[str, DisclosureClass]]:
+        """Disclosure classes for every released frame (output + artifacts)."""
+        raise NotImplementedError
+
+    def model_key(self, spec) -> str:
+        raise NotImplementedError
+
+    def cost(self, spec) -> int:
+        """Budget units — one per underlying aggregate (each is individually a
+        differencable release, so each must individually count)."""
+        return len(self.plan_aggregates(spec))
+
+
+MODEL_REGISTRY: dict[str, ModelProcedure] = {}
+
+
+def model_registry() -> dict[str, ModelProcedure]:
+    """The model-procedure registry. Imports the implementations lazily so
+    registration is deterministic without import-order tricks."""
+    from . import glm  # noqa: F401  (self-registers on import)
+
+    return MODEL_REGISTRY
