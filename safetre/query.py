@@ -169,7 +169,6 @@ class QuerySpec(BaseModel):
 
         cat = CATALOGUE[self.dataset]
         dims = cat["dims"]
-        internal_filters = cat.get("internal_filters", {})
 
         # measure: the registered procedure owns its admissibility check (O1);
         # an unregistered fn fails loudly here even if the Literal grows (R14)

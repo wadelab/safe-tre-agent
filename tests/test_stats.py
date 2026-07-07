@@ -44,7 +44,7 @@ def test_degenerate_inputs():
 # --- GLM numerics (round 4: cell-table GLMs) ------------------------------------
 
 from safetre.stats import (  # noqa: E402
-    IRLSResult, inv_symmetric, irls_cells, matrix_rank, normal_sf,
+    inv_symmetric, irls_cells, matrix_rank, normal_sf,
     regularized_gamma_q, student_t_sf,
 )
 
@@ -101,8 +101,10 @@ def test_grouped_fit_equals_cells_of_one(family):
     if family == "binomial":
         singles = irls_cells([[1.0, x] for x, _ in rows], [y for _, y in rows],
                              [1.0] * len(rows), family)
-        k0 = sum(y for x, y in rows if x == 0.0); n0 = sum(1 for x, _ in rows if x == 0.0)
-        k1 = sum(y for x, y in rows if x == 1.0); n1 = sum(1 for x, _ in rows if x == 1.0)
+        k0 = sum(y for x, y in rows if x == 0.0)
+        n0 = sum(1 for x, _ in rows if x == 0.0)
+        k1 = sum(y for x, y in rows if x == 1.0)
+        n1 = sum(1 for x, _ in rows if x == 1.0)
         grouped = irls_cells([[1.0, 0.0], [1.0, 1.0]], [k0 / n0, k1 / n1],
                              [float(n0), float(n1)], family)
     else:
@@ -110,8 +112,10 @@ def test_grouped_fit_equals_cells_of_one(family):
         singles = irls_cells([[1.0, x] for x, _ in counts], [y for _, y in counts],
                              [1.0] * len(counts), family,
                              offset=[0.0] * len(counts))
-        t0 = sum(y for x, y in counts if x == 0.0); e0 = sum(1 for x, _ in counts if x == 0.0)
-        t1 = sum(y for x, y in counts if x == 1.0); e1 = sum(1 for x, _ in counts if x == 1.0)
+        t0 = sum(y for x, y in counts if x == 0.0)
+        e0 = sum(1 for x, _ in counts if x == 0.0)
+        t1 = sum(y for x, y in counts if x == 1.0)
+        e1 = sum(1 for x, _ in counts if x == 1.0)
         grouped = irls_cells([[1.0, 0.0], [1.0, 1.0]], [t0, t1], [1.0, 1.0],
                              family, offset=[math.log(e0), math.log(e1)])
     for b_single, b_grouped in zip(singles.beta, grouped.beta):

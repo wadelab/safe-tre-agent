@@ -17,7 +17,7 @@ import re
 import pytest
 
 from safetre import synth
-from safetre.disclosure import DisclosurePolicy, SessionAuditor
+from safetre.disclosure import SessionAuditor
 from safetre.glm import GLMProcedure
 from safetre.planner import MockPlanner
 from safetre.query import GLMSpec, QuerySpec

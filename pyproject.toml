@@ -1,9 +1,26 @@
 [project]
 name = "safe-tre-agent"
-version = "0.1.0"
+version = "0.2.0"
 description = "Safe-outputs gateway for an AI analyst inside a Trusted Research Environment"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Alex Wade", email = "wade@wadelab.net" }]
 requires-python = ">=3.11"
+keywords = [
+    "trusted-research-environment", "statistical-disclosure-control",
+    "safe-outputs", "llm-safety", "sdc", "tre", "glm",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Security",
+]
 dependencies = [
     "pandas>=2.0",
     "numpy>=1.24",
@@ -11,6 +28,14 @@ dependencies = [
     "pydantic>=2.6",   # validated QuerySpec — the security boundary, not optional
     "duckdb>=1.0",     # read-only query engine
 ]
+
+[project.urls]
+Repository = "https://github.com/wadelab/safe-tre-agent"
+Documentation = "https://github.com/wadelab/safe-tre-agent/tree/main/docs"
+Changelog = "https://github.com/wadelab/safe-tre-agent/blob/main/CHANGELOG.md"
+
+[project.scripts]
+safetre-demo = "safetre.cli:main"
 
 [project.optional-dependencies]
 web = [
@@ -33,6 +58,7 @@ dev = [
     "bandit>=1.7",      # security linter (SAST)
     "pip-audit>=2.7",   # dependency vulnerability audit
     "statsmodels>=0.14",  # oracle for the stdlib-only IRLS in safetre.stats (dev-only: the runtime install surface is unchanged)
+    "ruff>=0.6",
 ]
 docs = [
     "mkdocs-material>=9.5",   # optional: `uv run --group docs mkdocs serve`
@@ -51,9 +77,23 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["safetre", "safetre_web"]
 
+[tool.hatch.build.targets.sdist]
+# source distribution = the reviewable research artifact: code, tests, docs,
+# formal model, harnesses. Local tooling config and binary decks stay out.
+exclude = [".agent", "artifacts/*.ppt", "artifacts/*.pptx", "site"]
+
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
 # `slow` marks the exhaustive full-skeleton passes (run with: pytest -m slow)
 markers = ["slow: exhaustive whole-skeleton runs, excluded from the default run"]
 addopts = "-m 'not slow'"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+# defaults (E4/E7/E9 + F) — pyflakes correctness plus gross style; the goal is
+# a zero-findings baseline, not a style rewrite
+select = ["E4", "E7", "E9", "F"]

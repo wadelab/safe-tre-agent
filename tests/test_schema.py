@@ -8,7 +8,6 @@ or hostile content ever reaches it.
 
 import json
 
-import pytest
 from fastapi.testclient import TestClient
 
 from safetre import synth

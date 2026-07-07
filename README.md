@@ -98,6 +98,14 @@ uv run python redteam/run_redteam.py              # gateway OFF vs ON, leakage t
 uv run pytest -q
 ```
 
+Or as an installed package (MIT-licensed; see `CHANGELOG.md` for releases):
+
+```bash
+pip install .            # or: uv build && pip install dist/*.whl  ('.[web]' adds the shell)
+safetre-demo             # scripted tour of the secure pipeline, synthetic data
+safetre-demo "regress total spend on age band"
+```
+
 Use a real local model by setting the generic `SAFETRE_LLM_*` env vars in `.env`
 (see `.env.example`) and `SAFETRE_LLM=real`. Remote model endpoints require an
 explicit synthetic-data-only opt-in.

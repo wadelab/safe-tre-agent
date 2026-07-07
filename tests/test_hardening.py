@@ -18,7 +18,7 @@ import pandas as pd
 import pytest
 
 from safetre import synth
-from safetre.config import PolicyConfig, load_policy_config
+from safetre.config import load_policy_config
 from safetre.disclosure import DisclosurePolicy, SessionAuditor, leak_detector
 from safetre.engine import QueryEngine
 from safetre.query import Measure, QuerySpec

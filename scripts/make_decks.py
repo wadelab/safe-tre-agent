@@ -22,7 +22,7 @@ import urllib.request
 from pptx import Presentation
 from pptx.dml.color import RGBColor
 from pptx.enum.text import PP_ALIGN
-from pptx.util import Emu, Inches, Pt
+from pptx.util import Inches, Pt
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -92,7 +92,8 @@ def _text(slide, left, top, width, height, runs, align=PP_ALIGN.LEFT):
 
 def _bar(slide, colour, height=Inches(0.18)):
     shp = slide.shapes.add_shape(1, 0, 0, SLIDE_W, height)
-    shp.fill.solid(); shp.fill.fore_color.rgb = colour
+    shp.fill.solid()
+    shp.fill.fore_color.rgb = colour
     shp.line.fill.background()
 
 
@@ -158,10 +159,14 @@ def table_slide(prs, title, headers, rows, accent=BLUE, col_widths=None):
             gt.columns[c].width = Inches(w)
     for c, h in enumerate(headers):
         cell = gt.cell(0, c)
-        cell.fill.solid(); cell.fill.fore_color.rgb = accent
+        cell.fill.solid()
+        cell.fill.fore_color.rgb = accent
         p = cell.text_frame.paragraphs[0]
-        r = p.add_run(); r.text = h
-        r.font.size = Pt(13); r.font.bold = True; r.font.color.rgb = WHITE
+        r = p.add_run()
+        r.text = h
+        r.font.size = Pt(13)
+        r.font.bold = True
+        r.font.color.rgb = WHITE
         r.font.name = "Arial"
     for ri, row in enumerate(rows, start=1):
         for c, val in enumerate(row):
@@ -169,8 +174,11 @@ def table_slide(prs, title, headers, rows, accent=BLUE, col_widths=None):
             cell.fill.solid()
             cell.fill.fore_color.rgb = WHITE if ri % 2 else PANEL
             p = cell.text_frame.paragraphs[0]
-            r = p.add_run(); r.text = val
-            r.font.size = Pt(12); r.font.color.rgb = INK; r.font.name = "Arial"
+            r = p.add_run()
+            r.text = val
+            r.font.size = Pt(12)
+            r.font.color.rgb = INK
+            r.font.name = "Arial"
 
 
 # --- decks --------------------------------------------------------------------

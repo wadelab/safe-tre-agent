@@ -1,0 +1,66 @@
+# Changelog
+
+All notable changes to safe-tre-agent. The normative record of safety
+behaviour is [docs/specification.md](docs/specification.md); security findings
+and fixes are in [docs/hardening-log.md](docs/hardening-log.md).
+
+## 0.2.0 — 2026-07-07
+
+The GLM / statistical-procedure-framework round. Plain-language account in
+[docs/elif.md](docs/elif.md).
+
+### Security
+
+- **Fixed a count-rounding bypass (hardening #25):** released count queries
+  carried the exact count in `value` beside the rounded `n`, making base-5
+  count rounding a no-op. Counts now release `n` alone.
+
+### Added
+
+- **Statistical procedures as registered contracts (spec R14).**
+  `safetre/procedures.py` holds the aggregate and model registries; the three
+  former `if fn == …` dispatch sites delegate to it and fail loudly on an
+  unregistered function. Adding a procedure without declared conformance
+  obligations fails the build.
+- **A `glm` tool (spec R15), cells-first.** Gaussian / binomial (logit) /
+  Poisson models over up to three categorical terms, fitted **exclusively
+  from gateway-finalized design-cell aggregates** by a stdlib-only IRLS.
+  Any suppressed design cell denies the whole model (P19); per-observation
+  outputs are not expressible (P20); a release carries the coefficient table,
+  the model block, and the vetted cell table it was fitted from, and
+  `safetre.glm.refit_from_artifact` reproduces the release bit-for-bit (P21).
+  Estimability refusals are decided from the finalized tables alone and name
+  terms, never quantities (P22).
+- **`sum_sq`** as a fifth registered aggregate (second-moment cells; the
+  gaussian dispersion input and the L2 moment-cell groundwork).
+- **Formal layer (spec R16).** The registries export their finite request
+  space (`formal/skeleton.json`); a bounded Alloy model generated from it
+  checks P19/P21 over every vetting outcome and P4-admissibility over the
+  exact catalogue atoms; two pytest sync hops pin code → skeleton → model;
+  a CI `formal` job runs the solver (sha256-pinned Alloy 6.2.0).
+- **Verification:** exhaustive enumeration of all 718 model skeleton points;
+  a reproducibility meta-test (refit-equality, exhaustive at ≤ 2 terms,
+  full skeleton under `pytest -m slow`); AST noninterference checks;
+  statsmodels as a dev-only oracle (row-level fits match to 1e-8); nine new
+  red-team attacks (20 total, all blocked by named controls); GLM items in
+  the planner-eval corpus.
+- **Measured, not asserted:** `scripts/measure_rounding_distortion.py`
+  quantifies the finalized-weights (rounded-count) fitting distortion
+  (`artifacts/rounding_distortion.json`).
+- `safetre-demo` console script (the packaged face of
+  `scripts/demo_query.py`); MIT license; ruff lint baseline.
+
+### Changed
+
+- Manifest v4: `glm` promoted from planned to available; the aggregate tool's
+  function list is derived from the registry; planner prompt carries the
+  GLMSpec shape and examples. Spec amended: R4 reworded; new clauses R14–R16
+  and P19–P22, all Implemented in the traceability table.
+
+## 0.1.0 — 2026-07-06
+
+Initial research prototype: the validated QuerySpec boundary (count / mean /
+sum / Pearson corr), read-only DuckDB engine, ACRO-style disclosure gateway
+with simulatable session auditing, HMAC-chained audit log, GOV.UK-styled demo
+shell, red-team harness, synthetic UK dataset, specification (R1–R13,
+P1–P18), and three rounds of hardening.

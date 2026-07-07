@@ -25,6 +25,8 @@ jobs:
         uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
       - name: Sync (frozen — exactly uv.lock)
         run: uv sync --all-extras --frozen
+      - name: Lint (ruff)
+        run: uv run ruff check safetre safetre_web tests scripts evals redteam formal
       - name: Tests
         run: uv run pytest -q
       - name: Red-team (gateway off vs on)
