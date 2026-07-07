@@ -223,6 +223,8 @@ def build_overview(shots: str, out: str) -> None:
         "Cells-first: a model is fitted ONLY from disclosure-vetted cell tables — never rows.",
         "If any design cell would be suppressed, the whole model is refused, loudly.",
         "Every release ships the vetted cell table it was fitted from: the analyst can reproduce it.",
+        "One-way ANOVA just joined as a second tool — reusing the GLM's vetted cells,",
+        "   adding only its own arithmetic: evidence the extension seam works.",
     ], accent=GREEN)
 
     bullets_slide(prs, "Evidence", [
@@ -290,12 +292,14 @@ def build_technical(shots: str, out: str) -> None:
         "Fail closed: an unresolved safety statistic is treated as unsafe and suppressed.",
     ], accent=GREEN)
 
-    bullets_slide(prs, "Models behind the same gateway (GLM, new)", [
+    bullets_slide(prs, "Models behind the same gateway (GLM + one-way ANOVA)", [
         "GLMs (gaussian / logistic / Poisson over categorical terms) fit ONLY on gateway-vetted cell tables.",
         "Any suppressed design cell denies the whole model — no merging, no dropping, no silent repair.",
         "A release carries the vetted cell table: refitting from it reproduces the coefficients bit-for-bit.",
         "So the disclosure claim is inherited from the gateway — not re-argued per statistic.",
-        "Machine-checked: exhaustive 718-point skeleton, refit-equality meta-test, Alloy model in CI.",
+        "One-way ANOVA is a second tool on the same seam: same vetted mean / sum-of-squares cells,",
+        "   one new stdlib numeric (the F-tail, cross-validated vs scipy), engine/gateway untouched.",
+        "Machine-checked: exhaustive 767-point model skeleton (718 GLM + 49 ANOVA), refit-equality, Alloy in CI.",
     ], accent=GREEN)
 
     bullets_slide(prs, "Simulatable session auditing", [
@@ -432,9 +436,19 @@ def build_elif(shots: str, out: str) -> None:
         "Every procedure is a registered contract: allowed columns, blessed query shape,",
         "safety witnesses (or inheritance), declared outputs, and its finite request space.",
         "Skip an obligation and the BUILD FAILS — a test enumerates and demands each one.",
-        "Then: all 718 model shapes tried exhaustively · random fuzzing · 20 replayed attacks ·",
+        "Then: all 767 model shapes tried exhaustively · random fuzzing · 20 replayed attacks ·",
         "an Alloy solver searches for any way to fit past a blocked cell (it finds none —",
         "and finds the counterexample instantly when we deliberately weaken the rule).",
+    ], accent=GREEN)
+
+    bullets_slide(prs, "The framework in action: adding one-way ANOVA", [
+        "ANOVA asks: do the averages differ across groups? (e.g. does spend differ by age band?)",
+        "We added it WITHOUT touching the safe core — because it needs only the group summaries",
+        "   (each group's average, spread and size) the librarian ALREADY checks and releases.",
+        "So genuinely new was tiny: one formula for the score, one list of which output is which.",
+        "It inherits every rule for free: one too-small group ⇒ the whole test is refused, out loud;",
+        "   and you can redo the test yourself from the table it hands back.",
+        "That is the seam working: a new statistic, no new way to leak.",
     ], accent=GREEN)
 
     bullets_slide(prs, "And one embarrassing thing we found", [
@@ -447,7 +461,7 @@ def build_elif(shots: str, out: str) -> None:
     table_slide(prs, "The numbers",
                 ["What", "Count"],
                 [["Spec clauses", "R1–R16, P1–P22 (7 new this round)"],
-                 ["Model shapes, all machine-checked", "718"],
+                 ["Model shapes, all machine-checked", "767 (718 GLM + 49 ANOVA)"],
                  ["Tests in the default suite", "360+ (plus exhaustive -m slow pass)"],
                  ["Red-team attacks, all blocked by a named control", "20 (9 new)"],
                  ["Solver-checked properties (Alloy, in CI)", "4"],
@@ -509,6 +523,16 @@ def build_guidelines(shots: str, out: str) -> None:
         "Extend EVERY layer: exhaustive enumeration · Hypothesis · oracle · red-team · eval corpus.",
         "Advertise last: manifest + planner prompt bump in ONE isolated, reviewed commit.",
         "Never: per-observation outputs · disclosure logic inside a procedure · silent fn fall-through.",
+    ], accent=GREEN)
+
+    bullets_slide(prs, "Worked example: one-way ANOVA (this release)", [
+        "Test: computable from catalogued aggregates?  YES — it needs only per-group",
+        "   mean, Σ(y²) and n: EXACTLY the gaussian GLM's design cells. So: cells-first, mandatory.",
+        "Plan the same two design-cell QuerySpecs; inherit the gateway, P19/P21/P22, reproducibility.",
+        "New code stayed small: stats.f_sf (F-tail, reusing the incomplete beta — no new dependency),",
+        "   AnovaSpec (typed boundary), AnovaProcedure. engine / disclosure / service: UNTOUCHED.",
+        "Checklist discharged: conformance obligation · skeleton regen (+49 pts) · oracle vs scipy.f_oneway ·",
+        "   noninterference guard · manifest planned→available (v5). Written up: docs/adding-a-statistical-tool.md.",
     ], accent=GREEN)
 
     bullets_slide(prs, "Datasets, columns, thresholds", [
