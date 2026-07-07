@@ -4,6 +4,18 @@ All notable changes to safe-tre-agent. The normative record of safety
 behaviour is [docs/specification.md](docs/specification.md); security findings
 and fixes are in [docs/hardening-log.md](docs/hardening-log.md).
 
+## Unreleased
+
+### Added
+
+- **Literal spec entry (spec R17).** A request that is a single JSON object
+  is taken as the spec itself, bypassing the planner and the
+  natural-language gates (intent vetting, fidelity checks) — every
+  downstream control (validation, budget, gateway, lineage, audit) applies
+  unchanged. Malformed JSON is refused loudly, never handed to the planner
+  as text. Red-team: a benign literal baseline plus a literal small-cell
+  attack pin the path.
+
 ## 0.2.0 — 2026-07-07
 
 The GLM / statistical-procedure-framework round. Plain-language account in

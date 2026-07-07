@@ -6,6 +6,7 @@ request → intent vetting → planner (untrusted) → QuerySpec validation
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 
 import pandas as pd
@@ -17,6 +18,23 @@ from .disclosure import simulatable_cohort_bound
 from .engine import QueryEngine
 from .procedures import model_registry
 from .query import QuerySpec
+
+
+def _literal_spec(request: str) -> dict | None:
+    """A request that is a single JSON object is an analyst-authored spec
+    (R17): it bypasses the planner and the natural-language gates, and is
+    treated as untrusted input by everything downstream, exactly as a
+    planner-proposed spec would be. Returns None for natural-language
+    requests. A request that starts as JSON but does not parse raises —
+    refused loudly, never re-routed to the planner as text.
+    """
+    text = request.strip()
+    if not text.startswith("{"):
+        return None
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"literal spec is not valid JSON: {exc}") from None
 
 
 @dataclass
@@ -49,12 +67,27 @@ class QueryService:
                     findings=[f.__dict__ for f in findings],
                     output_shape=(list(output.shape) if output is not None else None))
 
-        ok, why = vet_request(request)
-        trace.append(f"vetting: {why}")
-        if not ok:
-            f = [D.Finding("high", "intent_block", why)]
+        try:
+            literal = _literal_spec(request)
+        except ValueError as exc:
+            f = [D.Finding("high", "spec_rejected", str(exc))]
+            trace.append(f"literal spec: REJECTED ({exc})")
             record("denied", None, f, None)
-            return Result("denied", message=why, findings=f, trace=trace)
+            return Result("denied", message=f"query rejected: {exc}",
+                          findings=f, trace=trace)
+
+        if literal is None:
+            ok, why = vet_request(request)
+            trace.append(f"vetting: {why}")
+            if not ok:
+                f = [D.Finding("high", "intent_block", why)]
+                record("denied", None, f, None)
+                return Result("denied", message=why, findings=f, trace=trace)
+        else:
+            # R17: no natural-language question, so the NL gates (intent
+            # vetting, fidelity checks) have nothing to check; the typed
+            # validation below is the stronger admissibility gate.
+            trace.append("vetting: literal spec entered by analyst (R17)")
 
         # Budget short-circuit: once the session has spent its query budget, deny
         # before doing planner/engine work at all (bounds cost and the per-session
@@ -67,12 +100,17 @@ class QueryService:
             return Result("denied", message="session query budget exceeded",
                           findings=f, trace=trace)
 
-        raw = planner.plan(request)
+        if literal is not None:
+            raw = literal
+            trace.append("planner: bypassed (literal spec)")
+        else:
+            raw = planner.plan(request)
 
         # model procedures route by the explicit `tool` key; a plain QuerySpec
         # cannot carry one (extra="forbid"), so the dispatch is unambiguous.
         if isinstance(raw, dict) and "tool" in raw:
-            return self._handle_model(request, raw, auditor, trace, record)
+            return self._handle_model(request, raw, auditor, trace, record,
+                                      literal=literal is not None)
         trace.append("planner: QuerySpec proposed (untrusted)")
 
         try:
@@ -91,13 +129,17 @@ class QueryService:
         # was asked? Refuse when the planner grouped by a dimension the request
         # did not ask for, or asked for a breakdown this dataset cannot provide,
         # rather than silently returning an answer to a substituted question.
-        gok, gwhy = check_grouping_coherence(request, spec.dataset, spec.group_by)
-        trace.append(f"grouping: {gwhy}")
-        if not gok:
-            f = [D.Finding("high", "grouping_mismatch", gwhy)]
-            record("denied", spec.model_dump(), f, None)
-            return Result("denied", message=gwhy, spec=spec.model_dump(),
-                          findings=f, trace=trace)
+        # A literal spec IS the question, so there is no fidelity to check (R17).
+        if literal is not None:
+            trace.append("grouping: literal spec — fidelity gate not applicable")
+        else:
+            gok, gwhy = check_grouping_coherence(request, spec.dataset, spec.group_by)
+            trace.append(f"grouping: {gwhy}")
+            if not gok:
+                f = [D.Finding("high", "grouping_mismatch", gwhy)]
+                record("denied", spec.model_dump(), f, None)
+                return Result("denied", message=gwhy, spec=spec.model_dump(),
+                              findings=f, trace=trace)
 
         df = self.engine.run(spec)
         trace.append(f"engine: {len(df)} aggregate row(s) computed")
@@ -150,7 +192,7 @@ class QueryService:
                       findings=findings, trace=trace)
 
     def _handle_model(self, request: str, raw: dict, auditor: D.SessionAuditor,
-                      trace: list[str], record) -> Result:
+                      trace: list[str], record, literal: bool = False) -> Result:
         """Model procedures (R15): plan cell aggregates → vet EACH through the
         standard gateway → fit only when every one releases cleanly.
 
@@ -188,11 +230,15 @@ class QueryService:
                           findings=findings, trace=trace)
 
         # Fidelity gate: does the model answer the question that was asked?
-        cok, cwhy = check_term_coherence(request, spec.dataset,
-                                         spec.response, spec.terms)
-        trace.append(f"terms: {cwhy}")
-        if not cok:
-            return deny([D.Finding("high", "term_mismatch", cwhy)], cwhy)
+        # A literal spec IS the question, so there is no fidelity to check (R17).
+        if literal:
+            trace.append("terms: literal spec — fidelity gate not applicable")
+        else:
+            cok, cwhy = check_term_coherence(request, spec.dataset,
+                                             spec.response, spec.terms)
+            trace.append(f"terms: {cwhy}")
+            if not cok:
+                return deny([D.Finding("high", "term_mismatch", cwhy)], cwhy)
 
         aggregates = proc.plan_aggregates(spec)
         roles = proc.table_roles(spec)

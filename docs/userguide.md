@@ -39,17 +39,38 @@ Good requests are specific about the outcome, grouping, and filters:
 - `correlation between monthly spend self report and wellbeing score`
 - `correlation between age and spend for sex==M in region==London`
 
-The current executable tool is `aggregate_query`: count, mean, sum, and Pearson
-correlation over allowlisted datasets. Correlation is fixed-function: it can only
-use two allowlisted measure columns from the same dataset and returns `value`,
-`p_value`, and `n` after the normal disclosure and session checks. Future tools
-such as GLM, regression, and ANOVA will appear in the manifest only after they
-have fixed schemas and disclosure checks.
+The executable tools are those in the [manifest](tool-manifest.md):
+`aggregate_query` (count, mean, sum, sum of squares, and Pearson correlation
+over allowlisted datasets), `glm`, and `anova`. Correlation is fixed-function:
+it can only use two allowlisted measure columns from the same dataset and
+returns `value`, `p_value`, and `n` after the normal disclosure and session
+checks. New tools appear in the manifest only after they have fixed schemas
+and disclosure checks.
 
 Composite filters such as `sex==M` and `region==London` are compiled as separate
 validated predicates with bound parameters. Raw age can be used inside fixed
 tools such as donor-level age/spend correlation, but it is an internal analysis
 variable only: it cannot be grouped, rendered, or returned.
+
+### Entering a spec directly
+
+If the planner keeps misreading a request — wrong filter values, a dropped
+dimension — you can skip it: a request that is a single JSON object is taken
+as the spec itself (spec R17). For example:
+
+```json
+{"tool": "anova", "dataset": "spend", "response": "amount_gbp",
+ "factor": "region",
+ "filters": [{"column": "region", "op": "in", "value": ["London", "Scotland"]}]}
+```
+
+A literal spec passes through every safety control unchanged — allowlist
+validation, the session budget, the disclosure gateway, lineage, audit. Only
+the natural-language checks (intent vetting and the request↔spec fidelity
+gates) are skipped, because you authored the spec: there is no translation to
+be unfaithful to. Malformed JSON is refused with the parse error; it is never
+passed on to the planner as text. Specs must fit the 500-character request
+limit.
 
 ## Results
 

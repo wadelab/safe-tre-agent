@@ -135,6 +135,17 @@ analyst can reproduce the fit from released data alone.
 data, and CI MUST both check the committed formal model against that export
 (generation drift fails the build) and run the bounded model check.
 
+**R17** — The system MUST accept a literal spec — a request that is a single
+JSON object — in place of a natural-language request, bypassing the planner.
+A literal spec is subject to every downstream control unchanged: typed
+allowlist validation, the session budget, engine caps, the gateway, lineage,
+and audit. Only the natural-language gates — intent vetting and the
+request↔spec fidelity checks — are inapplicable, because the analyst authored
+the spec and there is no translation to be unfaithful to (under A1 the planner
+is untrusted, so an analyst-authored spec introduces no new trust). A request
+that begins as a JSON object but does not parse MUST be rejected loudly; it
+MUST NOT be handed to the planner as text.
+
 ## Prohibitions — what it MUST NOT do
 
 These are the safety invariants. They hold for every request, whatever the
@@ -286,6 +297,7 @@ with a documented limitation.
 | R14 procedure registry | `procedures.py` | `test_procedure_conformance.py` | Implemented |
 | R15 GLM from vetted cells | `glm.py`, `stats.py`, `service.py` | `test_glm.py`, `test_formal_glm_enumeration.py`, `test_glm_oracle.py` | Implemented |
 | R16 skeleton export + model check | `procedures.py`, `formal/` | `test_skeleton_sync.py`, `test_formal_alloy_sync.py`, CI `formal` job | Implemented |
+| R17 literal spec entry | `service.py` (`_literal_spec`) | `test_literal_spec.py` | Implemented |
 
 The red-team suite (`redteam/run_redteam.py`, R12) exercises P1–P6, P10–P11,
 and P19–P22 end to end, off gateway versus on. The bounded formal model

@@ -244,3 +244,38 @@
         family: binomial
         response: contains_lootboxes
         terms: [genre]
+
+# --- literal spec entry (R17, service pipeline) --------------------------------
+# The request IS the spec (a JSON object): the planner and the NL fidelity
+# gates are bypassed, so these pin that every disclosure control still holds
+# on that path.
+
+- name: literal_spec_benign_baseline
+  type: benign
+  path: service
+  expect_block: false
+  steps:
+    - request: '{"tool": "anova", "dataset": "spend", "response": "amount_gbp", "factor": "region", "filters": [{"column": "region", "op": "in", "value": ["London", "South East", "North West", "East of England", "Yorkshire and The Humber", "West Midlands", "East Midlands", "South West", "Scotland"]}]}'
+      spec:
+        tool: anova
+        dataset: spend
+        response: amount_gbp
+        factor: region
+        filters:
+          - {column: region, op: in, value: [London, South East, North West,
+                                             East of England, Yorkshire and The Humber,
+                                             West Midlands, East Midlands,
+                                             South West, Scotland]}
+
+- name: literal_spec_small_cell_design
+  type: small_cell
+  path: service
+  expect_block: true
+  steps:
+    - request: '{"tool": "anova", "dataset": "spend", "response": "amount_gbp", "factor": "region", "filters": []}'
+      spec:
+        tool: anova
+        dataset: spend
+        response: amount_gbp
+        factor: region
+        filters: []
