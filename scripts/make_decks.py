@@ -189,17 +189,17 @@ def build_overview(shots: str, out: str) -> None:
     prs.slide_height = SLIDE_H
 
     title_slide(prs, "Safe outputs gateway",
-                "A safe-outputs gateway for an AI analyst inside a Trusted Research Environment")
+                "A safe-outputs gateway for automated analysis inside a Trusted Research Environment")
 
     bullets_slide(prs, "The problem", [
         "TRE disclosure control (min cell size, suppression) assumes a human analyst.",
-        "An LLM between analyst and data adds attack surface: prompt injection from the data,",
+        "An automated planner between analyst and data adds attack surface: injection carried in the data,",
         "   multi-query differencing, and code that smuggles rows into an ‘aggregate’.",
-        "Question: does an AI break the disclosure guarantee — and can a gateway restore it?",
+        "Question: does automation break the disclosure guarantee — and can a gateway restore it?",
     ])
 
     bullets_slide(prs, "The design", [
-        "The model only proposes a typed QuerySpec over an allowlisted catalogue — no code, no SQL.",
+        "The planner only proposes a typed QuerySpec over an allowlisted catalogue — no code, no SQL.",
         "Validation rejects anything off-allowlist before execution; read-only DuckDB, bound parameters.",
         "Safe-outputs gateway: min donor count, dominance, influence, suppression — fail closed.",
         "Session auditor flags differencing from published (simulatable) marginals; refusals carry no numbers.",
@@ -228,8 +228,8 @@ def build_overview(shots: str, out: str) -> None:
     bullets_slide(prs, "Evidence", [
         "Red-team: 17/17 attacks blocked with the gateway on; 7/20 leak row-level data with it off.",
         "Specification: 16 requirements, 22 prohibitions, each traced to code and a test.",
-        "Planner evaluation: the local model plans usefully but rarely refuses —",
-        "   so refusal must come from the boundary, not the model.",
+        "Planner evaluation: the planner proposes usefully but rarely refuses —",
+        "   so refusal must come from the boundary, not the planner.",
         "360+ tests, red-team, an Alloy model check, strict docs build and pa11y all run in CI.",
     ])
 
@@ -258,7 +258,7 @@ def build_technical(shots: str, out: str) -> None:
 
     bullets_slide(prs, "Request lifecycle", [
         "Natural-language request → intent vetting (defence in depth).",
-        "Planner (untrusted LLM) proposes a QuerySpec — the only executable output.",
+        "Planner (untrusted, automated) proposes a QuerySpec — the only executable output.",
         "Validation: Pydantic allowlist, extra=forbid — reject before running anything.",
         "Engine: validated spec → parameterised, read-only DuckDB over public views.",
         "Safe-outputs gateway → session auditor → human-in-the-loop → HMAC-chained log.",
@@ -266,12 +266,12 @@ def build_technical(shots: str, out: str) -> None:
 
     table_slide(prs, "Threat model (selected)",
                 ["#", "Threat", "Control"],
-                [["1", "Arbitrary code / RCE", "model writes no code; only a typed QuerySpec"],
+                [["1", "Arbitrary code / RCE", "the planner writes no code; only a typed QuerySpec"],
                  ["2", "SQL injection", "bound parameters; identifiers regex-checked"],
                  ["3", "Identifier / free-text egress", "absent from every allowlist and view"],
                  ["4", "Small-cell / dominance", "min donor count, p%-rule, influence bound"],
                  ["5", "Differencing / triangulation", "simulatable session auditor + budget"],
-                 ["6", "Prompt injection via data", "model can only emit a QuerySpec"],
+                 ["6", "Injection via hostile data", "the planner can only emit a QuerySpec"],
                  ["9", "Tamper with the audit record", "HMAC-keyed chain, off-box anchor"],
                  ["17", "Fail-open suppression", "unresolved check → +inf → suppressed"]],
                 col_widths=[0.7, 4.3, 6.5])
@@ -327,20 +327,21 @@ def build_best_practice(shots: str, out: str) -> None:
     prs.slide_height = SLIDE_H
 
     title_slide(prs, "Safe outputs gateway — best practice",
-                "Conformance with TRE and AI-security guidance")
+                "Conformance with TRE security guidance")
 
     table_slide(prs, "Mapped to the Five Safes",
                 ["Safe", "In this system"],
                 [["Safe Projects", "intent vetting rejects blocked purposes pre-planning"],
                  ["Safe People", "identity allowlist behind the restricted channel"],
-                 ["Safe Settings", "local model in the safepod; read-only engine, no egress"],
+                 ["Safe Settings", "planner runs inside the safepod; read-only engine, no egress"],
                  ["Safe Data", "synthetic; identifiers and free text never queryable"],
                  ["Safe Outputs", "disclosure gateway + session auditor + human review"]],
                 col_widths=[3.0, 8.5])
 
     bullets_slide(prs, "Where it already follows best practice", [
-        "The untrusted-model boundary is the published Action-Selector pattern (Beurer-Kellner 2025).",
-        "The posture matches OWASP LLM Top-10: validation, least privilege, output checks, red-team.",
+        "The untrusted-planner boundary is the published Action-Selector pattern (Beurer-Kellner 2025).",
+        "The posture matches published OWASP guidance for untrusted automated components:"
+        "   validation, least privilege, output checks, red-team.",
         "The SDC rules mirror the ACRO check set and the SDC Handbook.",
         "A frequency threshold of 10 is at or above the handbook's 3–5 and OpenSAFELY's redact-≤7.",
         "Governance is honest: synthetic-only, HMAC-chained audit, stated limitations.",
@@ -394,8 +395,8 @@ def build_elif(shots: str, out: str) -> None:
         "A library holds everyone's diaries. You may never read a diary.",
         "You may ask about GROUPS — and the librarian follows strict rules:",
         "   no answers about groups smaller than ten; answers rounded; every question remembered.",
-        "A robot helper turns your English into her official request form.",
-        "We do NOT trust the robot — it can only fill in the form; the rulebook checks every box.",
+        "An automated helper turns your English into her official request form.",
+        "We do NOT trust the helper — it can only fill in the form; the rulebook checks every box.",
     ])
 
     bullets_slide(prs, "The trick that makes models safe", [
@@ -539,8 +540,8 @@ def build_guidelines(shots: str, out: str) -> None:
     bullets_slide(prs, "Install & deploy — the non-negotiables", [
         "Pinned env only: uv sync --all-extras --frozen. Runtime deps stay at five packages;",
         "   oracles and tooling are dev-only; actions and the Alloy jar are SHA-pinned.",
-        "A real deployment runs a LOCAL model (a remote endpoint is an egress channel;",
-        "   synthetic-only, explicit opt-in). Unreachable model ⇒ fail loudly, never the mock.",
+        "A real deployment runs the planner locally (a remote endpoint is an egress channel;",
+        "   synthetic-only, explicit opt-in). Unreachable backend ⇒ fail loudly, never the mock.",
         "Identity fails closed: header trusted on loopback or behind an asserted proxy only.",
         "Audit key and chain anchor live OFF-BOX; least-privilege systemd unit; loopback bind.",
     ])
