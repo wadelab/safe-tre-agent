@@ -58,4 +58,5 @@ nav:
       - GOV.UK UI plan: govuk-ui-plan.md
       - Formal methods: FORMAL_METHODS_ANALYSIS.md
       - Verifiable extensions: verifiable-extensions.md
+      - Adding a statistical tool (ANOVA): adding-a-statistical-tool.md
   - Fellowship positioning: fellowship.md

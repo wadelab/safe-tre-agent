@@ -264,3 +264,64 @@ class GLMSpec(BaseModel):
 
     def normalized_filters(self) -> tuple:
         return _normalized_filters(self.filters)
+
+
+class AnovaSpec(BaseModel):
+    """A one-way ANOVA request (spec R15) — the simplest possible model tool,
+    and a worked example of adding a statistical capability (docs/adding-a-
+    statistical-tool.md).
+
+    Deliberately narrower than GLMSpec: exactly ONE categorical factor and a
+    gaussian (interval) response. The value of keeping it a separate tool rather
+    than a GLM special case is pedagogical and contractual — it shows that a new
+    procedure reuses the entire cells-first safety machinery (design-cell
+    QuerySpecs, the gateway, P19–P22) and only adds its own *numerics* and
+    *output contract*. `terms` is exposed as a one-element view of `factor` so
+    the generic model path in `service._handle_model` (which speaks GLM's
+    response/terms vocabulary) drives this tool unchanged.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    tool: Literal["anova"] = "anova"
+    dataset: Literal["spend", "donor_spend", "wellbeing"]
+    response: str
+    factor: str
+    filters: list[Filter] = []
+
+    @field_validator("filters")
+    @classmethod
+    def _limit_filters(cls, v):
+        if len(v) > MAX_FILTERS:
+            raise ValueError(f"at most {MAX_FILTERS} filters")
+        return v
+
+    @model_validator(mode="after")
+    def _check_allowlist(self):
+        cat = CATALOGUE[self.dataset]
+        responses = cat.get("glm_responses", {})
+        # one-way ANOVA is an interval-response procedure: gaussian only
+        if "gaussian" not in responses.get(self.response, set()):
+            gaussian = sorted(c for c, fams in responses.items() if "gaussian" in fams)
+            raise ValueError(
+                f"response {self.response!r} is not a permitted gaussian ANOVA "
+                f"response for dataset {self.dataset!r} (allowed: {gaussian})")
+        if self.factor not in cat["dims"]:
+            raise ValueError(f"factor {self.factor!r} is not a permitted dimension")
+        if self.factor == self.response:
+            raise ValueError("factor cannot also be the response")
+        check_filters(self.dataset, self.filters)
+        if any(f.column == self.response for f in self.filters):
+            raise ValueError("response cannot also be filtered in a model query")
+        return self
+
+    @property
+    def terms(self) -> list[str]:
+        """The single factor as a term list — lets the generic model pipeline
+        (coherence check, audit record) treat ANOVA like any other model."""
+        return [self.factor]
+
+    def model_key(self) -> str:
+        return f"{self.dataset}:anova:{self.response}~{self.factor}"
+
+    def normalized_filters(self) -> tuple:
+        return _normalized_filters(self.filters)

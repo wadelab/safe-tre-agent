@@ -64,6 +64,17 @@ PLANNER_SYSTEM = (
     '{"tool":"glm","dataset":"spend","family":"binomial",'
     '"response":"contains_lootboxes","terms":["genre"],'
     '"filters":[{"column":"event_type","op":"==","value":"purchase"}]}\n'
+    "For a one-way ANOVA request ('one-way ANOVA of Y by A', 'does mean Y "
+    "differ across A', 'analysis of variance of Y between A groups'), output an "
+    "AnovaSpec JSON of the form:\n"
+    '{"tool":"anova","dataset":...,"response":<allowed gaussian response>,'
+    '"factor":<one allowlisted dimension>,"filters":[...]}\n'
+    "ANOVA takes exactly one categorical factor and a gaussian (interval-scale) "
+    "response such as a score or spend amount. If the request names more than "
+    "one factor, use the glm tool instead. Example:\n"
+    "  'one-way anova of wellbeing by region' -> "
+    '{"tool":"anova","dataset":"wellbeing","response":"wemwbs_score",'
+    '"factor":"region","filters":[]}\n'
     "Published tool manifest (anything else is rejected):\n" + _manifest_text() +
     "\nNever reference identifiers, names, timestamps or free text. JSON only."
 )
@@ -169,8 +180,38 @@ class MockPlanner:
                 "response": "total_spend_gbp",
                 "terms": terms or ["age_band"], "filters": filters}
 
+    def _plan_anova(self, request: str, u: str) -> dict:
+        """Deterministic AnovaSpec for one-way ANOVA requests. Response and
+        dataset are inferred from domain cues; the factor is the first
+        recognised dimension (defaulting to region, a dimension of every
+        dataset). A single factor only — multi-factor requests belong to glm."""
+        filters = self._filters_from_text(request)
+        if any(kw in u for kw in ("wellbeing", "wemwbs", "pgsi", "gambling",
+                                  "igds", "mental")):
+            dataset = "wellbeing"
+            if "pgsi" in u or "gambling" in u:
+                response = "pgsi_score"
+            elif "igds" in u:
+                response = "igds_score"
+            else:
+                response = "wemwbs_score"
+        elif "in-game" in u or "currency" in u:
+            dataset, response = "spend", "ingame_currency"
+        else:
+            dataset, response = "donor_spend", "total_spend_gbp"
+        factors = self._terms_from_text(u, (("region", "region"), ("sex", "sex"),
+                                            ("age_band", "age"),
+                                            ("income_band", "income"),
+                                            ("device_os", "device")))
+        factor = factors[0] if factors else "region"
+        return {"tool": "anova", "dataset": dataset, "response": response,
+                "factor": factor, "filters": filters}
+
     def plan(self, request: str) -> dict:
         u = request.lower()
+
+        if "anova" in u or "analysis of variance" in u:
+            return self._plan_anova(request, u)
 
         if any(kw in u for kw in ("regress", "as a function of", "logistic",
                                   "poisson", "controlling for", "glm")):

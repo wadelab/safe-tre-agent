@@ -44,9 +44,25 @@ def test_degenerate_inputs():
 # --- GLM numerics (round 4: cell-table GLMs) ------------------------------------
 
 from safetre.stats import (  # noqa: E402
-    inv_symmetric, irls_cells, matrix_rank, normal_sf,
+    f_sf, inv_symmetric, irls_cells, matrix_rank, normal_sf,
     regularized_gamma_q, student_t_sf,
 )
+
+
+@pytest.mark.parametrize("df2", [1, 2, 5, 30, 499])
+@pytest.mark.parametrize("df1", [1, 2, 5, 10])
+@pytest.mark.parametrize("f", [0.01, 0.5, 1.0, 2.5, 4.1772, 25.0])
+def test_f_sf_matches_scipy(f, df1, df2):
+    # the one-way ANOVA omnibus p-value, against scipy's F survival function
+    assert f_sf(f, df1, df2) == pytest.approx(
+        float(scipy_stats.f.sf(f, df1, df2)), rel=1e-9, abs=1e-12)
+
+
+def test_f_sf_degenerate_inputs():
+    assert f_sf(0.0, 3, 40) == 1.0        # no between-group variance -> p = 1
+    assert f_sf(-1.0, 3, 40) == 1.0
+    assert math.isnan(f_sf(float("nan"), 3, 40))
+    assert math.isnan(f_sf(2.0, 0, 40))   # no between-group d.f.
 
 
 @pytest.mark.parametrize("z", [-8.0, -3.0, -1.0, -0.1, 0.0, 0.1, 1.0, 3.0, 8.0])

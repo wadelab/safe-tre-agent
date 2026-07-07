@@ -108,6 +108,21 @@ def student_t_sf(t: float, df: float) -> float:
     return p if t >= 0 else 1.0 - p
 
 
+def f_sf(f: float, df1: float, df2: float) -> float:
+    """Upper tail P(F > f) of the F distribution with (df1, df2) d.f.
+
+    The one-way ANOVA omnibus p-value. Derived from the same incomplete beta
+    as the Pearson/Student tails above (no new special function): the F CDF is
+    I_{u}(df1/2, df2/2) with u = df1·f / (df1·f + df2), so the upper tail is
+    I_{1-u}(df2/2, df1/2) = regularized_beta(df2/(df2 + df1·f), df2/2, df1/2).
+    """
+    if df1 <= 0 or df2 <= 0 or not math.isfinite(f):
+        return float("nan")
+    if f <= 0.0:
+        return 1.0
+    return regularized_beta(df2 / (df2 + df1 * f), df2 / 2.0, df1 / 2.0)
+
+
 _GAMMA_EPS = 3e-14
 _GAMMA_MAX_ITER = 300
 

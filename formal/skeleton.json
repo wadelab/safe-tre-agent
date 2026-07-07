@@ -290,6 +290,302 @@
   }
  },
  "model": {
+  "anova": [
+   {
+    "dataset": "donor_spend",
+    "factor": "age_band",
+    "response": "total_spend_gbp",
+    "tool": "anova"
+   },
+   {
+    "dataset": "donor_spend",
+    "factor": "device_os",
+    "response": "total_spend_gbp",
+    "tool": "anova"
+   },
+   {
+    "dataset": "donor_spend",
+    "factor": "income_band",
+    "response": "total_spend_gbp",
+    "tool": "anova"
+   },
+   {
+    "dataset": "donor_spend",
+    "factor": "region",
+    "response": "total_spend_gbp",
+    "tool": "anova"
+   },
+   {
+    "dataset": "donor_spend",
+    "factor": "sex",
+    "response": "total_spend_gbp",
+    "tool": "anova"
+   },
+   {
+    "dataset": "spend",
+    "factor": "age_band",
+    "response": "amount_gbp",
+    "tool": "anova"
+   },
+   {
+    "dataset": "spend",
+    "factor": "age_rating",
+    "response": "amount_gbp",
+    "tool": "anova"
+   },
+   {
+    "dataset": "spend",
+    "factor": "contains_lootboxes",
+    "response": "amount_gbp",
+    "tool": "anova"
+   },
+   {
+    "dataset": "spend",
+    "factor": "device_os",
+    "response": "amount_gbp",
+    "tool": "anova"
+   },
+   {
+    "dataset": "spend",
+    "factor": "event_type",
+    "response": "amount_gbp",
+    "tool": "anova"
+   },
+   {
+    "dataset": "spend",
+    "factor": "genre",
+    "response": "amount_gbp",
+    "tool": "anova"
+   },
+   {
+    "dataset": "spend",
+    "factor": "income_band",
+    "response": "amount_gbp",
+    "tool": "anova"
+   },
+   {
+    "dataset": "spend",
+    "factor": "price_tier",
+    "response": "amount_gbp",
+    "tool": "anova"
+   },
+   {
+    "dataset": "spend",
+    "factor": "region",
+    "response": "amount_gbp",
+    "tool": "anova"
+   },
+   {
+    "dataset": "spend",
+    "factor": "sex",
+    "response": "amount_gbp",
+    "tool": "anova"
+   },
+   {
+    "dataset": "spend",
+    "factor": "age_band",
+    "response": "ingame_currency",
+    "tool": "anova"
+   },
+   {
+    "dataset": "spend",
+    "factor": "age_rating",
+    "response": "ingame_currency",
+    "tool": "anova"
+   },
+   {
+    "dataset": "spend",
+    "factor": "contains_lootboxes",
+    "response": "ingame_currency",
+    "tool": "anova"
+   },
+   {
+    "dataset": "spend",
+    "factor": "device_os",
+    "response": "ingame_currency",
+    "tool": "anova"
+   },
+   {
+    "dataset": "spend",
+    "factor": "event_type",
+    "response": "ingame_currency",
+    "tool": "anova"
+   },
+   {
+    "dataset": "spend",
+    "factor": "genre",
+    "response": "ingame_currency",
+    "tool": "anova"
+   },
+   {
+    "dataset": "spend",
+    "factor": "income_band",
+    "response": "ingame_currency",
+    "tool": "anova"
+   },
+   {
+    "dataset": "spend",
+    "factor": "price_tier",
+    "response": "ingame_currency",
+    "tool": "anova"
+   },
+   {
+    "dataset": "spend",
+    "factor": "region",
+    "response": "ingame_currency",
+    "tool": "anova"
+   },
+   {
+    "dataset": "spend",
+    "factor": "sex",
+    "response": "ingame_currency",
+    "tool": "anova"
+   },
+   {
+    "dataset": "wellbeing",
+    "factor": "age_band",
+    "response": "igds_score",
+    "tool": "anova"
+   },
+   {
+    "dataset": "wellbeing",
+    "factor": "device_os",
+    "response": "igds_score",
+    "tool": "anova"
+   },
+   {
+    "dataset": "wellbeing",
+    "factor": "income_band",
+    "response": "igds_score",
+    "tool": "anova"
+   },
+   {
+    "dataset": "wellbeing",
+    "factor": "region",
+    "response": "igds_score",
+    "tool": "anova"
+   },
+   {
+    "dataset": "wellbeing",
+    "factor": "sex",
+    "response": "igds_score",
+    "tool": "anova"
+   },
+   {
+    "dataset": "wellbeing",
+    "factor": "wave",
+    "response": "igds_score",
+    "tool": "anova"
+   },
+   {
+    "dataset": "wellbeing",
+    "factor": "age_band",
+    "response": "monthly_spend_selfreport",
+    "tool": "anova"
+   },
+   {
+    "dataset": "wellbeing",
+    "factor": "device_os",
+    "response": "monthly_spend_selfreport",
+    "tool": "anova"
+   },
+   {
+    "dataset": "wellbeing",
+    "factor": "income_band",
+    "response": "monthly_spend_selfreport",
+    "tool": "anova"
+   },
+   {
+    "dataset": "wellbeing",
+    "factor": "region",
+    "response": "monthly_spend_selfreport",
+    "tool": "anova"
+   },
+   {
+    "dataset": "wellbeing",
+    "factor": "sex",
+    "response": "monthly_spend_selfreport",
+    "tool": "anova"
+   },
+   {
+    "dataset": "wellbeing",
+    "factor": "wave",
+    "response": "monthly_spend_selfreport",
+    "tool": "anova"
+   },
+   {
+    "dataset": "wellbeing",
+    "factor": "age_band",
+    "response": "pgsi_score",
+    "tool": "anova"
+   },
+   {
+    "dataset": "wellbeing",
+    "factor": "device_os",
+    "response": "pgsi_score",
+    "tool": "anova"
+   },
+   {
+    "dataset": "wellbeing",
+    "factor": "income_band",
+    "response": "pgsi_score",
+    "tool": "anova"
+   },
+   {
+    "dataset": "wellbeing",
+    "factor": "region",
+    "response": "pgsi_score",
+    "tool": "anova"
+   },
+   {
+    "dataset": "wellbeing",
+    "factor": "sex",
+    "response": "pgsi_score",
+    "tool": "anova"
+   },
+   {
+    "dataset": "wellbeing",
+    "factor": "wave",
+    "response": "pgsi_score",
+    "tool": "anova"
+   },
+   {
+    "dataset": "wellbeing",
+    "factor": "age_band",
+    "response": "wemwbs_score",
+    "tool": "anova"
+   },
+   {
+    "dataset": "wellbeing",
+    "factor": "device_os",
+    "response": "wemwbs_score",
+    "tool": "anova"
+   },
+   {
+    "dataset": "wellbeing",
+    "factor": "income_band",
+    "response": "wemwbs_score",
+    "tool": "anova"
+   },
+   {
+    "dataset": "wellbeing",
+    "factor": "region",
+    "response": "wemwbs_score",
+    "tool": "anova"
+   },
+   {
+    "dataset": "wellbeing",
+    "factor": "sex",
+    "response": "wemwbs_score",
+    "tool": "anova"
+   },
+   {
+    "dataset": "wellbeing",
+    "factor": "wave",
+    "response": "wemwbs_score",
+    "tool": "anova"
+   }
+  ],
   "glm": [
    {
     "dataset": "donor_spend",

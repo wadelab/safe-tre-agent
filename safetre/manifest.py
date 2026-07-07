@@ -20,7 +20,7 @@ from .query import (
 )
 from .schema import ROLE_LABELS, column_description, declared_domain, role_of
 
-MANIFEST_VERSION = "2026-07-07.aggregate+glm.v4"
+MANIFEST_VERSION = "2026-07-07.aggregate+glm+anova.v5"
 
 
 def public_schema() -> dict[str, Any]:
@@ -154,13 +154,47 @@ def public_manifest() -> dict[str, Any]:
                     "subject_to_session_audit": True,
                 },
             },
-        ],
-        "planned_tool_classes": [
             {
                 "id": "anova",
-                "status": "planned",
-                "note": "Future fixed-function ANOVA/contrast tool; not executable until present in tools[].",
+                "version": "1",
+                "status": "available",
+                "description": (
+                    "One-way ANOVA of a gaussian response across the levels of "
+                    "one allowlisted categorical factor, computed exclusively "
+                    "from disclosure-checked group-cell aggregates (never "
+                    "row-level data)."),
+                "request_schema": "AnovaSpec",
+                "model": {
+                    "response": (
+                        "an allowlisted gaussian model response (interval scale)"),
+                    "factor": "one allowlisted categorical dimension of the dataset",
+                    "responses": {
+                        dataset: sorted(col for col, fams
+                                        in info.get("glm_responses", {}).items()
+                                        if "gaussian" in fams)
+                        for dataset, info in sorted(CATALOGUE.items())
+                    },
+                },
+                "constraints": {
+                    "factors": 1,
+                    "max_filters": MAX_FILTERS,
+                    "continuous_predictors_allowed": False,
+                    "per_observation_outputs": False,
+                },
+                "release": {
+                    "table_outputs": ["source", "df", "sum_sq", "mean_sq",
+                                      "statistic", "p_value"],
+                    "model_outputs": ["response", "factor", "n", "n_groups",
+                                      "grand_mean", "eta_squared", "df_between",
+                                      "df_within"],
+                    "cell_table_released": True,
+                    "denied_if_any_group_cell_suppressed": True,
+                    "fitted_from_finalized_aggregates_only": True,
+                    "subject_to_session_audit": True,
+                },
             },
+        ],
+        "planned_tool_classes": [
             {
                 "id": "regression",
                 "status": "planned",

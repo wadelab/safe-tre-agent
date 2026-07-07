@@ -116,7 +116,7 @@ def test_manifest_endpoint_is_public_contract():
     assert r.status_code == 200
     manifest = r.json()
     assert manifest["manifest_sha256"]
-    assert {tool["id"] for tool in manifest["tools"]} == {"aggregate_query", "glm"}
+    assert {tool["id"] for tool in manifest["tools"]} == {"aggregate_query", "glm", "anova"}
     assert "corr" in manifest["tools"][0]["measures"]["functions"]
     assert manifest["tools"][0]["release"]["corr_outputs"] == ["value", "p_value", "n"]
     assert "free_text" not in r.text

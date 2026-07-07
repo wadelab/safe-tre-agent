@@ -32,7 +32,7 @@ def test_only_available_tools_are_executable():
     manifest = public_manifest()
     available = {tool["id"] for tool in manifest["tools"] if tool["status"] == "available"}
     planned = {tool["id"] for tool in manifest["planned_tool_classes"]}
-    assert available == {"aggregate_query", "glm"}
+    assert available == {"aggregate_query", "glm", "anova"}
     assert manifest["tools"][0]["version"] == "4"
     assert manifest["tools"][0]["measures"]["functions"] == [
         "corr", "count", "mean", "sum", "sum_sq"]
@@ -53,6 +53,20 @@ def test_glm_tool_contract_is_published():
     # responses published per dataset must mirror the catalogue allowlist
     assert glm["model"]["responses"]["donor_spend"]["purchase_events"] == ["poisson"]
     assert "glm" not in {t["id"] for t in public_manifest()["planned_tool_classes"]}
+
+
+def test_anova_tool_contract_is_published():
+    anova = next(t for t in public_manifest()["tools"] if t["id"] == "anova")
+    assert anova["request_schema"] == "AnovaSpec"
+    assert anova["constraints"]["factors"] == 1
+    assert anova["constraints"]["per_observation_outputs"] is False
+    assert anova["release"]["denied_if_any_group_cell_suppressed"] is True
+    assert anova["release"]["fitted_from_finalized_aggregates_only"] is True
+    assert anova["release"]["cell_table_released"] is True
+    # only gaussian responses are offered for ANOVA
+    assert "wemwbs_score" in anova["model"]["responses"]["wellbeing"]
+    assert "contains_lootboxes" not in anova["model"]["responses"].get("spend", [])
+    assert "anova" not in {t["id"] for t in public_manifest()["planned_tool_classes"]}
 
 
 def test_manifest_says_planner_is_untrusted():

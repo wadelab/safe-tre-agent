@@ -82,7 +82,8 @@ ANALYSIS_CUES = [
     # model requests (R15)
     "regress", "regression", "model", "predict", "glm", "logistic", "poisson",
     "as a function of", "controlling for", "adjusted for", "adjusting for",
-    "effect of", "odds",
+    "effect of", "odds", "anova", "analysis of variance", "differ across",
+    "differ between",
 ]
 DOMAIN_CUES = [
     "spend", "spender", "spenders", "purchase", "purchases", "lootbox",

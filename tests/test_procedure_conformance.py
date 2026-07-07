@@ -99,6 +99,8 @@ def test_registry_is_the_schema_and_matches_declared_obligations():
 MODEL_PROCEDURES = {
     "glm": {"multi_query": True, "fits_on_finalized_only": True,
             "denies_on_suppression": True},
+    "anova": {"multi_query": True, "fits_on_finalized_only": True,
+              "denies_on_suppression": True},
 }
 
 

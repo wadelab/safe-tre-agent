@@ -19,6 +19,7 @@ import ast
 import inspect
 import os
 
+import safetre.anova
 import safetre.glm
 import safetre.stats
 
@@ -71,6 +72,26 @@ def test_irls_signature_is_primitive_lists_only():
     from safetre.stats import irls_cells
     params = list(inspect.signature(irls_cells).parameters)
     assert params[:5] == ["design", "response", "weights", "family", "offset"]
+
+
+def test_anova_module_never_touches_engine_or_database():
+    # the new one-way ANOVA tool inherits the same P21 boundary as glm: it can
+    # only plan QuerySpecs and consume the DataFrames it is handed.
+    imports = _module_imports(safetre.anova)
+    assert not (imports & _FORBIDDEN_GLM_IMPORTS), (
+        f"safetre.anova imports {imports & _FORBIDDEN_GLM_IMPORTS} — the model "
+        "procedure must not be able to reach rows (P21)")
+    source = inspect.getsource(safetre.anova)
+    for view in ("_spend_u", "_donor_spend_u", "_wellbeing_u"):
+        assert view not in source
+
+
+def test_anova_fit_entrypoints_take_only_finalized_frames():
+    from safetre.anova import AnovaProcedure, refit_from_artifact
+    assert list(inspect.signature(AnovaProcedure.fit).parameters) == \
+        ["self", "finalized", "spec"]
+    assert list(inspect.signature(refit_from_artifact).parameters) == \
+        ["cells", "spec"]
 
 
 def test_glm_source_file_is_the_audited_one():

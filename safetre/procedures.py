@@ -328,7 +328,7 @@ MODEL_REGISTRY: dict[str, ModelProcedure] = {}
 def model_registry() -> dict[str, ModelProcedure]:
     """The model-procedure registry. Imports the implementations lazily so
     registration is deterministic without import-order tricks."""
-    from . import glm  # noqa: F401  (self-registers on import)
+    from . import anova, glm  # noqa: F401  (self-register on import)
 
     return MODEL_REGISTRY
 
