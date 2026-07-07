@@ -464,6 +464,100 @@ def build_elif(shots: str, out: str) -> None:
     print(f"deck -> {out}")
 
 
+def build_guidelines(shots: str, out: str) -> None:
+    """The maintainer's deck: docs/maintenance.md as slides."""
+    prs = Presentation()
+    prs.slide_width = SLIDE_W
+    prs.slide_height = SLIDE_H
+
+    title_slide(prs, "Maintenance guidelines",
+                "How to change safe-tre-agent without breaking its claim — "
+                "the playbook (precise version: docs/maintenance.md)")
+
+    bullets_slide(prs, "Two principles govern every change", [
+        "The SPECIFICATION leads: behaviour changes start as a clause amendment with a",
+        "   traceability row; code and tests cite the clause; prose docs follow.",
+        "Refuse loudly, never repair silently: a merged category, a dropped cell, or a",
+        "   substituted question is wrong even when it is 'safe'. Denials are part of the product.",
+        "Boundary files (query/engine/procedures/disclosure/audit/identity) always get human review.",
+    ])
+
+    table_slide(prs, "The gate list — green before every merge",
+                ["Gate", "Command"],
+                [["Lint (zero findings)", "uv run ruff check safetre safetre_web tests …"],
+                 ["Tests + exhaustive skeletons", "uv run pytest -q  ·  uv run pytest -q -m slow"],
+                 ["Red-team, gateway off vs on", "uv run python redteam/run_redteam.py"],
+                 ["SAST + dependency CVEs", "uv run bandit -q -r …  ·  uv run pip-audit"],
+                 ["Docs (strict)", "uv run --group docs mkdocs build --strict"],
+                 ["Formal sync + model check", "gen_alloy_catalogue.py · formal/run_checks.py"],
+                 ["Accessibility (UI changes)", "pa11y on home / released / redacted / denied"]],
+                col_widths=[4.0, 7.5])
+
+    bullets_slide(prs, "Adding a statistical procedure (1/2) — architecture first", [
+        "Computable from catalogued aggregates?  Then CELLS-FIRST is mandatory:",
+        "   plan ordinary QuerySpecs, fit only on gateway-finalized tables,",
+        "   inherit every disclosure rule, prove reproducibility (refit-equality).",
+        "Genuinely needs rows?  That route waits for ACRO (roadmap item 1).",
+        "Spec first: amend R/P clauses + traceability BEFORE writing code.",
+    ], accent=GREEN)
+
+    bullets_slide(prs, "Adding a statistical procedure (2/2) — the checklist", [
+        "Register the contract in procedures.py (fragments only — the SafeSQL shape is central).",
+        "Declare obligations in test_procedure_conformance.py — double-entry: build fails on mismatch.",
+        "Regenerate formal artifacts (gen_alloy_catalogue.py --write); sync tests gate drift.",
+        "Extend EVERY layer: exhaustive enumeration · Hypothesis · oracle · red-team · eval corpus.",
+        "Advertise last: manifest + planner prompt bump in ONE isolated, reviewed commit.",
+        "Never: per-observation outputs · disclosure logic inside a procedure · silent fn fall-through.",
+    ], accent=GREEN)
+
+    bullets_slide(prs, "Datasets, columns, thresholds", [
+        "Every column gets a DI/QI/S/R role and (categorical) a declared domain.",
+        "Identifiers, free text, raw timestamps: in NO allowlist, NO public view — ever.",
+        "Update the public view AND the _u unit view; regenerate skeleton + Alloy block.",
+        "Keep the synthetic disclosure anchors (sub-threshold NI / sex-X, hostile strings).",
+        "Threshold floors are pinned by tests (min cell ≥ 5, rounding ≥ 5, dominance ≤ 0.5);",
+        "   unresolved safety values fail CLOSED (+inf) — preserve the pattern.",
+    ])
+
+    bullets_slide(prs, "Manifest & planner prompt = the safepod contract", [
+        "A tool is live only when it moves from planned_tool_classes into tools[].",
+        "Treat any change as a mini release: one isolated commit, MANIFEST_VERSION bump,",
+        "   contract pins updated deliberately, security review, signed artifact in a real safepod.",
+        "Prompt changes carry no safety obligation (the planner is untrusted) — but a quality one:",
+        "   run the planner eval before and after; extend the corpus for new phrasings.",
+    ], accent=AMBER)
+
+    bullets_slide(prs, "Changing the UI (e.g. GOV.UK guidance changes)", [
+        "The shell is FROZEN — fixes only. Design-system updates, a11y fixes = fixes.",
+        "   New controls, pages, or data surfaces = not fixes.",
+        "Stay unbranded: GOV.UK layout, but no GDS Transport, no crown, no government claim.",
+        "CSP stays script-src 'self' — no CDN assets, ever; identity/channel code is off-limits.",
+        "A denial renders NO data table (P18). Gate on pa11y (WCAG 2.2 AA), all four demo states.",
+        "Afterwards: regenerate deck screenshots (temporary allow-all identity, then restore).",
+    ], accent=AMBER)
+
+    bullets_slide(prs, "Install & deploy — the non-negotiables", [
+        "Pinned env only: uv sync --all-extras --frozen. Runtime deps stay at five packages;",
+        "   oracles and tooling are dev-only; actions and the Alloy jar are SHA-pinned.",
+        "A real deployment runs a LOCAL model (a remote endpoint is an egress channel;",
+        "   synthetic-only, explicit opt-in). Unreachable model ⇒ fail loudly, never the mock.",
+        "Identity fails closed: header trusted on loopback or behind an asserted proxy only.",
+        "Audit key and chain anchor live OFF-BOX; least-privilege systemd unit; loopback bind.",
+    ])
+
+    bullets_slide(prs, "Releasing · and when something goes wrong", [
+        "Release: CHANGELOG → version bump (single-sourced) → full gates → uv build →",
+        "   install the wheel in a FRESH venv and smoke it → tag → DRAFT GitHub release.",
+        "Publishing (and PyPI) is a deliberate human decision.",
+        "Security finding: numbered hardening-log entry + a pinning regression test +",
+        "   where possible a framework change that makes the whole class inexpressible",
+        "   (hardening #25 → declared output contracts is the model). Never fix a leak silently.",
+    ], accent=GREEN)
+
+    prs.save(out)
+    print(f"deck -> {out}")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--out-dir", default=os.path.join(ROOT, "artifacts"))
@@ -486,10 +580,11 @@ def main() -> int:
                     os.path.join(args.out_dir, "safe-tre-agent-technical.pptx"))
     build_best_practice(args.shots_dir,
                         os.path.join(args.out_dir, "safe-tre-agent-best-practice.pptx"))
-    # the plain-language deck (docs/elif.md as slides). Note the extension:
-    # ELIF.ppt is deliberately outside the artifacts/*.pptx ignore rule and is
-    # committed alongside docs/elif.md.
+    # the committed .ppt explainers (deliberately outside the artifacts/*.pptx
+    # ignore rule): the plain-language deck alongside docs/elif.md, and the
+    # maintainer's deck alongside docs/maintenance.md.
     build_elif(args.shots_dir, os.path.join(args.out_dir, "ELIF.ppt"))
+    build_guidelines(args.shots_dir, os.path.join(args.out_dir, "GUIDELINES.ppt"))
     return 0
 
 

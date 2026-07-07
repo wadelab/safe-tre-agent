@@ -50,6 +50,7 @@ nav:
       - Deployment: deployment.md
       - Certification & hardware: certification.md
       - Development: development.md
+      - Maintenance guidelines: maintenance.md
   - Engineering record:
       - Hardening log: hardening-log.md
       - Best-practice review: best-practice-review.md
