@@ -1,6 +1,7 @@
 % Preprint — not peer reviewed. Build: make (pdflatex + bibtex).
 % Sources of truth in the repository: docs/specification.md (normative
-% clauses), docs/security.md (threat model), docs/planner-eval.md (numbers).
+% clauses), docs/security.md (threat model), docs/planner-eval.md (numbers),
+% docs/elif.md (the cells-first model account), formal/ (the Alloy model).
 \documentclass[11pt,a4paper]{article}
 
 \usepackage[margin=2.5cm]{geometry}
@@ -35,13 +36,19 @@ and whether a deterministic safe-outputs gateway restores it. Our prototype
 confines the model to proposing a typed aggregate query over an allowlisted
 catalogue; validation, read-only execution, disclosure control, a session
 auditor whose refusals are simulatable from published metadata, and a keyed
-audit chain then decide what leaves. The design is stated as a normative
-specification --- thirteen requirements and eighteen prohibitions, each traced
-to enforcing code and tests. A red-team harness replays eight attacks with the
-gateway off and on: four leak row-level data without it; all eight are blocked
-with it, while benign analysis passes. Measuring a local model as planner
-shows why the boundary must not trust refusal: the model proposed a valid
-query for almost every unanswerable request, deflecting rather than refusing.
+audit chain then decide what leaves. Richer analyses --- generalized linear
+models and analysis of variance --- are admitted without widening the boundary
+by fitting them \emph{only} from aggregates the gateway has already checked, so
+a model release inherits the cells' safety and adds no row-level surface. The
+design is stated as a normative specification --- seventeen requirements and
+twenty-two prohibitions, each traced to enforcing code and tests --- and the
+finite request space of every procedure is exported as data and checked by a
+bounded model in a solver. A red-team harness replays twenty-two scenarios with
+the gateway off and on: eight leak row-level data without it; all eighteen
+attacks are blocked with it, while benign analysis passes. Measuring a local
+model as planner shows why the boundary must not trust refusal: the model
+proposed a valid query for almost every unanswerable request, deflecting rather
+than refusing.
 \end{abstract}
 
 \section{Introduction}
@@ -73,9 +80,12 @@ Contributions:
   \item a session auditor whose differencing refusals are \emph{simulatable}
     from published metadata, with the residual stated exactly
     (\S\ref{sec:auditor});
-  \item a normative specification --- 13 requirements, 18 prohibitions ---
-    with a traceability table from each clause to enforcing code and tests
-    (\S\ref{sec:spec});
+  \item a way to admit statistical models --- GLMs, ANOVA --- with no new
+    disclosure surface, by fitting them only from gateway-checked aggregate
+    cells (\S\ref{sec:procedures});
+  \item a normative specification (17 requirements, 22 prohibitions) whose
+    procedures export their finite request space as data, checked by a bounded
+    model in a solver (\S\ref{sec:spec});
   \item a red-team evaluation, gateway off versus on (\S\ref{sec:redteam});
   \item a planner-quality measurement showing that refusal must come from the
     boundary, not the model (\S\ref{sec:planner}).
@@ -99,24 +109,28 @@ data. (A6)~All data here is synthetic.
 The attack classes evaluated are: over-granular queries that produce small
 cells; prompt injection planted in survey free text; code-channel smuggling of
 identifiers inside an ostensible aggregate; two-query differencing; direct and
-disguised re-identification requests; and loose interpretation, where a valid
-but wrong query silently answers a different question.
+disguised re-identification requests; loose interpretation, where a valid but
+wrong query silently answers a different question; and, for the model tools, a
+regression asked over a grid that hides a suppressed cell.
 
 \section{Design}
 \label{sec:design}
 
 \paragraph{The query boundary.}
 The model never writes code or SQL. It may only propose a \emph{QuerySpec}: a
-declarative aggregate (count, mean, sum, or Pearson correlation) over a fixed
-catalogue of pre-joined, read-only datasets, with typed, allowlisted
-dimensions, measures, filters and bounded group-bys. Validation rejects
-unknown fields, off-catalogue columns, and type-invalid operators before
-anything executes. Direct identifiers, free text and raw timestamps are absent
-from every allowlist, so no valid query can name them. The validated spec
-compiles to parameterised SQL over public views --- filter values are always
-bound parameters --- and runs under fixed memory, thread and row caps. The
-query space is finite and enumerable, which is what makes the boundary
-testable and, prospectively, provable.
+declarative aggregate (count, mean, sum, sum of squares, or Pearson
+correlation) over a fixed catalogue of pre-joined, read-only datasets, with
+typed, allowlisted dimensions, measures, filters and bounded group-bys.
+Validation rejects unknown fields, off-catalogue columns, and type-invalid
+operators before anything executes. Direct identifiers, free text and raw
+timestamps are absent from every allowlist, so no valid query can name them.
+The validated spec compiles to parameterised SQL over public views --- filter
+values are always bound parameters --- and runs under fixed memory, thread and
+row caps. The query space is finite and enumerable, which is what makes the
+boundary testable and provable. A request may also be a literal spec --- a JSON
+object taken as the query itself, bypassing the planner --- and every
+downstream control still applies, so a caller who does not want a language model
+in the loop can drop it without leaving the boundary.
 
 \paragraph{The disclosure gateway.}
 Released tables pass SDC checks in the ACRO
@@ -164,47 +178,103 @@ attacker who can rewrite the database cannot forge a verifying history.
 Verification fails closed on malformed rows. Each decision exposes the
 validated spec, the compiled SQL, the findings and an ordered pipeline trace.
 
+\section{Composable procedures, fitted from cells}
+\label{sec:procedures}
+
+An aggregate query is a poor interface for real analysis: researchers want
+regressions and contrasts, not just group means. The tempting fix --- let the
+model fit a model on the rows --- reopens exactly the row-level surface the
+boundary closed. We take the opposite route. A statistical model is fitted
+\emph{only} from aggregate cells that have already passed the gateway, so it
+sees nothing an ordinary released table would not, and inherits the cells'
+safety rather than adding a second disclosure argument.
+
+\paragraph{Procedures as contracts.}
+Every procedure --- each aggregate, and each model --- is a registered object
+that declares and discharges a fixed set of obligations: admissibility (which
+requests it will accept), compilation safety, an influence control or its
+inheritance from cell vetting, and lineage. The three former dispatch sites
+that switched on a function name now delegate to this registry and fail loudly
+on anything unregistered. Adding a procedure without declared obligations fails
+the build, so the safety argument cannot silently fall behind the feature set.
+
+\paragraph{A GLM, cells-first.}
+The first model procedure fits generalized linear models --- Gaussian,
+binomial (logit), and Poisson, canonical links, categorical terms only --- by a
+small iteratively-reweighted-least-squares fitter that reads
+\emph{only the gateway-finalized design-cell tables}: the per-cell counts, means
+and second moments that the gateway has already rounded and suppressed. Three
+prohibitions make this tight. If any design cell is suppressed, or missing from
+the full grid of observed levels, the whole model is denied --- a hole in the
+grid must not be filled by the fit. No per-observation quantity may leave:
+residuals, fitted values, leverage and per-donor predictions are simply not
+expressible. And the fitter must be a deterministic function of the finalized
+cells alone; a released model ships the coefficient table, the summary block,
+and the vetted cell table it was fitted from, and a helper reproduces the
+release bit-for-bit from that table. Model refusals, like the auditor's, are
+decidable from the released-equivalent cell decisions and name terms, never
+quantities. One-way analysis of variance follows the same pattern over the same
+moment cells.
+
+\paragraph{Why fit from rounded cells at all.}
+Fitting from finalized (rounded, suppressed) cells rather than exact ones
+introduces a distortion. We measure it rather than wave it away: a script
+quantifies the coefficient shift induced by base-5 count rounding across the
+model skeleton, and the row-level fits are cross-checked against
+\texttt{statsmodels} --- a development-only oracle --- to agree to $10^{-8}$
+before rounding. The distortion is the honest price of never touching a row;
+its size is reported, not assumed negligible.
+
 \section{Specification and verification}
 \label{sec:spec}
 
-The design is fixed in a normative specification: thirteen requirements (what
-the system must do) and eighteen prohibitions (what it must never do), each
+The design is fixed in a normative specification: seventeen requirements (what
+the system must do) and twenty-two prohibitions (what it must never do), each
 with a stable identifier, plus the trust assumptions of \S\ref{sec:threat} and
-six explicit non-goals (notably: no differential-privacy claim, no
-cross-session defence, and the code-execution sandbox is illustration, not a
-jail). A traceability table maps every prohibition to the module that enforces
-it and the test that checks it, with an honest implemented/partial status.
+explicit non-goals (notably: no differential-privacy claim, no cross-session
+defence, and the code-execution sandbox is illustration, not a jail). A
+traceability table maps every prohibition to the module that enforces it and the
+test that checks it, with an honest implemented/partial status.
 
-Two verification layers exist today. Property-based tests sample the finite
-query space; they recently surfaced a fail-open crash --- floating-point
-cancellation drove a variance product negative and the influence query raised
-instead of suppressing --- exactly the class of bug the fail-closed
-prohibition names, fixed by making the degenerate case suppress. A red-team
-harness (next section) exercises the prohibitions end to end. The finite spec
-is deliberately shaped for a third layer: a machine-checked model of the
-catalogue and the query-to-SQL-to-release path, which is planned work.
+Four verification layers now exist. Property-based tests sample the query
+space; they surfaced a fail-open crash --- floating-point cancellation drove a
+variance product negative and the influence query raised instead of suppressing
+--- exactly the class of bug the fail-closed prohibition names, fixed by making
+the degenerate case suppress. Exhaustive enumeration then covers what sampling
+might miss: the query skeleton, and all 718 points of the model skeleton, are
+walked in full. A red-team harness exercises the prohibitions end to end
+(\S\ref{sec:redteam}). Finally, the layer the earlier design only anticipated is
+now real: each procedure exports its finite request space as data, and a bounded
+model of the release path, generated from that export, is checked in a solver on
+every point --- that suppressing any design cell denies the model, and that a
+model is a function of finalized cells alone. Two synchronisation tests pin code
+to the exported skeleton and the skeleton to the model, so a change to the code
+that outran the proof would fail the build, and the solver runs in continuous
+integration against a version-pinned binary.
 
 \section{Red-team evaluation}
 \label{sec:redteam}
 
-The harness replays ten scenarios --- two benign, eight attacks --- against a
-single session, first with the gateway off (raw sandbox output returned) and
+The harness replays twenty-two scenarios --- four benign, eighteen attacks ---
+against a single session, first with the gateway off (raw output returned) and
 then on. A leak oracle checks released output for row-level disclosure; for
 inferential attacks the oracle is complemented by which control fired, since
 the individual queries of a differencing pair are not themselves row dumps.
 
-With the gateway off, four of ten scenarios leak row-level data (small-cell
-tables, injected free text propagated to output, smuggled identifiers). With
-the gateway on, all eight attacks are neutralised --- denied, or redacted and
-released --- while both benign analyses flow through, small cells suppressed
-and explained (Figure~\ref{fig:redteam}). The suite runs in continuous
-integration and fails the build on any regression.
+With the gateway off, eight of the twenty-two scenarios leak row-level data
+(small-cell tables, injected free text propagated to output, smuggled
+identifiers, a regression over a grid hiding a suppressed cell). With the
+gateway on, all eighteen attacks are neutralised --- denied, or redacted and
+released --- while the benign analyses flow through, small cells suppressed and
+explained (Figure~\ref{fig:redteam}). The suite runs in continuous integration
+and fails the build on any regression.
 
-\begin{figure}[t]
+\begin{figure}[p]
   \centering
-  \includegraphics[width=0.9\linewidth]{figures/redteam_results.png}
-  \caption{Red-team scenarios with the gateway off versus on. Off: row-level
-  leaks. On: attacks denied or redacted; benign analysis released.}
+  \includegraphics[width=0.66\linewidth]{figures/redteam_results.png}
+  \caption{All twenty-two red-team scenarios with the gateway off versus on.
+  Off: eight leak row-level data. On: every attack is denied or redacted, and
+  the benign baselines are released.}
   \label{fig:redteam}
 \end{figure}
 
@@ -258,19 +328,23 @@ Simulatable auditing~\cite{kenthapadi2005} supplies the refusal-safety
 criterion; reconstruction attacks~\cite{dinur2003} and differential
 privacy~\cite{dwork2006} bound what deterministic SDC can ultimately promise.
 Indirect prompt injection~\cite{greshake2023} motivates treating the data as
-an input channel to the model.
+an input channel to the model. Fitting a model from published margins rather
+than rows is the disclosure-facing cousin of long-standing work on inference
+from aggregate and marginal tables.
 
 \section{Limitations}
 
 The prototype makes a bounded claim. It is not a differential-privacy system;
 its controls are SDC, and the simulatability residual is closed only by a DP
 accountant. The session auditor does not defend across sessions or colluding
-users. The disclosure engine is a stand-in for ACRO. The legacy code-execution
-path is retained only as a red-team narrative; it is not a secure sandbox. The
-planner corpus is small and single-domain, and sampled models vary run to run.
-All evaluation is on synthetic data; the deployment model (local model inside
-the enclave, operator-supplied identity and network boundary) has been
-exercised only in a test setting.
+users. The disclosure engine is a stand-in for ACRO. The model tools cover
+GLMs and one-way ANOVA over categorical terms only, and fitting from rounded
+cells carries a measured distortion. The legacy code-execution path is retained
+only as a red-team narrative; it is not a secure sandbox. The planner corpus is
+small and single-domain, and sampled models vary run to run. All evaluation is
+on synthetic data; the deployment model (local model inside the enclave,
+operator-supplied identity and network boundary) has been exercised only in a
+test setting.
 
 \section{Conclusion}
 
@@ -278,15 +352,17 @@ An LLM agent does break the human-analyst assumptions behind TRE disclosure
 control --- measurably, through injected data, cheap multi-query attacks, and
 a demonstrated unwillingness to refuse. A small, typed, deterministic boundary
 restores the guarantee while keeping the planning help: the model proposes,
-the safepod disposes. The parts that made this workable were unglamorous ---
-finite query spaces, fail-closed defaults, refusals that carry no numbers,
-metadata that never publishes an undeclared value's name --- and all of them
-are stated as checkable clauses rather than intentions.
+the safepod disposes. Richer analysis need not widen the boundary --- a model
+fitted only from checked cells inherits their safety --- and the safety argument
+can be carried as machine-checked clauses rather than intentions. The parts that
+made this workable were unglamorous: finite request spaces, fail-closed
+defaults, refusals that carry no numbers, metadata that never publishes an
+undeclared value's name, and a fitter that never sees a row.
 
-\paragraph{Availability.} Code, specification, corpus and red-team suite:
-\url{https://github.com/wadelab/safe-tre-agent}. The prototype was built with
-AI assistance; all security-relevant code is human-reviewed and covered by the
-traceability table.
+\paragraph{Availability.} Code, specification, corpus, red-team suite and formal
+model: \url{https://github.com/wadelab/safe-tre-agent}. The prototype was built
+with AI assistance; all security-relevant code is human-reviewed and covered by
+the traceability table.
 
 \bibliographystyle{plain}
 \bibliography{references}

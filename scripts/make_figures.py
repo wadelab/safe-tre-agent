@@ -26,7 +26,7 @@ GREEN_F, GREEN_E = "#e7f5ec", "#2e7d32"
 RED_F, RED_E = "#fdeaea", "#c62828"
 
 CONTROL_LABEL = {
-    "small_cell": "min cell size\n(redacted)",
+    "small_cell": "min cell size (redacted)",
     "free_text_egress": "egress block",
     "identifier_egress": "egress block",
     "raw_sensitive": "egress block",
@@ -40,16 +40,23 @@ def collect():
     attacks = yaml.safe_load(open(os.path.join(ROOT, "redteam", "attacks.yaml")))
     rows = []
     for atk in attacks:
-        off = rt.leaked(rt.run_unguarded(tables, atk["requests"]))
-        final_on, status_on, controls = rt.run_guarded(tables, atk["requests"])
+        # mirror run_redteam's two paths: natural-language `requests`, or the
+        # spec-level `steps` used by the model/procedure attacks.
+        if atk.get("path") == "service":
+            off = rt.leaked(rt.run_service_unguarded(tables, atk["steps"]))
+            final_on, status_on, controls = rt.run_service_guarded(tables, atk["steps"])
+        else:
+            off = rt.leaked(rt.run_unguarded(tables, atk["requests"]))
+            final_on, status_on, controls = rt.run_guarded(tables, atk["requests"])
         on = rt.leaked(final_on)
         # pick the most meaningful control to name
         ctrl = next((CONTROL_LABEL[c] for c in
                      ["identifier_egress", "free_text_egress", "raw_sensitive",
                       "small_cell", "differencing", "intent_block"] if c in controls),
                     "released" if status_on == "released" else "blocked")
-        rows.append({"name": atk["name"].replace("_", " "), "off": off,
-                     "on": on, "status": status_on, "ctrl": ctrl})
+        rows.append({"name": atk["name"].replace("_", " "),
+                     "benign": atk.get("type") == "benign",
+                     "off": off, "on": on, "status": status_on, "ctrl": ctrl})
     return rows
 
 
@@ -66,7 +73,7 @@ def cell(ax, x, y, w, h, safe, top, bottom):
 def main():
     rows = collect()
     n = len(rows)
-    fig, ax = plt.subplots(figsize=(8.6, 0.86 * n + 1.8))
+    fig, ax = plt.subplots(figsize=(8.6, 0.52 * n + 1.6))
     ax.set_xlim(0, 10)
     ax.set_ylim(0, n + 1.4)
     ax.axis("off")
@@ -78,15 +85,16 @@ def main():
 
     for i, r in enumerate(rows):
         y = n - 1 - i
-        ax.text(0.2, y + 0.4, r["name"], ha="left", va="center", fontsize=10, color=INK)
+        name = r["name"] if len(r["name"]) <= 30 else r["name"][:29] + "…"
+        ax.text(0.2, y + 0.4, name, ha="left", va="center", fontsize=9, color=INK)
         cell(ax, 3.7, y + 0.06, 2.8, 0.78, not r["off"],
              "LEAK" if r["off"] else "safe",
              "raw rows released" if r["off"] else "no disclosure")
         cell(ax, 6.7, y + 0.06, 2.8, 0.78, not r["on"],
              "LEAK" if r["on"] else "safe", r["ctrl"])
 
-    blocked = sum(1 for r in rows if r["name"] != "benign baseline" and not r["on"])
-    attacks = sum(1 for r in rows if r["name"] != "benign baseline")
+    blocked = sum(1 for r in rows if not r["benign"] and not r["on"])
+    attacks = sum(1 for r in rows if not r["benign"])
     leaked_off = sum(1 for r in rows if r["off"])
     ax.text(0.2, -0.2,
             f"{blocked}/{attacks} attacks neutralised by the gateway   ·   "
