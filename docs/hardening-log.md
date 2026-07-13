@@ -155,10 +155,12 @@ The `Procedure` registry refactor itself is proposed, not yet landed (boundary
 files → reviewed PR); the conformance suite enforces the obligation externally
 in the meantime.
 
-## 2026-07-04 — round 2e (real-model red-team via ExampleProvider)
+## 2026-07-04 — round 2e (real-model red-team, remote endpoint)
 
 First red-team of the secure `QuerySpec` path against a **real, untrusted**
-planner (ExampleProvider `local-model-a`) rather than the deterministic mock. 22
+planner (a remote-hosted model, synthetic data only; the model is deliberately
+not named — see [model runtime](model-runtime.md)) rather than the
+deterministic mock. 22
 adversarial natural-language requests (jailbreaks, prompt-injection phrasings,
 identifier/free-text requests, exact-age and single-individual pinpointing, a
 correlation-influence attempt, and two differencing sequences), each run through
@@ -193,7 +195,7 @@ expressible in one. The real-model run is the evidence: even when a phrasing
 slipped past vetting, nothing disclosive could be produced. The cue list was
 still broadened so obvious paraphrases are stopped early (and cheaply, before an
 API call). A repeatable version of this run lives at
-`redteam/realmodel_results.txt` (git-ignored; needs a ExampleProvider key and network,
+`redteam/realmodel_results.txt` (git-ignored; needs a remote-endpoint key and network,
 so it is a manual check, not a CI gate).
 
 ## 2026-07-04 — round 2d (correlation influence control)

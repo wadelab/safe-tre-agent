@@ -67,11 +67,12 @@ def make_planner():
     MockPlanner. The stub ignores group-by and other request nuance, so falling
     back to it silently degrades result quality (e.g. a grouped correlation
     collapses to a single aggregate). The offline stub is opt-in for tests/CI
-    only, via an explicit SAFETRE_LLM=mock.
+    only, via an explicit SAFETRE_LLM=mock; an unrecognised mode is a
+    configuration error and fails loudly.
     """
-    if (os.environ.get("SAFETRE_LLM") or "").strip().lower() == "mock":
+    from safetre.llm import LLMClient, resolve_planner_mode
+    if resolve_planner_mode(default="real") == "mock":
         return MockPlanner()
-    from safetre.llm import LLMClient
     return LLMPlanner(LLMClient())
 
 

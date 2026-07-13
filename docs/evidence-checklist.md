@@ -12,7 +12,7 @@ the [test deployment evidence bundle](test-deployment.md#7-evidence-bundle).
 | Commit | `git rev-parse HEAD` |
 | Environment lock | `sha256sum uv.lock` |
 | Host and OS | `uname -a` (or equivalent) |
-| Planner mode | `mock`, `real`, or `exampleprovider` (remote modes are synthetic-data-only) |
+| Planner mode | `mock` or `real`; if the endpoint was remote, say so (remote is synthetic-data-only) |
 | Test suite | `uv run pytest -q` |
 | Red-team | `uv run python redteam/run_redteam.py` — the summary line |
 | SAST | `uv run bandit -q -r safetre safetre_web` |
@@ -34,7 +34,7 @@ Paste into an issue comment or release note and fill in:
 ### Demo evidence — YYYY-MM-DD
 
 - commit: `<sha>` · uv.lock sha256: `<hash>`
-- host: `<hostname, OS>` · planner mode: `<mock|real|exampleprovider (synthetic-data-only)>`
+- host: `<hostname, OS>` · planner mode: `<mock|real>` · endpoint: `<local|remote (synthetic-data-only)>`
 - [ ] tests pass (`uv run pytest -q`)
 - [ ] red-team: all attacks neutralised (`uv run python redteam/run_redteam.py`)
 - [ ] SAST clean (`uv run bandit -q -r safetre safetre_web`)
@@ -52,7 +52,8 @@ skips the awkward line.
 ## Status framing
 
 When citing results, keep the same framing the docs use: what is built and
-tested is listed in [progress](progress.md), what is deliberately not yet done
+tested is recorded in the [write-up](writeup.md) and the
+[hardening log](hardening-log.md), what is deliberately not yet done
 is in the [roadmap](roadmap.md), and nothing in a synthetic-data demo implies
 readiness for real data — that bar is the [certification](certification.md)
 and [safepod](safepod.md) pages.

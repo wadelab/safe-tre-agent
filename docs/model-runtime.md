@@ -61,19 +61,22 @@ SAFETRE_ALLOW_REMOTE_LLM=1
 SAFETRE_LLM_BASE_URL=https://example-llm-provider.invalid/v1
 ```
 
-For a ExampleProvider synthetic-data web demo:
+A hosted OpenAI-compatible endpoint works the same way — set the base URL,
+key and model id, with the same explicit opt-in. Remote endpoints are egress
+channels and must stay synthetic-data-only:
 
 ```bash
-export SAFETRE_LLM=exampleprovider
+export SAFETRE_LLM=real
 export SAFETRE_ALLOW_REMOTE_LLM=1
-export PROVIDER_API_KEY=...
-export SAFETRE_LLM_MODEL=provider-pass/hosted-max
+export SAFETRE_LLM_BASE_URL=https://<provider>/v1
+export SAFETRE_LLM_API_KEY=...
+export SAFETRE_LLM_MODEL=<model-id>
 ```
 
-`SAFETRE_LLM=exampleprovider` uses the OpenAI-compatible ExampleProvider API endpoint
-`https://llm.example.net/api/v1`. `SAFETRE_LLM_API_KEY` may be used instead of
-`PROVIDER_API_KEY`; if both are set, the `SAFETRE_LLM_API_KEY` value wins. This
-profile is remote and must stay synthetic-data-only.
+This documentation deliberately does not name the provider or model used for
+the maintainers' own demos: advertising which model plans queries invites
+model-targeted prompt injection, and no safety property depends on the choice —
+the planner is untrusted whichever model fills the role.
 
 Legacy `OPENAI_BASE_URL`, `OPENAI_API_KEY`, and `SAFETRE_MODEL` are still read as
 fallbacks, but new deployments should use the `SAFETRE_LLM_*` names.

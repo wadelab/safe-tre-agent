@@ -40,7 +40,6 @@ hosted server is involved.
 | Understand local model assumptions | [Model runtime](model-runtime.md) |
 | Understand the two-LLM tool contract | [Tool manifest](tool-manifest.md) |
 | See how well local models actually plan | [Planner evaluation](planner-eval.md) |
-| See what has been built, most recent first | [Progress](progress.md) |
 | See what comes next, in order | [Roadmap](roadmap.md) |
 
 ### Using the prototype
@@ -61,8 +60,7 @@ hosted server is involved.
 |---|---|
 | See what's been red-teamed and fixed | [Hardening log](hardening-log.md) |
 | See the conformance review against TRE practice | [Best-practice review](best-practice-review.md) |
-| See the round-2 hardening plan (done) | [Round 2 plan](round2-plan.md) |
-| See the GOV.UK interface restyle plan | [GOV.UK UI plan](govuk-ui-plan.md) |
+| See the GOV.UK interface restyle record | [GOV.UK restyle record](govuk-ui-plan.md) |
 | See the formal-methods analysis | [Formal methods](FORMAL_METHODS_ANALYSIS.md) |
 | See candidate verifiable extensions | [Verifiable extensions](verifiable-extensions.md) |
 

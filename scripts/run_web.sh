@@ -3,7 +3,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-# Load local config (SAFETRE_LLM=exampleprovider/real, API key, model, etc.) so the app
+# Load local config (SAFETRE_LLM=real, endpoint, API key, model, etc.) so the app
 # uses the configured online planner. Without this, SAFETRE_LLM is unset and the
 # app can only use it if it is already exported in the ambient environment.
 ENV_FILE="${SAFETRE_WEB_ENV_FILE:-.env.local}"

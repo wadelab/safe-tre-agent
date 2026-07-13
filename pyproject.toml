@@ -79,8 +79,9 @@ packages = ["safetre", "safetre_web"]
 
 [tool.hatch.build.targets.sdist]
 # source distribution = the reviewable research artifact: code, tests, docs,
-# formal model, harnesses. Local tooling config and binary decks stay out.
-exclude = [".agent", "artifacts/*.ppt", "artifacts/*.pptx", "site"]
+# formal model, harnesses. Hidden local-tooling directories (editor/agent
+# config — anything dot-prefixed except .github) and binary decks stay out.
+exclude = [".[!g]*/", "artifacts/*.ppt", "artifacts/*.pptx", "site"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

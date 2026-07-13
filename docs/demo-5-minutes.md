@@ -43,15 +43,17 @@ enforced at the boundary, not by the planner.
 SAFETRE_LLM=mock uv run uvicorn safetre_web.app:app --host 127.0.0.1 --port 8800
 ```
 
-**Variant B — remote model, synthetic-data-only.** A cheap remote endpoint
-gives the full planning experience. Remote endpoints are egress channels, so
-they require an explicit opt-in and must never be used with real data:
+**Variant B — remote model, synthetic-data-only.** Any hosted
+OpenAI-compatible endpoint gives the full planning experience. Remote
+endpoints are egress channels, so they require an explicit opt-in and must
+never be used with real data:
 
 ```bash
-export SAFETRE_LLM=exampleprovider
+export SAFETRE_LLM=real
 export SAFETRE_ALLOW_REMOTE_LLM=1        # synthetic-data-only opt-in
-export PROVIDER_API_KEY=...                 # never commit this
-export SAFETRE_LLM_MODEL=provider-pass/hosted-max
+export SAFETRE_LLM_BASE_URL=https://<provider>/v1
+export SAFETRE_LLM_API_KEY=...           # never commit this
+export SAFETRE_LLM_MODEL=<model-id>
 uv run uvicorn safetre_web.app:app --host 127.0.0.1 --port 8800
 ```
 

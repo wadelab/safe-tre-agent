@@ -7,8 +7,6 @@ import threading
 import pytest
 
 from safetre.llm import (
-    PROVIDER_BASE_URL,
-    PROVIDER_DEFAULT_MODEL,
     DEFAULT_LLM_BASE_URL,
     DEFAULT_LLM_MODEL,
     LLMClient,
@@ -27,7 +25,6 @@ LLM_ENV = [
     "SAFETRE_ALLOWED_LLM_HOSTS",
     "SAFETRE_ALLOW_REMOTE_LLM",
     "SAFETRE_LLM",
-    "PROVIDER_API_KEY",
     "OPENAI_BASE_URL",
     "OPENAI_API_KEY",
     "SAFETRE_MODEL",
@@ -84,56 +81,47 @@ def test_llm_config_allows_remote_only_when_explicitly_enabled(monkeypatch):
     assert LLMConfig.from_env().base_url == "https://openrouter.ai/api/v1"
 
 
-def test_exampleprovider_profile_uses_provider_defaults_and_key(monkeypatch):
+def test_remote_endpoint_configured_via_generic_env(monkeypatch):
     clear_llm_env(monkeypatch)
-    monkeypatch.setenv("SAFETRE_LLM", "exampleprovider")
+    monkeypatch.setenv("SAFETRE_LLM", "real")
     monkeypatch.setenv("SAFETRE_ALLOW_REMOTE_LLM", "1")
-    monkeypatch.setenv("PROVIDER_API_KEY", "provider-key")
+    monkeypatch.setenv("SAFETRE_LLM_BASE_URL", "https://remote.example/v1")
+    monkeypatch.setenv("SAFETRE_LLM_MODEL", "provider/model-id")
+    monkeypatch.setenv("SAFETRE_LLM_API_KEY", "remote-key")
     cfg = LLMConfig.from_env()
-    assert cfg.provider == "exampleprovider"
-    assert cfg.base_url == PROVIDER_BASE_URL
-    assert cfg.model == PROVIDER_DEFAULT_MODEL
-    assert cfg.api_key == "provider-key"
+    assert cfg.base_url == "https://remote.example/v1"
+    assert cfg.model == "provider/model-id"
+    assert cfg.api_key == "remote-key"
 
 
-def test_exampleprovider_profile_prefers_safetre_api_key(monkeypatch):
+def test_api_key_prefers_safetre_over_legacy_openai_env(monkeypatch):
     clear_llm_env(monkeypatch)
-    monkeypatch.setenv("SAFETRE_LLM_PROVIDER", "exampleprovider")
-    monkeypatch.setenv("SAFETRE_ALLOW_REMOTE_LLM", "1")
-    monkeypatch.setenv("PROVIDER_API_KEY", "provider-key")
+    monkeypatch.setenv("OPENAI_API_KEY", "legacy-key")
     monkeypatch.setenv("SAFETRE_LLM_API_KEY", "safetre-key")
     assert LLMConfig.from_env().api_key == "safetre-key"
 
 
-def test_exampleprovider_profile_prefers_provider_key_over_legacy_openai_key(monkeypatch):
+def test_provider_profile_env_is_rejected_loudly(monkeypatch):
     clear_llm_env(monkeypatch)
-    monkeypatch.setenv("SAFETRE_LLM", "exampleprovider")
-    monkeypatch.setenv("SAFETRE_ALLOW_REMOTE_LLM", "1")
-    monkeypatch.setenv("OPENAI_API_KEY", "legacy-key")
-    monkeypatch.setenv("PROVIDER_API_KEY", "provider-key")
-    assert LLMConfig.from_env().api_key == "provider-key"
-
-
-def test_exampleprovider_profile_still_requires_remote_opt_in(monkeypatch):
-    clear_llm_env(monkeypatch)
-    monkeypatch.setenv("SAFETRE_LLM", "exampleprovider")
-    monkeypatch.setenv("PROVIDER_API_KEY", "provider-key")
-    with pytest.raises(ValueError, match="not allowed"):
+    monkeypatch.setenv("SAFETRE_LLM_PROVIDER", "some-provider")
+    with pytest.raises(ValueError, match="no longer supported"):
         LLMConfig.from_env()
 
 
-def test_exampleprovider_profile_requires_api_key(monkeypatch):
+def test_planner_mode_real_and_mock(monkeypatch):
     clear_llm_env(monkeypatch)
-    monkeypatch.setenv("SAFETRE_LLM_PROVIDER", "exampleprovider")
-    monkeypatch.setenv("SAFETRE_ALLOW_REMOTE_LLM", "1")
-    with pytest.raises(ValueError, match="ExampleProvider requires"):
-        LLMConfig.from_env()
-
-
-def test_exampleprovider_mode_uses_real_planner(monkeypatch):
-    clear_llm_env(monkeypatch)
-    monkeypatch.setenv("SAFETRE_LLM", "exampleprovider")
+    assert real_llm_enabled() is False          # unset -> offline mock (CLI default)
+    monkeypatch.setenv("SAFETRE_LLM", "mock")
+    assert real_llm_enabled() is False
+    monkeypatch.setenv("SAFETRE_LLM", "real")
     assert real_llm_enabled() is True
+
+
+def test_unknown_planner_mode_fails_loudly_not_silently(monkeypatch):
+    clear_llm_env(monkeypatch)
+    monkeypatch.setenv("SAFETRE_LLM", "some-old-profile")
+    with pytest.raises(ValueError, match="unknown SAFETRE_LLM mode"):
+        real_llm_enabled()
 
 
 def test_llm_client_speaks_chat_completions_protocol(monkeypatch):
@@ -178,7 +166,8 @@ def test_llm_client_speaks_chat_completions_protocol(monkeypatch):
     ]
 
 
-def test_llm_client_accepts_exampleprovider_data_wrapped_response(monkeypatch):
+def test_llm_client_accepts_data_wrapped_response(monkeypatch):
+    """Some API gateways wrap the chat-completions payload in a data envelope."""
     clear_llm_env(monkeypatch)
 
     class Handler(BaseHTTPRequestHandler):

@@ -16,7 +16,7 @@ from safetre.llm import LLMClient, MockLLM, real_llm_enabled  # noqa: E402
 
 
 def make_llm():
-    # honours SAFETRE_LLM in {real, exampleprovider, ...}; anything else -> offline mock
+    # SAFETRE_LLM=real -> real client; unset/mock -> offline mock; anything else fails loudly
     if real_llm_enabled():
         return LLMClient()
     return MockLLM()

@@ -135,13 +135,14 @@ SAFETRE_ALLOW_REMOTE_LLM=1
 
 Remote endpoints are synthetic-data-only because they are data-egress channels.
 
-For a ExampleProvider-only synthetic demo, set:
+For a remote-endpoint synthetic demo, set:
 
 ```bash
-export SAFETRE_LLM=exampleprovider
+export SAFETRE_LLM=real
 export SAFETRE_ALLOW_REMOTE_LLM=1
-export PROVIDER_API_KEY=...
-export SAFETRE_LLM_MODEL=provider-pass/hosted-max
+export SAFETRE_LLM_BASE_URL=https://<provider>/v1
+export SAFETRE_LLM_API_KEY=...
+export SAFETRE_LLM_MODEL=<model-id>
 ```
 
 Then run `scripts/run_web.sh` or the `uvicorn` command from step 4. Do not store

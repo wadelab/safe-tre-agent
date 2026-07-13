@@ -104,13 +104,14 @@ The endpoint must implement OpenAI-compatible `/v1/chat/completions`. Remote
 model endpoints require `SAFETRE_ALLOW_REMOTE_LLM=1` and are for synthetic-data
 development only.
 
-For the ExampleProvider synthetic-data web demo:
+For a remote-endpoint synthetic-data web demo:
 
 ```bash
-export SAFETRE_LLM=exampleprovider
-export SAFETRE_ALLOW_REMOTE_LLM=1
-export PROVIDER_API_KEY=...
-export SAFETRE_LLM_MODEL=provider-pass/hosted-max
+export SAFETRE_LLM=real
+export SAFETRE_ALLOW_REMOTE_LLM=1        # synthetic-data-only opt-in
+export SAFETRE_LLM_BASE_URL=https://<provider>/v1
+export SAFETRE_LLM_API_KEY=...           # never commit this
+export SAFETRE_LLM_MODEL=<model-id>
 scripts/run_web.sh
 ```
 

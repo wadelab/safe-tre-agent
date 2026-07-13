@@ -295,7 +295,7 @@ is a validation rejection) measures this gap
     Planner & valid & primary & accepted & cohort & rejected \\
     \midrule
     Keyword stub (control) & 94\% & 33\% & 33\% & 44\% & 50\% \\
-    Local LLM (local-model-a) & 94\% & 50\% & 67\% & 72\% & 0--25\% \\
+    Real LLM planner\footnotemark{} & 94\% & 50\% & 67\% & 72\% & 0--25\% \\
     \bottomrule
   \end{tabular}
   \caption{Planner quality against the reference corpus. \emph{valid}: passes
@@ -305,6 +305,11 @@ is a validation rejection) measures this gap
   runs).}
   \label{tab:planner}
 \end{table}
+\footnotetext{A remote-hosted model behind an OpenAI-compatible endpoint,
+used under the prototype's synthetic-data-only opt-in. The model is
+deliberately not named: advertising which model plans queries invites
+model-targeted prompting, and the measurement characterises the class of
+planner the boundary must tolerate, not one product.}
 
 Two findings matter for the architecture. The model plans usefully but
 imprecisely --- its common miss is a dropped filter, yielding a valid query

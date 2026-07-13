@@ -137,9 +137,9 @@ uv run uvicorn safetre_web.app:app --host 127.0.0.1 --port 8800   # or scripts/r
 ```
 
 The interface follows the [GOV.UK Design System](https://design-system.service.gov.uk/)
-(unbranded) and is WCAG 2.2 AA. See [what has been built](docs/progress.md) for
-recent work — a normative [specification](docs/specification.md), a safe
-schema-disclosure endpoint, and a planner-quality [evaluation](docs/planner-eval.md).
+(unbranded) and is WCAG 2.2 AA. Recent work includes a normative
+[specification](docs/specification.md), a safe schema-disclosure endpoint, and
+a planner-quality [evaluation](docs/planner-eval.md).
 
 The web layer is built security-first (the model is treated as untrusted):
 

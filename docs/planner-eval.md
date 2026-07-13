@@ -25,9 +25,14 @@ uv run python evals/run_planner_eval.py --planner real  # SAFETRE_LLM_* env
 | Planner | valid | primary | accepted | cohort | rejected (n=4) |
 |---|---|---|---|---|---|
 | MockPlanner (keyword stub) | 94% | 33% | 33% | 44% | 50% |
-| local-model-a (local, via provider-pass) | 94% | 50% | 67% | 72% | 0–25%* |
+| Real planner (remote-hosted model†) | 94% | 50% | 67% | 72% | 0–25%* |
 
 \* two runs; the model is sampled, so scores vary run to run.
+
+† synthetic-data-only endpoint; the model is deliberately not named
+([model runtime](model-runtime.md)) — naming the planner invites
+model-targeted prompting, and the measurement is of the *class* of planner
+the boundary must tolerate, not of one product.
 
 Three observations worth keeping:
 

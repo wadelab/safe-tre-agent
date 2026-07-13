@@ -40,7 +40,6 @@ nav:
       - Model runtime: model-runtime.md
       - Tool manifest: tool-manifest.md
       - Planner evaluation: planner-eval.md
-      - Progress: progress.md
       - Roadmap: roadmap.md
   - Public demo:
       - Overview: public-demo.md
@@ -59,8 +58,7 @@ nav:
   - Engineering record:
       - Hardening log: hardening-log.md
       - Best-practice review: best-practice-review.md
-      - Round 2 plan: round2-plan.md
-      - GOV.UK UI plan: govuk-ui-plan.md
+      - GOV.UK restyle record: govuk-ui-plan.md
       - Formal methods: FORMAL_METHODS_ANALYSIS.md
       - Verifiable extensions: verifiable-extensions.md
       - Adding a statistical tool (ANOVA): adding-a-statistical-tool.md
