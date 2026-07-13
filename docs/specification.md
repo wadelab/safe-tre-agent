@@ -10,7 +10,7 @@ states the requirements as testable clauses.
 The requirements cover the **secure path** — the QuerySpec gateway that the web
 interface uses and that carries the whole security claim. The legacy
 "LLM-writes-pandas" path is out of scope here except where a prohibition names
-it (see [N3](#non-goals)).
+it (see [N3](#non-goals-what-it-does-not-claim)).
 
 ## Conventions
 
@@ -189,7 +189,7 @@ trail. Refusals are non-numeric.
 decision MUST be a function of the published, simulatable marginals only, so a
 refusal discloses nothing an analyst could not already compute. *(One residual
 bit — isolating a sub-threshold category — is the documented deviation a DP
-accountant closes; see [N1](#non-goals).)*
+accountant closes; see [N1](#non-goals-what-it-does-not-claim).)*
 
 **P12** — MUST NOT publish, in the marginals, a sub-threshold donor count or any
 value outside a column's declared domain. An undeclared value (a hostile string

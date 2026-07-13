@@ -142,5 +142,5 @@ Models with continuous predictors for logistic/Poisson families (their maths
 genuinely needs row-level data, so they wait for ACRO's production output
 checking); anything across sessions or colluding users (differential privacy
 is the roadmap answer); and it remains a research prototype on synthetic
-data — see the [non-goals](specification.md#non-goals) and the
-[roadmap](roadmap.md).
+data — see the [non-goals](specification.md#non-goals-what-it-does-not-claim)
+and the [roadmap](roadmap.md).

@@ -17,7 +17,7 @@ Guidance for coding agents working in this repository.
 - Real-model integrations must stay local-first and model-agnostic. Prefer `SAFETRE_LLM_*` settings and the `complete(system, user)` adapter boundary over provider SDK assumptions.
 - Remote LLM endpoints require explicit `SAFETRE_ALLOW_REMOTE_LLM=1` and are synthetic-data-only.
 - Outside planners may use the public tool manifest, but the manifest is not authorization. The safepod must validate every proposed tool call independently.
-- Future stats tools such as GLMs, regression, and ANOVA must be fixed-function schemas with deterministic validators and disclosure checks, not arbitrary generated code.
+- Statistical tools (the shipped GLM and one-way ANOVA, and any future additions) must be fixed-function schemas with deterministic validators and disclosure checks, not arbitrary generated code; new procedures register declared conformance obligations in `safetre/procedures.py` (see `docs/adding-a-statistical-tool.md`).
 - Keep direct identifiers, free text, raw timestamps, and high-granularity fields out of the public catalogue and public DuckDB views.
 - All filter values must remain bound parameters. Identifiers must come only from allowlists and pass identifier validation.
 - Do not lower disclosure thresholds, dominance controls, correlation influence controls, count rounding, query-budget checks, or differencing checks without explicit security review.
@@ -48,9 +48,9 @@ uv run python redteam/run_redteam.py
 For docs changes, also run:
 
 ```bash
-uv run --group docs mkdocs build
+uv run --group docs mkdocs build --strict
 ```
 
-`mkdocs build --strict` currently fails on known links from docs to source files outside `docs/`; do not treat that as a new regression unless those warnings change.
+The strict build passes and is a CI gate; treat any new warning as a regression.
 
 On each new build, update a version tag visible in the webpage so that we can see which version of the code produced the interface we are using and also which verison goes with which docs.
