@@ -110,6 +110,25 @@ Use a real local model by setting the generic `SAFETRE_LLM_*` env vars in `.env`
 (see `.env.example`) and `SAFETRE_LLM=real`. Remote model endpoints require an
 explicit synthetic-data-only opt-in.
 
+## Public demo route
+
+The repo is the demo — there is no hosted server, and the primary demo path
+needs no network exposure at all. The docs walk a reviewer from clone to
+understanding in under fifteen minutes:
+
+- [Demo in 5 minutes](docs/demo-5-minutes.md) — pinned env, synthetic data,
+  the web app on loopback, three smoke checks. Offline planner mode
+  (`SAFETRE_LLM=mock`, no key) or a synthetic-data-only remote model profile.
+- [Screenshot tour](docs/screenshot-tour.md) — home, released, redacted,
+  denied, audit verify: what each state shows and how to reproduce the images.
+- [Evidence checklist](docs/evidence-checklist.md) — record commit, lock hash,
+  check results and audit verification so a demo run is citable.
+
+If you do need to show it to someone remotely, keep the app on loopback and
+use the restricted-channel topology in [deployment](docs/deployment.md)
+(`tailscale serve` into localhost); remote model endpoints remain
+synthetic-data-only either way.
+
 ## Web interface (Phase 1 — security-first)
 
 ```bash

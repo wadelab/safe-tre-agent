@@ -47,6 +47,15 @@ uv run pytest -q
 | `test_disclosure.py` | gateway rules (min cell, egress, differencing) |
 | `test_pipeline.py` | legacy guarded analyst path and sandbox isolation |
 
+## Docs screenshots
+
+The demo-state images in the docs (`docs/figures/demo-*.png`) are generated,
+not hand-captured: `uv run python scripts/make_demo_screenshots.py` starts a
+throwaway mock-planner server on port 8801 and screenshots the four states
+with headless Chrome. Regenerate them after any UI change and check the diff.
+The states and queries are documented in the
+[screenshot tour](screenshot-tour.md#reproducing-the-captures).
+
 ## Security checks
 
 ```bash

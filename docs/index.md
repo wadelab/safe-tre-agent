@@ -14,6 +14,20 @@ The **[research write-up](writeup.md)** is the canonical technical report: the
 problem, the design, the red-team results, and the simulatable-auditing
 argument. Everything else supports it.
 
+To see it run rather than read about it, take the **[public demo](public-demo.md)**
+path: clone the repo, run the synthetic demo locally in five minutes, and check
+what you see against the recorded screenshot tour and evidence checklist. No
+hosted server is involved.
+
+### The public demo
+
+| If you want to… | Read |
+|---|---|
+| Understand the demo route and its scope | [Public demo](public-demo.md) |
+| Run the synthetic demo locally, fast | [Demo in 5 minutes](demo-5-minutes.md) |
+| See the five states that carry the argument | [Screenshot tour](screenshot-tour.md) |
+| Record a run as citable evidence | [Evidence checklist](evidence-checklist.md) |
+
 ### The research argument
 
 | If you want to… | Read |

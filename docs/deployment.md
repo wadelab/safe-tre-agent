@@ -108,7 +108,7 @@ All configuration is via environment variables.
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `SAFETRE_LLM` | `mock` | `mock` (deterministic MockPlanner), `real` (generic model planner), or `exampleprovider` (synthetic-data remote demo only) |
+| `SAFETRE_LLM` | `real` | `real` (generic model planner, the default), `exampleprovider` (synthetic-data remote demo only), or `mock` (deterministic MockPlanner — explicit tests/CI opt-in, never a silent fallback) |
 | `SAFETRE_LLM_PROVIDER` | `generic` | optional provider profile; `exampleprovider` selects the ExampleProvider API defaults |
 | `SAFETRE_LLM_BASE_URL` | `http://127.0.0.1:8000/v1` | OpenAI-compatible local model endpoint |
 | `SAFETRE_LLM_API_KEY` | `local` | bearer token for the local endpoint, if required |

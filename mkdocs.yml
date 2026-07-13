@@ -42,6 +42,11 @@ nav:
       - Planner evaluation: planner-eval.md
       - Progress: progress.md
       - Roadmap: roadmap.md
+  - Public demo:
+      - Overview: public-demo.md
+      - Demo in 5 minutes: demo-5-minutes.md
+      - Screenshot tour: screenshot-tour.md
+      - Evidence checklist: evidence-checklist.md
   - Using the prototype:
       - Beginner guide: beginner.md
       - How to install: install.md
