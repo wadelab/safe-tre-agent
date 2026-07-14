@@ -583,6 +583,145 @@ def build_guidelines(shots: str, out: str) -> None:
     print(f"deck -> {out}")
 
 
+def build_formal_elif(shots: str, out: str) -> None:
+    """The plain-language deck for the formal layer: what the Lean proofs and
+    Alloy models do, why they are needed, how they work, where they stop
+    (precise version: docs/FORMAL_METHODS_ANALYSIS.md + formal/README.md)."""
+    prs = Presentation()
+    prs.slide_width = SLIDE_W
+    prs.slide_height = SLIDE_H
+
+    title_slide(prs, "The maths-checked safety layer, explained simply",
+                "What the Lean proofs and Alloy models do, why we need them, "
+                "how they are built, and where they stop "
+                "(precise version: docs/FORMAL_METHODS_ANALYSIS.md · formal/README.md)")
+
+    bullets_slide(prs, "TL;DR", [
+        "Tests check the examples we thought of; proofs check EVERY possibility.",
+        "Lean 4 now proves the core rules: no valid question can ever name a person's identifier,",
+        "   and the SQL we build is always one read-only question with the data values kept out of it.",
+        "Alloy searches every arrangement of a small world for a way to break the model-fitting",
+        "   and differencing rules — and finds none.",
+        "Alloy must also keep FINDING the two known gaps — so the model can't quietly flatter the code.",
+        "Everything is generated from the running code and re-checked in CI on every push.",
+    ], accent=GREEN)
+
+    bullets_slide(prs, "Why tests alone are not enough", [
+        "A test checks the cases we thought of; an attacker looks for the case we didn't.",
+        "The question space is infinite — filters can hold any value, requests any wording —",
+        "   so no test suite can enumerate it.",
+        "A proof quantifies over ALL cases at once, and it would still hold if every test were deleted.",
+        "Our catalogue is small and finite — the rare luxury that makes proving practical here.",
+    ])
+
+    bullets_slide(prs, "Two tools, two different jobs", [
+        "LEAN 4 is a proof assistant: we restate a rule in mathematics and the computer",
+        "   checks the proof line by line. Best for 'this holds for ALL queries, forever'.",
+        "ALLOY is a model finder: describe a small world and it tries every arrangement of it,",
+        "   exhaustively, hunting for one that breaks the rule. Best for 'can any COMBINATION",
+        "   of events go wrong?' — suppressed cells, pairs of queries, unlucky orderings.",
+        "Rule of thumb used here: Lean where we can prove for all; Alloy where we search combinations.",
+    ])
+
+    bullets_slide(prs, "What Lean proves (the librarian's forms)", [
+        "No valid request form can name a diary owner: identifiers, free text and timestamps",
+        "   are on no allowlist, and every allowlisted name is proved different from them.",
+        "'Internal' columns (like exact age) may narrow a question but can never be grouped or released.",
+        "The database question we compile is always ONE read-only SELECT on one declared view —",
+        "   the grammar we prove in simply has no way to write anything else.",
+        "Data values can never appear inside the SQL text: the model has no field that could hold one.",
+        "Every column carries a privacy label, and the labels are consistent:",
+        "   group keys are never sensitive; measured quantities always are.",
+    ], accent=GREEN)
+
+    bullets_slide(prs, "How the Lean layer is built", [
+        "The catalogue, the labels, and the engine's real view columns are GENERATED from the",
+        "   running code — the view columns come from asking the database itself, not reading source text.",
+        "A small Lean mirror of the validator and the SQL builder; each rule proved once, over all specs.",
+        "The pin to reality: 414 generated example queries where Lean's rendered SQL must equal",
+        "   the real engine's output byte for byte, bound-parameter counts included.",
+        "Sync tests fail CI the moment the generated files drift from the code;",
+        "   the CI formal job then re-checks every proof with a checksum-pinned toolchain.",
+    ])
+
+    bullets_slide(prs, "What the Lean layer does NOT give you", [
+        "It proves a MODEL of the code, not the Python itself. The gap is closed by generation,",
+        "   the byte-exact pin, and sync tests — but it is a gap, and we say so.",
+        "One theorem (the 414-case pin) is checked by fast compiled evaluation, which trusts",
+        "   the Lean compiler; the same pairs are independently re-checked from the Python side.",
+        "It is about NAMES and SHAPES — which columns, what SQL. It does not yet prove anything",
+        "   about the released NUMBERS. That is the differential-privacy roadmap item.",
+    ], accent=AMBER)
+
+    bullets_slide(prs, "What Alloy checks (1): model fitting", [
+        "The rule: a statistical model may be fitted ONLY from summary cells the gateway released.",
+        "Alloy explores EVERY possible vetting outcome — each cell released or suppressed,",
+        "   in every combination — and finds no way to fit past a blocked cell.",
+        "It also finds the counterexample instantly when we deliberately weaken the rule,",
+        "   which is how we know the check has teeth.",
+        "The catalogue facts are checked over the REAL datasets and columns — exhaustive, not sampled.",
+    ], accent=GREEN)
+
+    bullets_slide(prs, "What Alloy checks (2): the differencing attack", [
+        "The attack: ask two almost-identical group questions and subtract —",
+        "   the difference between the answers can be one person.",
+        "Our auditor decides from PUBLISHED group sizes only, so a refusal itself leaks nothing.",
+        "Checked: the published bound never under-counts the true difference (denials are sound),",
+        "   and the classic move — adding or removing one rare category — always dies.",
+    ], accent=GREEN)
+
+    bullets_slide(prs, "The honest twist: the checker must keep finding the holes", [
+        "The differencing rule has two known gaps, documented in the code itself:",
+        "   a big group size can hide a small true difference, and a question that changes",
+        "   TWO things at once is never denied by this rule.",
+        "Instead of hiding them, the Alloy model is required to EXHIBIT both gaps on demand.",
+        "If it ever stops finding them, CI fails — the model has drifted into flattering the code.",
+        "Today the gaps are covered by the per-cell size threshold; properly closing them",
+        "   is the differential-privacy roadmap item.",
+    ], accent=AMBER)
+
+    bullets_slide(prs, "What the Alloy layer does NOT give you", [
+        "It is BOUNDED: small worlds (six donors, a few queries at a time).",
+        "'No counterexample within bounds' is strong evidence, not an unconditional proof —",
+        "   most real design flaws show up in small worlds, but that is a heuristic, not a theorem.",
+        "It checks PAIRS of queries; the session's full timeline (budget spending,",
+        "   observe-then-record ordering) is the next slice of work.",
+        "Same model-vs-code gap as Lean, closed the same way: generated facts, sync tests.",
+    ], accent=AMBER)
+
+    bullets_slide(prs, "Keeping the maths honest", [
+        "The classic failure of formal methods: the model quietly stops matching the code,",
+        "   and the proofs keep passing about a system that no longer exists.",
+        "Three cheap sync tests run with the ordinary test suite (no Lean, no Java needed):",
+        "   the exported request space, the Alloy catalogue block, and the Lean catalogue +",
+        "   all 414 SQL pairs must each equal what the live code generates right now.",
+        "After any catalogue or view change: regenerate both, or CI refuses the change.",
+        "CI downloads both toolchains checksum-pinned — the checker itself can't be swapped out.",
+    ], accent=GREEN)
+
+    table_slide(prs, "The numbers",
+                ["What", "Count"],
+                [["Lean theorems (helper lemmas included), zero `sorry`", "40"],
+                 ["Byte-exact SQL pin cases against the live engine", "414"],
+                 ["Alloy models / checked properties / must-stay-findable gaps", "2 / 6 / 3"],
+                 ["Axioms beyond Lean's standard three", "1 (fast evaluation, on one theorem)"],
+                 ["Pytest sync hops pinning models to code", "3"],
+                 ["Toolchains, both checksum-pinned in CI", "Lean 4.32.0 · Alloy 6.2.0"]],
+                col_widths=[8.0, 3.5])
+
+    bullets_slide(prs, "What the whole layer still cannot do", [
+        "It cannot make the planner safe — the planner stays untrusted.",
+        "   The proofs are about the cage, not the animal.",
+        "It does not prove the released numbers are private: these are disclosure controls,",
+        "   not differential privacy — no epsilon budget yet.",
+        "It cannot see physical or social risk: safepods, key custody and people remain governance.",
+        "It remains a research prototype, on synthetic data only.",
+    ], accent=GREY)
+
+    prs.save(out)
+    print(f"deck -> {out}")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--out-dir", default=os.path.join(ROOT, "artifacts"))
@@ -610,6 +749,7 @@ def main() -> int:
     # maintainer's deck alongside docs/maintenance.md.
     build_elif(args.shots_dir, os.path.join(args.out_dir, "ELIF.ppt"))
     build_guidelines(args.shots_dir, os.path.join(args.out_dir, "GUIDELINES.ppt"))
+    build_formal_elif(args.shots_dir, os.path.join(args.out_dir, "ELIF-FORMAL.ppt"))
     return 0
 
 
