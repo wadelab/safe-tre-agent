@@ -19,6 +19,20 @@ Screenshots land in `artifacts/shots/` (also gitignored); pass `--no-capture`
 to rebuild from existing ones. Regenerate after any UI or status change so the
 deck never drifts from the interface.
 
+## The component map is generated
+
+`safe-tre-agent-components.pptx` — the component & trust map (runtime
+pipeline, assurance toolchain, upstream-project provenance) — is built by
+`scripts/make_component_map.py`. No screenshots, so no capture step; the
+red-team corpus size is read from `redteam/attacks.yaml` at build time:
+
+```bash
+uv run --group decks python scripts/make_component_map.py
+```
+
+Regenerate after adding a procedure, a formal model, a CI job, or a runtime
+dependency, so the map never drifts from the code.
+
 ## Still hand-made
 
 - `userguide.pdf` — rendered from `docs/userguide.md`
