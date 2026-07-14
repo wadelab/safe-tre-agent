@@ -9,7 +9,7 @@ whole security argument rests on.
 import re
 import typing
 
-from safetre import disclosure, engine, query
+from safetre import disclosure, engine, query, schema
 from safetre.schema import identifier_columns
 
 FORBIDDEN_IN_PUBLIC_VIEWS = {"donor_id", "free_text", "age_years"}
@@ -32,6 +32,23 @@ def test_public_catalogue_excludes_identifiers_and_freetext():
         cols = set(info["dims"]) | set(info["measures"])
         assert "donor_id" not in cols and "free_text" not in cols
         assert not (cols & identifier_columns()), f"identifier in catalogue {ds!r}"
+
+
+def test_every_catalogue_column_has_an_explicit_role():
+    """schema.role_of falls back to 'R' (reference) for unknown columns, the
+    LEAST protective label. A catalogue column relying on that default would
+    be mislabelled silently, and the generated Lean label map would inherit
+    the error — so require an explicit role for every exposed column."""
+    declared = ({c for cols in schema.TABLES.values() for c in cols}
+                | set(schema._DERIVED_ROLES))
+    for ds, info in query.CATALOGUE.items():
+        cols = (set(info["dims"]) | set(info["measures"])
+                | set(info.get("internal_filters", {}))
+                | set(info.get("internal_measures", set())))
+        missing = cols - declared
+        assert not missing, (
+            f"{ds!r}: catalogue columns without an explicit disclosure "
+            f"role: {sorted(missing)}")
 
 
 def test_internal_analysis_columns_are_not_public_outputs():

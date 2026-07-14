@@ -50,6 +50,14 @@ theorem no_identifier_leakage (q : QuerySpec) :
 
 **CI integration:** Install `elan` (the Lean toolchain manager) and run `lean --check formal/QuerySpec.lean` as a CI step. If the proof fails, the build fails.
 
+**2026-07-14 update — implemented.** `formal/lean/` holds a Lean 4 model of the catalogue and QuerySpec validity (`SafeTre/Spec.lean`), generated from the live code by `scripts/gen_lean_catalogue.py` (`SafeTre/Catalogue.lean`: dims, measures, internal columns, disclosure-role labels via `schema.role_of`, and the engine's *live* view columns read back from DuckDB). The proved theorems (`SafeTre/Proofs.lean` — no `sorry`; standard axioms only, checked with `#print axioms`):
+
+- `no_identifier_reference` — over the whole (unbounded) spec space, a valid spec references only allowlisted columns, and every allowlist is disjoint from `{donor_id, free_text, ts}` (P3);
+- `internal_never_grouped` and `end_to_end_release_safe` — internal-only columns are never group-by keys, and a released frame carries only group-by keys and fixed payload names: never an identifier, internal, or witness column (P4; P2's column-level form);
+- label consistency — every referencable column carries an explicit role, none is DI, group-by keys are never sensitive, all public measures are sensitive, and the live public views expose no DI column (`test_invariants.py` additionally forbids any catalogue column from falling back to `role_of`'s permissive default).
+
+CI replays the proofs with a sha256-pinned Lean toolchain (`lake build` of `formal/lean` in the `formal` job — the roadmap's `lean --check` in its Lake form); `tests/test_formal_lean_sync.py` regenerates the artifacts and fails on drift, closing the model↔code gap the same way the Alloy skeleton sync does.
+
 ---
 
 ### B. SQL Generation Correctness: "The Engine Only Produces Safe SQL"
@@ -89,6 +97,8 @@ theorem sql_is_readonly (spec : QuerySpec) :
 
 This is not a machine-checked grammar proof yet, but it makes the SQL safety contract directly inspectable in CI.
 
+**2026-07-14 update — proved.** `formal/lean/SafeTre/Sql.lean` defines the SafeSQL grammar as an inductive type — one SELECT over one declared view, WHERE atoms that carry values only as `?`-placeholder counts, the fixed `ORDER BY n DESC LIMIT` tail — and an abstract compiler mirroring `engine.compile_query`. The type has no constructor for DDL, DML, joins, or subqueries, and no field of any value type, so read-only-ness and never-interpolating-values (P9) hold by construction. Proved on top (`SafeTre/Proofs.lean`): `compile_mentions_no_identifier` (nothing selected, filtered, or guarded is a forbidden column), `compile_single_declared_view` (the public view, or the unit view exactly when the spec uses declared internal columns — `engine._source_view`; the roadmap line's "public views only" was the imprecise form), `compile_mentions_on_view` (every mentioned column exists on the source view; on the public branch nothing internal is mentioned), and `compile_param_accounting` (exactly one bound parameter per filter value). The model is pinned to the engine by `cases_pin_engine`: 414 generated cases — every registered measure configuration crossed with group-by depths and filter shapes — where the Lean-rendered SQL must equal `compile_query`'s output byte for byte and the parameter counts must agree. That one theorem is checked by `native_decide` (compiled evaluation — the only theorem with a larger trusted base), and the same pairs are independently regenerated from the live engine by the pytest sync hop.
+
 ---
 
 ### C. Information-Flow Analysis: "No Identifier-Labeled Data Can Reach Release"
@@ -114,6 +124,16 @@ Prove noninterference: **Secret data cannot affect the Public/Sensitive output**
 
 2. **Full (research-grade, 3–6 months):** Use a labelled type system (e.g., encode in Lean 4 or use a language-level information-flow type system like Jif/FlowCaml) to type-check the entire data pipeline: view projection → engine aggregation → disclosure filtering → rounding.
 
+**2026-07-14 design note — what is now mechanized, and the honest shape of the rest.** The lightweight path is done (§A): every catalogue column carries a DI/QI/S/R label generated from `schema.role_of`, label consistency is proved in Lean, a strict-coverage test forbids silent default labels, and the *column-level* noninterference corollary is a theorem — a valid spec's released frame cannot name a Secret or Internal-only column, end to end through validation, compilation, and the gateway's finalize step (`end_to_end_release_safe`).
+
+What column-level reasoning cannot give is *value-level* noninterference: that the numbers in a released aggregate are insensitive, up to the disclosure controls, to any one donor's data. Three observations shape the practical route:
+
+1. **The right statement is conditional declassification, not classical noninterference.** Aggregates *must* depend on sensitive values — that is their purpose. The provable form is: released values are a function of gateway-finalized cells only, and each release channel is an approved aggregate whose declared disclosure class (`cell_key` / `count` / `magnitude` / `statistic` / `p_value`) has its control applied (threshold, dominance, influence). The procedure output contract (R14) is exactly this declassification policy, already stated in code.
+2. **The GLM path already has the strongest witness.** `refit_from_artifact` reproduces a released model bit-for-bit from the released artifacts alone (P21, machine-checked over the enumerated skeleton): released model outputs provably carry no information beyond the vetted cells. The web query path's analogue is a release-equality test — recompute the released frame from the finalized table alone and require bit-equality — with `postprocess` (contractually "no new data") as the step to pin.
+3. **Language-level IFC for Python is not the tractable route.** Jif/FlowCaml-style labelled type systems do not usefully exist for Python, and porting the pipeline defeats the demo. The tractable mechanization is a Lean model of the *service composition* — labelled tables flowing validation → engine → witnesses → gateway → finalize — proving every value that reaches release passed through an output-contract channel, pinned to the code by the existing generated-artifact sync discipline plus the release-equality tests above.
+
+Remaining open, in order of value: the temporal session model (budget and `observe → apply → record` — the natural TLA+/Alloy 6 next slice), then the quantitative step: replacing "insensitive up to controls" with a DP accountant (roadmap item 3), where value-level guarantees become theorems rather than control descriptions.
+
 ---
 
 ### D. Model Checking the Disclosure Policy
@@ -134,6 +154,8 @@ Prove noninterference: **Secret data cannot affect the Public/Sensitive output**
 - **[TLA+](https://lamport.azurewebsites.net/tla/tla.html):** Better for the sequential composition aspect — modeling the session auditor's query history and proving that no sequence of 20 queries can violate the privacy property.
 
 **What it catches:** Differencing attacks that exploit rounding asymmetry, triangulation across multiple group-by dimensions, and budget-exhaustion strategies.
+
+**2026-07-14 update — first slice.** `formal/disclosure_policy.als` models the session auditor's cohort-lineage rule as implemented (`disclosure.simulatable_cohort_bound`): cohorts as per-dimension value selections, the true symmetric difference, and the simulatable marginal upper bound. Checked (a counterexample fails CI): `MarginalBoundSound` — the docstring's soundness claim, the marginal bound dominates the true symmetric difference on a single differing dimension; `RareCategoryIsolationBlocked` — the canonical add/remove-a-rare-category attack cannot pass the auditor (P11's decision rule). Machine-exhibited as satisfiable runs (unsatisfiability fails CI): the *interaction residual* (a large marginal hiding a small true difference) and the *multi-dimension sentinel* — the two gaps the code's docstring documents, now demonstrated rather than asserted, and covered by the per-cell donor threshold and the DP roadmap item. The auditor's temporal behaviour (budget, `observe`/`record` ordering) remains the open slice.
 
 ---
 
@@ -186,11 +208,11 @@ This does not replace Lean/Alloy, but it gives CI a broad executable approximati
 
 ### Phase 1 — Quick Wins (1–2 weeks)
 
-- [ ] Formalize `CATALOGUE` and `QuerySpec` in Lean 4
-- [ ] Prove identifier non-membership (no valid query can reference `donor_id`, `free_text`, or `ts`) and internal-only non-release (`age_years` can affect only approved fixed-tool outputs)
-- [ ] Add CI step: `lean --check formal/QuerySpec.lean`
+- [x] **(2026-07-14)** Formalize `CATALOGUE` and `QuerySpec` in Lean 4 — `formal/lean/SafeTre/`, catalogue/labels/view columns generated from the live code
+- [x] **(2026-07-14)** Prove identifier non-membership (`no_identifier_reference`) and internal-only non-release (`internal_never_grouped`, `end_to_end_release_safe`) — over the whole spec space, `sorry`-free
+- [x] **(2026-07-14)** Add CI step — `lake build` of `formal/lean` in the `formal` job, toolchain sha256-pinned
 - [x] Add Hypothesis property-based testing in `tests/test_query_properties.py` to fuzz-generate valid `QuerySpec` instances and verify executable boundary invariants
-- [ ] Add security labels (`DI`, `QI`, `S`, `R`) to `CATALOGUE` entries and prove label consistency at the type level
+- [x] **(2026-07-14)** Add security labels (`DI`, `QI`, `S`, `R`) — the generated `roleOf?` map plus the label-consistency theorems and a strict-coverage invariant test (no silent default role)
 
 ### Phase 2 — Stronger Guarantees (1–2 months)
 
@@ -200,16 +222,16 @@ This does not replace Lean/Alloy, but it gives CI a broad executable approximati
       P19/P21/P4 in CI, with two pytest sync hops pinning
       code → `formal/skeleton.json` → model (see `formal/README.md`). The
       disclosure-policy/differencing model below remains open.
-- [ ] Model the disclosure policy in Alloy; search for differencing/triangulation counterexamples
+- [x] **(2026-07-14)** Model the disclosure policy in Alloy (`formal/disclosure_policy.als`): lineage-rule soundness and rare-category isolation checked; the documented residuals found and kept as satisfiable runs. Static and pairwise — the temporal session model is the open remainder
 - [x] Extract SQL compilation into inspectable plans and add property tests for the safe public SQL shape
-- [ ] Prove SQL generation correctness in a proof assistant (engine produces only read-only SELECT from public views)
+- [x] **(2026-07-14)** Prove SQL generation correctness in a proof assistant — the SafeSQL type + compiler theorems in `SafeTre/Sql.lean`/`Proofs.lean`, pinned to the engine by the 414-case byte-equality check (§B update; \"declared view\" is the precise form of \"public views\")
 - [x] Formalize noninterference for the model-fitting path: the fitter is
       statically stdlib-only and structurally fed only gateway-finalized
       tables; machine-checked by refit-equality over the enumerated skeleton
       (`tests/test_glm_properties.py`, `tests/test_glm_noninterference.py`).
       The full web-path label lattice remains open.
-- [ ] Formalize information-flow labels and prove noninterference for the web query path
-- [ ] Prove that the composition of `QuerySpec` validation + engine + disclosure gateway maintains the identifier-free invariant end-to-end
+- [ ] Formalize information-flow labels and prove noninterference for the web query path — *labels and the column-level corollary are done (§A); the value-level route is designed in the §C note; open*
+- [x] **(2026-07-14)** Prove that the composition of `QuerySpec` validation + engine + disclosure gateway maintains the identifier-free invariant end-to-end — `end_to_end_release_safe` (column-level; value-level is the §C programme)
 
 ### Phase 3 — Research-Grade (3–6 months)
 

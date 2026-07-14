@@ -296,11 +296,20 @@ with a documented limitation.
 | R5 complementary suppression | `disclosure.py` (`_secondary_suppress`) | `test_disclosure.py` | Partial (single-dim exact, multi-dim conservative) |
 | R14 procedure registry | `procedures.py` | `test_procedure_conformance.py` | Implemented |
 | R15 GLM from vetted cells | `glm.py`, `stats.py`, `service.py` | `test_glm.py`, `test_formal_glm_enumeration.py`, `test_glm_oracle.py` | Implemented |
-| R16 skeleton export + model check | `procedures.py`, `formal/` | `test_skeleton_sync.py`, `test_formal_alloy_sync.py`, CI `formal` job | Implemented |
+| R16 skeleton export + model check | `procedures.py`, `formal/` | `test_skeleton_sync.py`, `test_formal_alloy_sync.py`, `test_formal_lean_sync.py`, CI `formal` job | Implemented |
 | R17 literal spec entry | `service.py` (`_literal_spec`) | `test_literal_spec.py` | Implemented |
 
 The red-team suite (`redteam/run_redteam.py`, R12) exercises P1–P6, P10–P11,
 and P19–P22 end to end, off gateway versus on. The bounded formal model
 (`formal/glm_gateway.als`, R16) discharges P19/P21 over every vetting outcome
 and P4-admissibility over the exact catalogue atoms, pinned to the code by the
-skeleton sync tests.
+skeleton sync tests. A Lean 4 layer (`formal/lean/`, R16) proves the
+query-boundary core over the whole spec space: no valid QuerySpec references
+an identifier, free-text, or timestamp column (P3); internal-only columns
+never reach a group-by or a release (P4); compiled SQL is one read-only
+SELECT over the spec's declared view with every filter value a bound
+parameter (P9) — pinned to the engine by generated render-equality cases and
+`test_formal_lean_sync.py`. `formal/disclosure_policy.als` model-checks the
+session auditor's simulatable differencing decision (P11): the marginal
+bound is sound, rare-category isolation is blocked, and the rule's two
+documented residuals are machine-exhibited rather than asserted.

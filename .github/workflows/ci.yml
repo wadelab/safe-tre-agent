@@ -39,12 +39,15 @@ jobs:
         run: uv run pip-audit            # relax to advisory (continue-on-error) if it blocks on an unfixable transitive CVE
 
   formal:
-    # Bounded model check of the P-clauses over the generated catalogue (R16).
-    # The pytest job already pins code -> skeleton -> model correspondence;
-    # this job only has to prove the assertions. The Alloy jar comes from a
-    # GitHub release pinned by sha256 (same supply-chain posture as the SHA-
-    # pinned actions); run_checks.py turns the receipt into the verdict
-    # because the Alloy CLI exits 0 even on a counterexample.
+    # The machine-checked layer (R16): Alloy bounded model checks (the GLM
+    # release path and the disclosure-policy lineage rule) plus the Lean 4
+    # proofs over the generated catalogue (identifier non-membership, label
+    # consistency, SafeSQL compilation, the engine pin). The pytest job
+    # already pins code -> generated artifacts correspondence; this job only
+    # has to replay solvers and proofs. Both toolchains come from GitHub
+    # releases pinned by sha256 (same supply-chain posture as the SHA-pinned
+    # actions); run_checks.py turns Alloy receipts into the verdict because
+    # the Alloy CLI exits 0 even on a counterexample.
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -58,8 +61,16 @@ jobs:
         run: |
           curl -sL -o /tmp/alloy.jar https://github.com/AlloyTools/org.alloytools.alloy/releases/download/v6.2.0/org.alloytools.alloy.dist.jar
           echo "6b8c1cb5bc93bedfc7c61435c4e1ab6e688a242dc702a394628d9a9801edb78d  /tmp/alloy.jar" | sha256sum -c
-      - name: Model check (P19, P21, P4 + vacuity guards)
+      - name: Model check (P19/P21/P4, disclosure lineage + vacuity guards)
         run: python3 formal/run_checks.py --jar /tmp/alloy.jar
+      - name: Fetch Lean 4.32.0 (sha256-pinned)
+        run: |
+          curl -sL -o /tmp/lean.tar.zst https://github.com/leanprover/lean4/releases/download/v4.32.0/lean-4.32.0-linux.tar.zst
+          echo "fca846f3588724a38ad19ee40292c67cb7438d7555903372e3308eef795ba516  /tmp/lean.tar.zst" | sha256sum -c
+          mkdir /tmp/lean && tar --use-compress-program=unzstd -xf /tmp/lean.tar.zst -C /tmp/lean --strip-components=1
+      - name: Replay the Lean proofs (identifier/label/SafeSQL theorems)
+        working-directory: formal/lean
+        run: PATH=/tmp/lean/bin:$PATH lake build
 
   accessibility:
     # pa11y (WCAG 2AA) against the four demo states, using the runner's Chrome.

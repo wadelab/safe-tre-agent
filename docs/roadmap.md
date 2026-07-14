@@ -43,10 +43,22 @@ A first slice is delivered (spec R16): the registries export their finite
 request space (`formal/skeleton.json`), a bounded **Alloy model** generated
 from that export checks P19/P21 over every vetting outcome and
 P4-admissibility over the exact catalogue atoms, and a CI `formal` job runs
-the solver next to pytest. What remains is the original core: the P1–P9
-query-boundary model — starting with P7 (fail-closed), the clause the July
-round of property-testing showed real bugs land on — and the auditor's
-temporal model (`observe → apply → record`).
+the solver next to pytest.
+
+A second slice followed: the query boundary itself is now proved in
+**Lean 4** (`formal/lean/`) — no valid QuerySpec references an identifier
+(P3), internal-only columns never reach a group-by or a release (P4),
+compiled SQL is a single declared-view read-only SELECT with every value a
+bound parameter (P9), and disclosure-role labels are consistent — pinned to
+the code by generated artifacts, a 414-case render-equality check against
+the live engine, and sync tests. A second Alloy model
+(`formal/disclosure_policy.als`) checks the session auditor's simulatable
+differencing rule and machine-exhibits its documented residuals. What
+remains: the auditor's *temporal* model (`observe → apply → record`, budget
+exhaustion) — with it P7 (fail-closed), the clause the July round of
+property-testing showed real bugs land on — and value-level noninterference
+through the numeric path (see the §C design note in
+[formal methods](FORMAL_METHODS_ANALYSIS.md)).
 
 This ranks above DP because it hardens the claim we already make, rather than
 adding a claim we do not yet make.

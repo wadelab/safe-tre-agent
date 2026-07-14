@@ -1,4 +1,4 @@
-"""The committed Alloy model must match the live registry export (R16).
+"""The committed Alloy models must match the live registry export (R16).
 
 Second hop of the correspondence chain (skeleton -> model), pure Python — no
 Java needed in the default test run. `scripts/gen_alloy_catalogue.py` without
@@ -24,13 +24,14 @@ def test_formal_artifacts_match_live_registry():
         f"formal artifacts are stale:\n{proc.stdout}{proc.stderr}")
 
 
-def test_alloy_model_declares_the_expected_commands():
+def test_alloy_models_declare_the_expected_commands():
     # the CI verdict script fails on missing commands; mirror that here so a
     # renamed assertion is caught without a Java toolchain
-    from formal.run_checks import EXPECTED_CHECKS, EXPECTED_RUNS
-    with open(os.path.join(ROOT, "formal", "glm_gateway.als")) as fh:
-        source = fh.read()
-    for name in EXPECTED_CHECKS:
-        assert f"check {name}" in source, name
-    for name in EXPECTED_RUNS:
-        assert f"run {name}" in source, name
+    from formal.run_checks import MODELS
+    for model, expected in MODELS.items():
+        with open(os.path.join(ROOT, "formal", model)) as fh:
+            source = fh.read()
+        for name in expected["checks"]:
+            assert f"check {name}" in source, f"{model}: missing check {name}"
+        for name in expected["runs"]:
+            assert f"run {name}" in source, f"{model}: missing run {name}"
