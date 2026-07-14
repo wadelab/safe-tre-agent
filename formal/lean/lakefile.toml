@@ -1,0 +1,5 @@
+name = "SafeTre"
+defaultTargets = ["SafeTre"]
+
+[[lean_lib]]
+name = "SafeTre"

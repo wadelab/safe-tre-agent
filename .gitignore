@@ -36,3 +36,6 @@ paper/*.pdf
 
 # generated deck screenshots
 artifacts/shots/
+
+# Lean build artifacts (formal/lean)
+formal/lean/.lake/
