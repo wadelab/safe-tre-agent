@@ -1,5 +1,7 @@
 site_name: safe-tre-agent
 site_description: A safe-outputs gateway for an AI analyst inside a Trusted Research Environment
+site_url: https://wadelab.github.io/safe-tre-agent/
+repo_url: https://github.com/wadelab/safe-tre-agent
 docs_dir: docs
 
 theme:
