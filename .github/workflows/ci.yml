@@ -40,7 +40,8 @@ jobs:
 
   formal:
     # The machine-checked layer (R16): Alloy bounded model checks (the GLM
-    # release path and the disclosure-policy lineage rule) plus the Lean 4
+    # release path, the disclosure-policy lineage rule, and the temporal
+    # session model of the auditor) plus the Lean 4
     # proofs over the generated catalogue (identifier non-membership, label
     # consistency, SafeSQL compilation, the engine pin). The pytest job
     # already pins code -> generated artifacts correspondence; this job only
@@ -61,7 +62,7 @@ jobs:
         run: |
           curl -sL -o /tmp/alloy.jar https://github.com/AlloyTools/org.alloytools.alloy/releases/download/v6.2.0/org.alloytools.alloy.dist.jar
           echo "6b8c1cb5bc93bedfc7c61435c4e1ab6e688a242dc702a394628d9a9801edb78d  /tmp/alloy.jar" | sha256sum -c
-      - name: Model check (P19/P21/P4, disclosure lineage + vacuity guards)
+      - name: Model check (P19/P21/P4, disclosure lineage, temporal session + vacuity guards)
         run: python3 formal/run_checks.py --jar /tmp/alloy.jar
       - name: Fetch Lean 4.32.0 (sha256-pinned)
         run: |

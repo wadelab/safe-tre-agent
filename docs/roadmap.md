@@ -53,12 +53,19 @@ bound parameter (P9), and disclosure-role labels are consistent — pinned to
 the code by generated artifacts, a 414-case render-equality check against
 the live engine, and sync tests. A second Alloy model
 (`formal/disclosure_policy.als`) checks the session auditor's simulatable
-differencing rule and machine-exhibits its documented residuals. What
-remains: the auditor's *temporal* model (`observe → apply → record`, budget
-exhaustion) — with it P7 (fail-closed), the clause the July round of
-property-testing showed real bugs land on — and value-level noninterference
-through the numeric path (see the §C design note in
-[formal methods](FORMAL_METHODS_ANALYSIS.md)).
+differencing rule and machine-exhibits its documented residuals.
+
+A third slice delivered the auditor's *temporal* model
+(`formal/temporal_session.als`): the `observe → apply → record` event order
+over the auditor's mutable state, checking the budget invariant and
+exhaustion short-circuit (P17), the fail-closed gate (P7 — the clause the
+July round of property-testing showed real bugs land on), and
+differencing-pair serialisation under the per-Session lock (P16), with the
+hardening #18 race machine-exhibited once the lock assumption is dropped.
+What remains: value-level noninterference through the numeric path (see the
+§C design note in [formal methods](FORMAL_METHODS_ANALYSIS.md)); its
+prerequisite — released-value shaping running on the finalized frame —
+landed as hardening #26.
 
 This ranks above DP because it hardens the claim we already make, rather than
 adding a claim we do not yet make.

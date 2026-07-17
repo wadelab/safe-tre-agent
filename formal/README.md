@@ -13,7 +13,8 @@ hunting).
 | `skeleton.json` | The registries' finite request space exported as data (`safetre.procedures.registry_skeleton()`): the catalogue, every aggregate measure configuration, and all no-filter model skeleton points (718 GLM + 49 ANOVA). |
 | `glm_gateway.als` | Alloy model of the GLM release path: GLMSpec admissibility, nondeterministic per-cell vetting, the service rule. Checks P19/P21 over every vetting outcome and P4-admissibility over the exact catalogue atoms. |
 | `disclosure_policy.als` | Alloy model of the session auditor's cohort-lineage rule (`simulatable_cohort_bound`). Checks the marginal bound's soundness and that rare-category isolation is blocked (P11); machine-exhibits the two residuals the code documents, as satisfiable runs. |
-| `run_checks.py` | Headless runner for both models: executes every command via the Alloy CLI and turns the receipts into a CI verdict (the CLI itself exits 0 even on a counterexample). Fails on any counterexample, any unsatisfiable run, or a missing command. |
+| `temporal_session.als` | Alloy 6 temporal model of a session: the `observe → apply → record` event order of `QueryService.handle`/`_handle_model` over the auditor's mutable state. Checks the budget invariant and exhaustion short-circuit (P17), the fail-closed gate (P7), differencing-pair serialisation under the per-Session lock (P16) and that lineage records exactly the releases; machine-exhibits the hardening #18 race when the lock assumption is dropped. |
+| `run_checks.py` | Headless runner for the Alloy models: executes every command via the Alloy CLI and turns the receipts into a CI verdict (the CLI itself exits 0 even on a counterexample). Fails on any counterexample, any unsatisfiable run, or a missing command. |
 | `lean/` | The Lean 4 package (`SafeTre`). `Types/Spec/Sql/Proofs.lean` are hand-written; `Catalogue.lean` (catalogue, DI/QI/S/R labels, live view columns) and `Cases.lean` (414 compiled-SQL pin pairs) are **generated** by `scripts/gen_lean_catalogue.py`. |
 
 ## What is proved (Lean, whole spec space)
@@ -59,6 +60,15 @@ engine by pytest, so a compiler bug would have to fool both.
   sentinel — are `run` commands that must stay satisfiable: if the model
   stops exhibiting them, it has drifted from the code it claims to describe
   (`disclosure_policy.als`).
+- **P7/P16/P17** temporally, over 3 requests / 3 cohorts / traces up to 12
+  steps: spend is monotone, the two entry prechecks keep it inside the
+  budget under the lock, exhaustion short-circuits every later request
+  before engine work, the gate releases only unflagged release/redact
+  verdicts, and the cohort history equals the released cohorts at every
+  instant. The per-Session lock is an explicit assumption, not a fact: the
+  `Hardening18RaceWithoutLock` run must stay satisfiable, exhibiting both
+  halves of a differencing pair releasing once the lock is dropped
+  (`temporal_session.als`).
 
 ## Correspondence discipline
 
@@ -68,8 +78,11 @@ code. Pytest-checked hops close it, none needing Java or Lean:
 1. `tests/test_skeleton_sync.py` — `skeleton.json` equals the live
    `registry_skeleton()` export;
 2. `tests/test_formal_alloy_sync.py` — the committed `.als` generated block
-   equals `scripts/gen_alloy_catalogue.py`'s output, and both models still
-   declare every command the verdict script expects;
+   equals `scripts/gen_alloy_catalogue.py`'s output, and every model still
+   declares every command the verdict script expects;
+2a. `tests/test_formal_temporal_sync.py` — the live service's trace event
+   order (engine → auditor → gateway → hitl) and record-only-on-release
+   match `temporal_session.als`;
 3. `tests/test_formal_lean_sync.py` — the committed `Catalogue.lean` and
    `Cases.lean` equal `scripts/gen_lean_catalogue.py`'s output (catalogue,
    labels, live view columns, and the engine's actual SQL for every pin
@@ -107,7 +120,7 @@ Filter *value* typing (covered by the parameter-binding property tests — the
 Lean model carries values only as bound-parameter counts, by design), the
 numeric fit itself (covered by the reproducibility meta-test and the
 statsmodels oracle), rounding/dominance arithmetic (covered by the gateway's
-own tests), value-level noninterference through the release path (designed
-in the §C note of `docs/FORMAL_METHODS_ANALYSIS.md`), and the session
-auditor's *temporal* behaviour — budget exhaustion and `observe → apply →
-record` ordering — the natural next slice (TLA+/Alloy 6 temporal operators).
+own tests), and value-level noninterference through the release path — the
+remaining slice, designed in the §C note of
+`docs/FORMAL_METHODS_ANALYSIS.md`; its prerequisite (released-value shaping
+running on the finalized frame) landed with hardening #26.

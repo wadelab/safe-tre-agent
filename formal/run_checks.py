@@ -50,6 +50,20 @@ MODELS: dict[str, dict[str, set[str]]] = {
             "MultiDimSentinelResidual",
         },
     },
+    "temporal_session.als": {
+        "checks": {
+            "P17_SpentMonotone",
+            "P17_BudgetInvariantUnderLock",
+            "P17_ExhaustionShortCircuits",
+            "P16_DifferencingPairNeverBothReleased",
+            "P7_GateFailsClosed",
+            "LineageIsExactlyReleases",
+        },
+        "runs": {
+            "someTemporalSession",
+            "Hardening18RaceWithoutLock",
+        },
+    },
 }
 
 

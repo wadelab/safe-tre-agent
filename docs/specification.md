@@ -277,7 +277,7 @@ with a documented limitation.
 | P4 internal variables never leave | `query.py`, `engine.py` | `test_secure.py`, Lean `P4` | Implemented |
 | P5 minimum donor count | `disclosure.py`, `engine.py` (`n_donors`) | `test_secure.py`, `test_disclosure.py` | Implemented |
 | P6 dominance / influence | `disclosure.py`, `engine.py` | `test_secure.py`, `test_disclosure.py` | Implemented |
-| P7 fail closed on unresolved check | `engine.py`, `disclosure.py` | `test_hardening.py` | Implemented |
+| P7 fail closed on unresolved check | `engine.py`, `disclosure.py` | `test_hardening.py`, Alloy `temporal_session` | Implemented |
 | P8 strict allowlist validation | `query.py` (`extra="forbid"`) | `test_secure.py`, `test_query_properties.py` | Implemented |
 | P9 parameterised SQL only | `engine.py` (`_ident`, bound params) | `test_secure.py`, `test_query_properties.py`, Lean `P9` | Implemented |
 | P10 non-numeric refusals | `disclosure.py` (`SessionAuditor`) | `test_hardening.py` | Implemented |
@@ -286,8 +286,8 @@ with a documented limitation.
 | P13 identity/channel coupling | `identity.py`, `channel.py` | `test_hardening.py`, `test_web.py` | Implemented |
 | P14 channel + allowlist gate | `channel.py`, `identity.py`, `app.py` | `test_web.py`, `test_schema.py` | Implemented |
 | P15 tamper-evident audit | `audit.py` (HMAC chain) | `test_secure.py` | Implemented |
-| P16 concurrency serialisation | `session.py`, `app.py` | `test_hardening.py` | Implemented |
-| P17 budget short-circuit | `service.py`, `disclosure.py` | `test_hardening.py` | Implemented |
+| P16 concurrency serialisation | `session.py`, `app.py` | `test_hardening.py`, Alloy `temporal_session` | Implemented |
+| P17 budget short-circuit | `service.py`, `disclosure.py` | `test_hardening.py`, Alloy `temporal_session` | Implemented |
 | P18 no table on denial | `_result.html`, `service.py` | `test_web.py` | Implemented |
 | P19 deny on incomplete cell table | `service.py` (`_handle_model`) | `test_glm.py`, `test_glm_properties.py`, red-team, Alloy `P19` | Implemented |
 | P20 no per-observation model output | `glm.py` (output contract), `analyst.py` (intent) | `test_glm.py`, `test_procedure_conformance.py` | Implemented |
@@ -313,3 +313,8 @@ parameter (P9) — pinned to the engine by generated render-equality cases and
 session auditor's simulatable differencing decision (P11): the marginal
 bound is sound, rare-category isolation is blocked, and the rule's two
 documented residuals are machine-exhibited rather than asserted.
+`formal/temporal_session.als` model-checks the auditor's temporal behaviour
+(P7, P16, P17): the budget invariant and exhaustion short-circuit, the
+fail-closed gate, differencing-pair serialisation under the per-Session
+lock, lineage recording exactly the releases — and machine-exhibits the
+hardening #18 race when the lock assumption is dropped.

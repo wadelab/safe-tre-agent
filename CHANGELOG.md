@@ -4,6 +4,24 @@ All notable changes to safe-tre-agent. The normative record of safety
 behaviour is [docs/specification.md](docs/specification.md); security findings
 and fixes are in [docs/hardening-log.md](docs/hardening-log.md).
 
+## Unreleased
+
+### Added
+
+- **Temporal session model (roadmap item 2, third slice).**
+  `formal/temporal_session.als` model-checks the auditor's
+  `observe → apply → record` event order in Alloy 6 temporal logic: spend is
+  monotone and the entry prechecks keep it inside the budget under the
+  per-Session lock, exhaustion short-circuits every later request before
+  engine work (P17), the fail-closed gate releases only unflagged
+  release/redact verdicts (P7), a differencing pair can never fully release
+  under the lock (P16), and the cohort history equals the released cohorts
+  at every instant. The lock is an explicit assumption, not a fact: a
+  mandatory-satisfiable run exhibits the hardening #18 TOCTOU once it is
+  dropped. Wired into the CI `formal` job via `run_checks.py`; a new sync
+  test pins the live service's trace order and record-only-on-release to
+  the model.
+
 ## 0.3.0 — 2026-07-17
 
 The formal round: the query boundary proved in Lean 4, the differencing rule
