@@ -26,7 +26,7 @@ researcher question
   -> untrusted planner proposes QuerySpec JSON
   -> strict validation checks the catalogue
   -> read-only DuckDB runs a fixed aggregate query
-  -> disclosure gateway suppresses unsafe cells
+  -> safe-outputs gateway suppresses unsafe cells
   -> session auditor checks query history
   -> audit log records the decision
   -> only safe aggregate output leaves

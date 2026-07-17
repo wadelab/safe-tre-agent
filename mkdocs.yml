@@ -33,11 +33,11 @@ markdown_extensions:
 nav:
   - Home: index.md
   - Research argument:
+      - Explained simply: elif.md
       - Research write-up: writeup.md
-      - Explained simply (ELIF): elif.md
-      - Specification: specification.md
       - Security model: security.md
       - Architecture: architecture.md
+      - Specification: specification.md
       - Safepod model: safepod.md
       - Model runtime: model-runtime.md
       - Tool manifest: tool-manifest.md

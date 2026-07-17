@@ -105,8 +105,9 @@ elsewhere.
   observations in the [planner evaluation](planner-eval.md).
 - **CI hardening** — the strict docs build, the red-team harness (exits
   nonzero on any failure), pa11y against the four demo states, and the
-  `formal` job (both Alloy model checks plus the Lean proof replay, toolchains
-  sha256-pinned) all run in `ci.yml` next to pytest, bandit and pip-audit.
+  `formal` job (all three Alloy model checks plus the Lean proof replay,
+  toolchains sha256-pinned) all run in `ci.yml` next to pytest, bandit and
+  pip-audit.
 - **Preprint** — `paper/preprint.tex` consolidates the write-up, the
   specification, the red-team results and the planner evaluation into one
   external-facing technical report; builds with `make`, distributed via
@@ -126,10 +127,11 @@ elsewhere.
 - **Container-isolated escalation path** (gVisor/Firecracker) — only if the
   legacy code path is ever promoted; today it exists for the red-team
   narrative.
-- **Branch protection + signed commits** — at go-public: require PR review
-  from code owners and green status checks, no force-push to `main`,
-  optionally signed commits. Deliberately deferred because it slows the
-  current solo straight-to-`main` workflow.
+- **Signed commits and required PR review** — branch protection landed with
+  go-public (2026-07-17: green status checks required, no force-push or
+  deletion of `main`). Required code-owner review and commit signing stay
+  parked while the workflow is a single maintainer committing directly to
+  `main`.
 - **Git history rewrite to drop old deck binaries** — the full generated decks
   are untracked going forward (the three small plain-language `.ppt` explainers
   are committed deliberately); rewriting history is a separate, destructive

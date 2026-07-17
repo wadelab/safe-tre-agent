@@ -237,9 +237,10 @@ item 1), which would supply production-grade output checking to lean on.
 | done | `Procedure` registry refactor; delete the `if fn == …` branches | `safetre/procedures.py` (aggregate + model registries) |
 | done | First model procedure (`glm`, cells-first) with O5 reproducibility + O6 skeleton export | `safetre/glm.py`, `test_glm*` suites |
 | done | Bounded Alloy model of the model release path (P19/P21/P4), generated from the skeleton, CI-gated | `formal/`, CI `formal` job |
-| next | Golden NL→spec corpus; commit a runnable (key-gated) real-model red-team harness | partial (round 2e run recorded; GLM corpus items added) |
-| later | Per-procedure Lean lemmas for O1/O2 (`decide` over the finite catalogue) | see [Formal methods analysis §A/§B](FORMAL_METHODS_ANALYSIS.md) |
-| later | Alloy/TLA+ model of the auditor's sequential composition (`observe → apply → record`) | see [Formal methods analysis §D](FORMAL_METHODS_ANALYSIS.md) |
+| done | Golden NL→spec corpus and scored planner evaluation | `evals/corpus.yaml`, `evals/run_planner_eval.py`, [planner evaluation](planner-eval.md) |
+| next | Commit a runnable (key-gated) real-model red-team harness | partial (round 2e run recorded) |
+| done | Lean proofs of the O1/O2 boundary over the whole spec space | `formal/lean/` (P3/P4/P9, label consistency, the 414-case engine pin) |
+| done | Temporal model of the auditor's sequential composition (`observe → apply → record`) | `formal/temporal_session.als` (P7/P16/P17; hardening #18 race machine-exhibited) |
 
 The through-line: make the **procedure interface the proof-obligation
 checklist**, keep **natural language outside the proofs**, and let a single

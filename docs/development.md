@@ -1,5 +1,8 @@
 # Development
 
+For contributors: how to set up the environment, run the checks, and change
+the code without weakening a control.
+
 ## Environment (uv)
 
 The project is managed with [uv](https://docs.astral.sh/uv/). Dependencies are

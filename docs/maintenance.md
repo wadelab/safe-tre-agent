@@ -175,7 +175,7 @@ Full guides: [install](install.md), [deployment](deployment.md),
 
 ## Releasing a version
 
-The v0.2.0 recipe: update `CHANGELOG.md`; bump `[project] version` (the
+The release recipe (first used for v0.2.0): update `CHANGELOG.md`; bump `[project] version` (the
 package reads `__version__` from distribution metadata — one place only);
 run the full gate list; `uv build`; **install the wheel into a fresh venv
 outside the repo** and smoke it (`safetre-demo "regress total spend on age

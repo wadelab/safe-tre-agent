@@ -1,6 +1,8 @@
 # Model runtime
 
-The model is a replaceable planner, not the security boundary. The secure path
+How to plug in the LLM that plays the planner role — locally or via a
+configured endpoint — and why nothing about safety depends on which one you
+choose. The model is a replaceable planner, not the security boundary. The secure path
 only requires a component with this interface:
 
 ```python

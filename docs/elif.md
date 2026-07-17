@@ -9,8 +9,9 @@ those.*
 ## TL;DR
 
 The gateway can now fit **statistical models** — gaussian, logistic and
-Poisson GLMs — and it does so **without ever looking at anyone's individual
-data**. A model is computed *only* from small summary tables ("cells") that
+Poisson GLMs (generalized linear models, the workhorse regressions of
+applied statistics) — and it does so **without ever looking at anyone's
+individual data**. A model is computed *only* from small summary tables ("cells") that
 the existing disclosure gateway has already checked and released. If even one
 cell of the model's table would have been blocked, the whole model is refused,
 loudly. Every released model ships with the exact cell table it was computed
@@ -19,8 +20,8 @@ coefficients** — which is also how we *prove* the model never used anything
 secret. Around this sits a general **framework for adding statistical
 procedures**: each new procedure is a registered contract whose safety
 obligations are enforced by CI (the build fails if you skip one), checked by
-exhaustive enumeration over its finite request space (718 model shapes),
-fuzzed by property tests, attacked by a 20-scenario red-team, cross-validated
+exhaustive enumeration over its finite request space (767 model shapes),
+fuzzed by property tests, attacked by a 22-scenario red-team, cross-validated
 against reference implementations, and — new for this project — model-checked
 by an **Alloy solver** in CI. Along the way we found and fixed a real
 pre-existing bug: released counts carried the exact number right next to the
@@ -139,8 +140,9 @@ the new "declare every released column" contract exists to make impossible.
 ## What it still does not do
 
 Models with continuous predictors for logistic/Poisson families (their maths
-genuinely needs row-level data, so they wait for ACRO's production output
-checking); anything across sessions or colluding users (differential privacy
+genuinely needs row-level data, so they wait for production output checking
+from ACRO, the UK SDC community's output-checking tool); anything across
+sessions or colluding users (differential privacy
 is the roadmap answer); and it remains a research prototype on synthetic
 data — see the [non-goals](specification.md#non-goals-what-it-does-not-claim)
 and the [roadmap](roadmap.md).

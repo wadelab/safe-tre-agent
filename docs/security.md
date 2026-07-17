@@ -278,7 +278,7 @@ D1–D7). After the [first hardening round](hardening-log.md), what remains:
 |---|---|---|
 | 1 | secure web interface, QuerySpec engine, audit log | **done** |
 | 2 | tailscale ACL + allowlist enforcement, off-box log mirroring | next |
-| 3 | HITL reviewer queue for escalated analyses; live trace | planned |
+| 3 | HITL (human-in-the-loop) reviewer queue for escalated analyses; live trace | planned |
 | 4 | ACRO proper, DP accountant, container-isolated escalation | pre-real-data |
 
 **No real data should touch this system before Phase 4.**

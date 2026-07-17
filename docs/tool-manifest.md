@@ -1,5 +1,8 @@
 # Tool manifest and two-LLM workflow
 
+What outside AI assistants are told this system can do, and why that public
+contract is not authorization: every proposed call is re-validated inside.
+
 The intended production shape has two LLM-facing layers:
 
 - **outside LLM**: user-facing planner, possibly a frontier model, outside the
@@ -64,9 +67,9 @@ donor-level age/spend correlation. These variables are not public grouping or
 output columns. They are accepted only in the specific schema positions the
 safepod validator allows.
 
-Planned stats families such as `glm`, `anova`, and `regression` are listed as
-planned only. A proposed tool call is executable only if it appears in `tools[]`
-with `status: "available"`.
+Stats families still to come, such as `regression` and `survival`, are listed
+as planned only (`glm` and `anova` are available). A proposed tool call is
+executable only if it appears in `tools[]` with `status: "available"`.
 
 ## Inside vetting
 
@@ -98,9 +101,9 @@ arbitrary code. The first one is live:
 
 | Tool class | Status | Typical use | Key vetting constraints |
 |---|---|---|---|
-| `glm` | **available (v1, manifest v4)** | gaussian, logistic (binomial), Poisson over categorical terms | fitted from gateway-finalized design cells only (R15/P21); any suppressed cell denies the model (P19); ≤ 3 terms, canonical links, per-dataset response allowlist; releases coefficients + model block + the vetted cell table; no row diagnostics ever (P20) |
+| `glm` | **available (v1, manifest v5)** | gaussian, logistic (binomial), Poisson over categorical terms | fitted from gateway-finalized design cells only (R15/P21); any suppressed cell denies the model (P19); ≤ 3 terms, canonical links, per-dataset response allowlist; releases coefficients + model block + the vetted cell table; no row diagnostics ever (P20) |
+| `anova` | **available (v1, manifest v5)** | one-way analysis of variance from vetted group cells | fitted from the same gateway-finalized mean/`sum_sq`/`n` cells the gaussian GLM plans; any suppressed cell denies the table (P19); reproducible from the released cell table |
 | `regression` | planned | continuous-predictor linear models (moment cells, L2) | min rows per parameter, bounded covariate count, no residual/fitted-value release |
-| `anova` | planned | group comparisons and contrasts | min group size, predeclared contrasts, suppress sparse levels |
 | `survival` | parked | time-to-event models | extra caution: event counts, censoring patterns, and time granularity can disclose |
 
 The `glm` entry deliberately does **not** follow this table's original "min

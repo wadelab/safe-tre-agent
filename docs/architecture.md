@@ -1,5 +1,9 @@
 # Architecture
 
+How the system is put together: the components, the trust boundaries between
+them, and why the safety argument survives a hostile model. For the
+plain-language account read [Explained simply](elif.md) first.
+
 ## Design principle
 
 The large language model is **untrusted**. It can be wrong, or be prompt-injected

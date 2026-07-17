@@ -6,7 +6,8 @@
 
 Trusted Research Environments (TREs) let researchers analyse sensitive data they
 can never see directly: code runs *inside* the enclave and only aggregate
-outputs are released, after disclosure checks. The UK's flagship is
+outputs are released, after statistical disclosure control (SDC) checks. The
+UK's flagship is
 **OpenSAFELY** (Bennett Institute, Oxford), now at NHS scale — but its output
 checking is still **two trained humans** inspecting every release, and
 semi-automated tools such as **ACRO/SACRO** (DARE UK) assume a **human** analyst
@@ -60,8 +61,16 @@ flowchart LR
     style X fill:#fdeaea,stroke:#c62828,color:#17202A
 ```
 
-Mapped to the **Five Safes**: vetting = Safe Projects/People, the gateway =
-Safe Outputs, the in-enclave local model = Safe Settings.
+The planner's only output is a **`QuerySpec`** — a small, strictly validated
+JSON object naming a dataset, one measure, and optional group-by and filters,
+all from an allowlisted catalogue. Nothing else can pass validation, so the
+model's entire influence on the system is confined to choosing among
+pre-approved aggregate questions.
+
+Mapped to the
+**[Five Safes](https://ukdataservice.ac.uk/help/secure-lab/what-is-the-five-safes-framework/)**:
+vetting = Safe Projects/People, the gateway = Safe Outputs, the in-enclave
+local model = Safe Settings.
 
 ### Request lifecycle
 
@@ -114,7 +123,7 @@ flowchart LR
 **on**, in a fresh session, and reports whether a row-level leak reaches the
 caller and which control engaged.
 
-![Red-team results: gateway off vs on](figures/redteam_results.png)
+![Bar chart of red-team results: with the gateway off, eight scenarios leak row-level data; with the gateway on, all attacks are blocked and benign queries pass](figures/redteam_results.png)
 
 | Attack | Gateway OFF | Gateway ON | Stopped by |
 |---|---|---|---|
@@ -158,15 +167,18 @@ The bound is conservative, and its residual is stated exactly. For two cohorts
 that differ on one dimension, the whole-population marginal of the differing
 values bounds the symmetric difference from above: a denial is always sound,
 and the canonical attack — isolating a globally rare category by adding or
-removing one predicate — is caught. What the bound misses is differencing that
-isolates a small group through the *interaction* of a common category with a
-narrow cohort; the per-cell donor threshold covers most of that case, and a
-differential-privacy accountant closes it (see the
-[roadmap](roadmap.md#3-differential-privacy-accountant)). The residual is one
-bit: sub-threshold rare-category isolation is caught using the true count
-internally. That gap — deterministic, explainable SDC on one side, DP on the
-other — is the trade this prototype exists to measure. The full side-channel
-statement is in the [security model](security.md#side-channels-and-residual-oracles).
+removing one predicate — is caught.
+
+What the bound misses is differencing that isolates a small group through the
+*interaction* of a common category with a narrow cohort; the per-cell donor
+threshold covers most of that case, and a differential-privacy accountant
+closes it (see the [roadmap](roadmap.md#3-differential-privacy-accountant)).
+
+The residual is one bit: sub-threshold rare-category isolation is caught using
+the true count internally. That gap — deterministic, explainable SDC on one
+side, DP on the other — is the trade this prototype exists to measure. The
+full side-channel statement is in the
+[security model](security.md#side-channels-and-residual-oracles).
 
 ## Limitations (and what production needs)
 

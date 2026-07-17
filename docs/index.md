@@ -1,12 +1,28 @@
 # safe-tre-agent documentation
 
-A safe-outputs gateway that lets an **AI analyst** answer questions over
-sensitive behavioural data held in a **Trusted Research Environment (TRE)**,
-without any row-level data leaving and without trusting the model with code.
+## What this is, simply
 
-The model is treated as adversarial. Its only power is to propose a validated,
-declarative query; a deterministic engine runs it; a disclosure gateway checks
-every output; and every request is written to a tamper-evident audit log.
+Hospitals, statistics agencies and universities hold data that is valuable
+for research but too sensitive to hand out. The standard answer is a
+**Trusted Research Environment (TRE)**: the data stays inside, researchers
+send questions in, and only checked, aggregated answers come out.
+
+This project asks what happens when an **AI helps with the asking** — and
+builds the machinery that keeps the same guarantees when it does. The AI is
+treated as untrusted: it never sees the raw data, never runs code or SQL,
+and cannot release anything. All it may do is *propose* a query in a small,
+fixed vocabulary. Ordinary, deterministic software then does everything that
+matters: it validates the proposal against an allowlist, runs it read-only,
+checks every number in the answer against statistical disclosure rules
+(minimum group sizes, no dominant contributors, rounding, no
+question-pairs that differ by one person), and writes the whole exchange to
+a tamper-evident log. Nothing the checks did not pass ever reaches the
+researcher.
+
+Everything here runs on **synthetic data** — it is a research prototype,
+not a production service. The plainest account of how it works is
+[Explained simply](elif.md); the fastest way to see it is the
+[five-minute demo](demo-5-minutes.md).
 
 ## Start here
 
@@ -32,6 +48,7 @@ hosted server is involved.
 
 | If you want to… | Read |
 |---|---|
+| Read the plainest account of how it works | [Explained simply](elif.md) |
 | Read the canonical technical report | [Write-up](writeup.md) |
 | See what it must and must not do (normative) | [Specification](specification.md) |
 | Understand the threat model and controls | [Security model](security.md) |
@@ -70,7 +87,7 @@ hosted server is involved.
 |---|---|
 | Position it for fellowship funding | [Fellowship positioning](fellowship.md) |
 
-## The one-paragraph version
+## The one-paragraph technical version
 
 A researcher asks a question in natural language. An (untrusted) LLM turns it
 into a **`QuerySpec`** — a JSON object describing an aggregate over an
@@ -88,7 +105,8 @@ exposed to a tailnet via `tailscale serve`.
 Phase 1 (secure web interface) is built and tested. The data is **synthetic**.
 See [Security model § Limitations](security.md#limitations-and-roadmap) for what
 is and isn't production-ready, and the [roadmap](roadmap.md) for what comes
-next (ACRO integration first, then the formal model, then a DP accountant).
+next (ACRO integration first, then the last slice of the formal model, then a
+differential-privacy release mode).
 
 > **Built on:** OpenSAFELY (Bennett Institute, Oxford) for the code-to-data,
 > outputs-checked TRE model; ACRO/SACRO (DARE UK) for statistical disclosure

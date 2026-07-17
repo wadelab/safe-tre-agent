@@ -92,7 +92,7 @@ The prototype already demonstrates:
 - red-team scenarios showing row-level leaks with the gateway off and blocked
   outputs with the gateway on.
 
-![Red-team summary](figures/redteam_results.png)
+![Bar chart of red-team results: with the gateway off, eight scenarios leak row-level data; with the gateway on, all attacks are blocked and benign queries pass](figures/redteam_results.png)
 
 ## Near-term fellowship work packages
 
@@ -119,7 +119,10 @@ Deliverables:
 ### Work package 2: Formal executable specification
 
 Turn the finite `QuerySpec` and SQL-plan boundary into a machine-checkable
-artifact.
+artifact. First slices are delivered: the query boundary is proved in Lean 4
+and three bounded Alloy models (release path, differencing rule, temporal
+session) run in CI — see the [roadmap](roadmap.md) item 2 record. The work
+package extends this to value-level noninterference.
 
 Deliverables:
 
@@ -131,7 +134,9 @@ Deliverables:
 ### Work package 3: Real output-checking dependency
 
 Replace the lightweight disclosure stand-in with ACRO-style output checking where
-possible, while preserving the agent-specific session auditor.
+possible, while preserving the agent-specific session auditor. A first slice is
+delivered: a read-only decision comparison over the red-team corpus, with
+findings recorded in the [ACRO comparison](acro-comparison.md).
 
 Deliverables:
 

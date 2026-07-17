@@ -252,7 +252,7 @@ Formal methods have inherent limits in this context. Be clear about the boundari
 | **Side channels** | Timing, memory usage, and cache-based side channels are outside the scope of pure formal methods | Would require constant-time implementations and hardware-level analysis |
 | **Physical security** | Safepod controls (encrypted disk, tamper-evident enclosure, disabled radios) are operational controls, not mathematical properties | Organisational policy and audit logs |
 | **Synthetic data safety** | Formal methods can prove the *system* doesn't leak data, but cannot prove the *synthetic generation process* is safe | Requires separate statistical disclosure assessment of the synthetic data generator |
-| **Social engineering** | An authorised analyst could share results outside the system | HITL review, legal agreements, and output monitoring |
+| **Social engineering** | An authorised analyst could share results outside the system | Human-in-the-loop (HITL) review, legal agreements, and output monitoring |
 
 ---
 
