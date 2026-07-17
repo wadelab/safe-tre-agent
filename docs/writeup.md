@@ -125,10 +125,13 @@ caller and which control engaged.
 | differencing (2-query) | no *row* leak\* | safe — denied | session auditor |
 | direct re-identification | no *row* leak\* | safe — denied | intent vetting |
 
-**5/5 attacks neutralised; 3/6 would have leaked row-level data with the gateway
-off.** Benign analysis still flows through untouched, and small-cell queries are
-**redacted and released** (offending cells suppressed) rather than blanket-denied
-— matching real TRE practice.
+The table shows the original five attacks; the corpus has since grown to 22
+scenarios (grouping-fidelity probes, GLM-specific attacks, literal-spec
+entries). Current standing: **18/18 attacks neutralised; 8/22 scenarios would
+leak row-level data with the gateway off.** Benign analysis still flows
+through untouched, and small-cell queries are **redacted and released**
+(offending cells suppressed) rather than blanket-denied — matching real TRE
+practice.
 
 \* *Inferential attacks: the individual queries are not themselves row dumps, so
 the naive leak oracle reads "safe" even with the gateway off — which is exactly
