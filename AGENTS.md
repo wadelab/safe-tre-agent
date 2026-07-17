@@ -7,7 +7,6 @@ Guidance for coding agents working in this repository.
 - Use `uv` for Python commands: `uv run pytest -q`, `uv run bandit -q -r safetre safetre_web`, `uv run pip-audit`, and `uv run python ...`.
 - Keep changes tightly scoped. Do not weaken security controls to make tests pass.
 - After changing the catalogue, schema roles, DuckDB views, the query compiler, or the procedure registries, regenerate the formal artifacts: `uv run python scripts/gen_alloy_catalogue.py --write` and `uv run python scripts/gen_lean_catalogue.py --write` (see `formal/README.md`). The pytest sync tests fail loudly on drift; never hand-edit a generated block.
-- If the user says `CAP=commit and push`, stop at committing and pushing the branch. Do not open a PR unless explicitly asked.
 - Do not commit generated or ignored artifacts such as `.venv/`, `.pytest_cache/`, `site/`, `data/*.csv`, `redteam/results.csv`, or `__pycache__/`.
 
 ## Security invariants

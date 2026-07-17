@@ -1,8 +1,7 @@
 # Fellowship and research positioning
 
-This page frames `safe-tre-agent` as a base project for a research fellowship
-application, including the AI-safety fellows programme and adjacent AI safety /
-secure research infrastructure calls.
+This page frames `safe-tre-agent` as a base project for research fellowship
+applications in AI safety and secure research infrastructure.
 
 ## One-sentence project
 
@@ -30,10 +29,10 @@ disclosure guarantees.
 
 ## Fit with AI-safety fellowship themes
 
-The programme's [Fellows Program page](https://example.org/ai-safety-fellows-program/)
-describes support for work on AI safety and alignment-relevant research. This
-project is a concrete systems-safety case study: how to deploy capable models in
-a high-stakes data setting while treating the model as untrusted infrastructure.
+Fellowship programmes in this space support work on AI safety and
+alignment-relevant research. This project is a concrete systems-safety case
+study: how to deploy capable models in a high-stakes data setting while
+treating the model as untrusted infrastructure.
 
 The safety claim rests on deterministic boundaries, typed tool contracts,
 disclosure policy, auditability, and deployment controls. The model is confined

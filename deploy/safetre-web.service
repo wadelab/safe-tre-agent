@@ -1,5 +1,6 @@
 # Hardened systemd unit for the safe-tre-agent web interface.
-# Install: copy to /etc/systemd/system/, run `uv sync --all-extras` in WorkingDirectory
+# Install: adjust the /opt/safe-tre-agent paths to your checkout, copy to
+# /etc/systemd/system/, run `uv sync --all-extras` in WorkingDirectory
 # first (creates .venv), then: systemctl daemon-reload && systemctl enable --now safetre-web
 #
 # The sandboxing directives are the security boundary at the process level;
@@ -12,8 +13,8 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=/probox/raid/toolbox/git/safe-tre-agent
-Environment=PYTHONPATH=/probox/raid/toolbox/git/safe-tre-agent
+WorkingDirectory=/opt/safe-tre-agent
+Environment=PYTHONPATH=/opt/safe-tre-agent
 # Real local model (no data egress). The IPAddress* sandbox below permits only
 # loopback, so this must point at an in-safepod model, not a remote provider.
 # Point BASE_URL/MODEL at your served model; keep it local to preserve no-egress.
@@ -25,7 +26,7 @@ Environment=SAFETRE_REQUIRE_IDENTITY=1
 Environment=SAFETRE_RESTRICTED_CHANNEL=1
 Environment=SAFETRE_CHANNEL_ALLOW_NETS=127.0.0.1/32,::1/128
 # bind localhost only; expose via `tailscale serve --bg 8800`
-ExecStart=/probox/raid/toolbox/git/safe-tre-agent/.venv/bin/uvicorn safetre_web.app:app --host 127.0.0.1 --port 8800
+ExecStart=/opt/safe-tre-agent/.venv/bin/uvicorn safetre_web.app:app --host 127.0.0.1 --port 8800
 
 # --- least-privilege sandboxing ---
 DynamicUser=yes
