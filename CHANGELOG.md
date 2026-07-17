@@ -4,7 +4,12 @@ All notable changes to safe-tre-agent. The normative record of safety
 behaviour is [docs/specification.md](docs/specification.md); security findings
 and fixes are in [docs/hardening-log.md](docs/hardening-log.md).
 
-## Unreleased
+## 0.3.0 — 2026-07-17
+
+The formal round: the query boundary proved in Lean 4, the differencing rule
+model-checked in Alloy, one-way ANOVA as the worked registry example, and a
+p-value side channel closed. Plain-language account in the ELIF-FORMAL deck
+(`artifacts/ELIF-FORMAL.ppt`).
 
 ### Security
 

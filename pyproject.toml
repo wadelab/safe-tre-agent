@@ -1,6 +1,6 @@
 [project]
 name = "safe-tre-agent"
-version = "0.2.0"
+version = "0.3.0"
 description = "Safe-outputs gateway for an AI analyst inside a Trusted Research Environment"
 readme = "README.md"
 license = "MIT"
