@@ -10,7 +10,7 @@ hunting).
 
 | File | What it is |
 |---|---|
-| `skeleton.json` | The registries' finite request space exported as data (`safetre.procedures.registry_skeleton()`): the catalogue, every aggregate measure configuration, and all 718 no-filter GLM skeleton points. |
+| `skeleton.json` | The registries' finite request space exported as data (`safetre.procedures.registry_skeleton()`): the catalogue, every aggregate measure configuration, and all no-filter model skeleton points (718 GLM + 49 ANOVA). |
 | `glm_gateway.als` | Alloy model of the GLM release path: GLMSpec admissibility, nondeterministic per-cell vetting, the service rule. Checks P19/P21 over every vetting outcome and P4-admissibility over the exact catalogue atoms. |
 | `disclosure_policy.als` | Alloy model of the session auditor's cohort-lineage rule (`simulatable_cohort_bound`). Checks the marginal bound's soundness and that rare-category isolation is blocked (P11); machine-exhibits the two residuals the code documents, as satisfiable runs. |
 | `run_checks.py` | Headless runner for both models: executes every command via the Alloy CLI and turns the receipts into a CI verdict (the CLI itself exits 0 even on a counterexample). Fails on any counterexample, any unsatisfiable run, or a missing command. |

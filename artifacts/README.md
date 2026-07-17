@@ -1,8 +1,10 @@
 # Presentation artifacts
 
-The slide decks and the rendered user guide live here on disk but are **not
-tracked in git** (each deck revision added ~450 KB of undiffable binary to the
-history). Distribute them as GitHub Release assets instead.
+The full slide decks and the rendered user guide live here on disk but are
+**not tracked in git** (each deck revision added ~450 KB of undiffable binary
+to the history); distribute them as GitHub Release assets instead. Three small
+plain-language explainers are the deliberate exceptions and ARE committed:
+`ELIF.ppt`, `ELIF-FORMAL.ppt` and `GUIDELINES.ppt`.
 
 ## The overview deck is generated
 

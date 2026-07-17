@@ -49,13 +49,17 @@ NL request
 ```
 
 Statistical procedures are **registered contracts** (spec R14): the five
-aggregate measures plus a **GLM tool** (gaussian / logistic / Poisson over
-categorical terms) that is fitted *exclusively from gateway-vetted cell
-tables* — any suppressed design cell denies the whole model, a release
-carries the cell table it was fitted from, and refitting from the released
-artifacts reproduces the coefficients bit-for-bit (machine-checked, and
-model-checked in Alloy: see [`formal/`](formal/README.md) and
-[verifiable extensions](docs/verifiable-extensions.md)).
+aggregate measures plus two model tools — a **GLM** (gaussian / logistic /
+Poisson over categorical terms) and a **one-way ANOVA** — fitted
+*exclusively from gateway-vetted cell tables*: any suppressed design cell
+denies the whole model, a release carries the cell table it was fitted from,
+and refitting from the released artifacts reproduces the coefficients
+bit-for-bit. The safety boundary is machine-checked: the query boundary is
+proved in **Lean 4** (identifier non-membership, internal-only containment,
+parameterised single-SELECT SQL — pinned to the live engine byte-for-byte)
+and the release path and differencing rule are model-checked in **Alloy**,
+all replayed in CI. See [`formal/`](formal/README.md) and
+[verifiable extensions](docs/verifiable-extensions.md).
 
 ```bash
 uv run python scripts/demo_query.py "regress total spend on age band"
@@ -138,8 +142,10 @@ uv run uvicorn safetre_web.app:app --host 127.0.0.1 --port 8800   # or scripts/r
 
 The interface follows the [GOV.UK Design System](https://design-system.service.gov.uk/)
 (unbranded) and is WCAG 2.2 AA. Recent work includes a normative
-[specification](docs/specification.md), a safe schema-disclosure endpoint, and
-a planner-quality [evaluation](docs/planner-eval.md).
+[specification](docs/specification.md), the GLM and ANOVA tools, the
+Lean/Alloy formal layer ([`formal/`](formal/README.md)), a safe
+schema-disclosure endpoint, and a planner-quality
+[evaluation](docs/planner-eval.md).
 
 The web layer is built security-first (the model is treated as untrusted):
 
@@ -176,15 +182,20 @@ threshold — keep the suppression and differencing demos honest across seeds.
 
 ## Threat model / red-team
 
-`redteam/attacks.yaml` exercises: small-cell over-granularity, prompt-injection
-planted in `free_text`, code-channel smuggling of identifiers, a two-query
-differencing attack, and a direct re-identification request. `run_redteam.py`
-replays each with the gateway OFF and ON and reports what actually leaked.
+`redteam/attacks.yaml` holds 22 scenarios (18 attacks, 4 benign baselines):
+small-cell over-granularity, prompt-injection planted in `free_text`,
+code-channel smuggling of identifiers, differencing pairs, direct
+re-identification, grouping-fidelity probes, GLM-specific attacks (suppressed
+cells recovered through a saturated design, internal-variable predictors,
+residual requests, model differencing pairs), and literal-spec entries.
+`run_redteam.py` replays each with the gateway OFF and ON and reports what
+actually leaked; it is a CI gate that exits nonzero on any failure.
 
 ![Red-team: gateway off vs on](docs/figures/redteam_results.png)
 
-**5/5 attacks neutralised; 3/6 would leak row-level data with the gateway off.**
-Benign analysis flows through; small-cell queries are redacted and released.
+**18/18 attacks neutralised; 8/22 scenarios would leak row-level data with the
+gateway off.** Benign analysis flows through; small-cell queries are redacted
+and released.
 
 ## Two execution paths
 
@@ -204,15 +215,25 @@ and DP accounting for the session budget.
 ```
 safetre/      RESEARCH CORE — query (QuerySpec), engine (DuckDB), planner,
               service, disclosure gateway + session auditor, audit (hash-chain),
-              config (policy loader), stats, schema, synthetic data,
+              procedures (registered contracts), glm, anova, stats,
+              config (policy loader), schema, synthetic data,
               analyst+guards (legacy/escalation), llm
 safetre_web/  DEMO SHELL — FastAPI app, identity (Safe People), session,
               channel, rate limit, templates, static
-scripts/      make_data.py, demo.py, make_figures.py, run_web.sh
+formal/       machine-checked layer (R16) — Lean 4 proofs, Alloy models,
+              skeleton.json, run_checks.py; generated + pinned to the code
+scripts/      make_data.py, demo_query.py, make_figures.py,
+              gen_alloy_catalogue.py, gen_lean_catalogue.py, make_decks.py,
+              make_demo_screenshots.py, measure_rounding_distortion.py,
+              restart_web.sh, run_web.sh
 redteam/      attacks.yaml, run_redteam.py
+evals/        planner-quality corpus + runner
+paper/        preprint.tex (builds with make)
 deploy/       safetre-web.service (hardened systemd unit)
-docs/         writeup.md + figures
+docs/         mkdocs site — specification, roadmap, hardening log, security
+              model, demo tours + figures
 tests/        pytest suite: disclosure, pipeline, secure QuerySpec/engine/audit,
-              hardening regressions, stats cross-validation, web, local-model
+              hardening regressions, stats cross-validation, GLM/ANOVA
+              conformance + properties, formal sync hops, web, local-model
               config, manifest, and query invariants
 ```

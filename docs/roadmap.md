@@ -91,8 +91,9 @@ elsewhere.
   per-planner spec quality and refusal behaviour; first numbers, method and
   observations in the [planner evaluation](planner-eval.md).
 - **CI hardening** — the strict docs build, the red-team harness (exits
-  nonzero on any failure), pa11y against the four demo states, and the Alloy
-  model check all run in `ci.yml` next to pytest, bandit and pip-audit.
+  nonzero on any failure), pa11y against the four demo states, and the
+  `formal` job (both Alloy model checks plus the Lean proof replay, toolchains
+  sha256-pinned) all run in `ci.yml` next to pytest, bandit and pip-audit.
 - **Preprint** — `paper/preprint.tex` consolidates the write-up, the
   specification, the red-team results and the planner evaluation into one
   external-facing technical report; builds with `make`, distributed via
@@ -116,5 +117,7 @@ elsewhere.
   from code owners and green status checks, no force-push to `main`,
   optionally signed commits. Deliberately deferred because it slows the
   current solo straight-to-`main` workflow.
-- **Git history rewrite to drop old deck binaries** — the decks are untracked
-  going forward; rewriting history is a separate, destructive decision.
+- **Git history rewrite to drop old deck binaries** — the full generated decks
+  are untracked going forward (the three small plain-language `.ppt` explainers
+  are committed deliberately); rewriting history is a separate, destructive
+  decision.

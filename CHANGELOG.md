@@ -19,6 +19,14 @@ and fixes are in [docs/hardening-log.md](docs/hardening-log.md).
 
 ### Added
 
+- **One-way ANOVA (`anova`), the second registered model procedure.** Fits
+  from the same gateway-vetted mean/`sum_sq`/`n` group cells the gaussian GLM
+  already plans, so the disclosure machinery (allowlisted design-cell
+  queries, fail-closed denial, reproducibility from the released cell table)
+  is inherited unchanged. Stdlib-only F-tail (`stats.f_sf`) cross-validated
+  against scipy; manifest v5 promotes `anova` to available; 49 new
+  model-skeleton points; a worked example of the registry recipe in
+  [docs/adding-a-statistical-tool.md](docs/adding-a-statistical-tool.md).
 - **Literal spec entry (spec R17).** A request that is a single JSON object
   is taken as the spec itself, bypassing the planner and the
   natural-language gates (intent vetting, fidelity checks) — every
@@ -26,6 +34,35 @@ and fixes are in [docs/hardening-log.md](docs/hardening-log.md).
   unchanged. Malformed JSON is refused loudly, never handed to the planner
   as text. Red-team: a benign literal baseline plus a literal small-cell
   attack pin the path.
+- **Formal round 2 (roadmap item 2, spec R16).** A Lean 4 model of the query
+  boundary, generated from and pinned to the live code: no valid QuerySpec
+  references an identifier, free-text, or timestamp column (P3);
+  internal-only columns never reach a group-by or a release (P4); compiled
+  SQL is one read-only SELECT over the declared view with every filter value
+  a bound parameter (P9); DI/QI/S/R labels are consistent, with a
+  column-level noninterference corollary end to end. Pinned by a 414-case
+  byte-exact render-equality check against `compile_query` and a third sync
+  hop (`test_formal_lean_sync.py`); the proofs are replayed in the CI
+  `formal` job (Lean pinned by sha256). A second Alloy model
+  (`formal/disclosure_policy.als`) checks the session auditor's simulatable
+  differencing rule (P11) and machine-exhibits its two documented residuals.
+- **Public-repo-first demo package.** The repo is the demo surface:
+  [docs/public-demo.md](docs/public-demo.md), a five-minute tour, a
+  screenshot tour and an evidence checklist, with
+  `scripts/make_demo_screenshots.py` regenerating the demo figures against a
+  throwaway mock server.
+- **Decks and generators.** A maintenance-playbook deck and doc
+  ([docs/maintenance.md](docs/maintenance.md)), a component & trust-map
+  generator (`scripts/make_component_map.py`), and a plain-language
+  explainer deck for the formal layer (`artifacts/ELIF-FORMAL.ppt`, built by
+  `build_formal_elif()` in `scripts/make_decks.py`).
+
+### Changed
+
+- **Model/provider identities redacted repo-wide:** tracked files use the
+  generic `SAFETRE_LLM_*` endpoint recipe and neutral "automated planner"
+  language (decks and web UI regenerated to match).
+- **Preprint** brought up to date with the GLM / procedure-framework round.
 
 ## 0.2.0 — 2026-07-07
 

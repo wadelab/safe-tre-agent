@@ -273,15 +273,15 @@ with a documented limitation.
 |---|---|---|---|
 | P1 no code/SQL execution | `query.py`, `service.py` | `test_secure.py` | Implemented |
 | P2 no row-level output | `engine.py` (aggregate-only views) | `test_secure.py`, `test_invariants.py` | Implemented |
-| P3 no identifiers/free-text/timestamps | `query.py`, `engine.py` `_VIEWS` | `test_invariants.py`, `test_web.py` | Implemented |
-| P4 internal variables never leave | `query.py`, `engine.py` | `test_secure.py` | Implemented |
+| P3 no identifiers/free-text/timestamps | `query.py`, `engine.py` `_VIEWS` | `test_invariants.py`, `test_web.py`, Lean `P3` | Implemented |
+| P4 internal variables never leave | `query.py`, `engine.py` | `test_secure.py`, Lean `P4` | Implemented |
 | P5 minimum donor count | `disclosure.py`, `engine.py` (`n_donors`) | `test_secure.py`, `test_disclosure.py` | Implemented |
 | P6 dominance / influence | `disclosure.py`, `engine.py` | `test_secure.py`, `test_disclosure.py` | Implemented |
 | P7 fail closed on unresolved check | `engine.py`, `disclosure.py` | `test_hardening.py` | Implemented |
 | P8 strict allowlist validation | `query.py` (`extra="forbid"`) | `test_secure.py`, `test_query_properties.py` | Implemented |
-| P9 parameterised SQL only | `engine.py` (`_ident`, bound params) | `test_secure.py`, `test_query_properties.py` | Implemented |
+| P9 parameterised SQL only | `engine.py` (`_ident`, bound params) | `test_secure.py`, `test_query_properties.py`, Lean `P9` | Implemented |
 | P10 non-numeric refusals | `disclosure.py` (`SessionAuditor`) | `test_hardening.py` | Implemented |
-| P11 simulatable differencing | `disclosure.py`, `service.py` | `test_secure.py`, `test_hardening.py` | Partial (one-bit residual, N1) |
+| P11 simulatable differencing | `disclosure.py`, `service.py` | `test_secure.py`, `test_hardening.py`, Alloy `disclosure_policy` | Partial (one-bit residual, N1) |
 | P12 safe marginals & schema | `engine.py`, `manifest.py`, `schema.py` | `test_schema.py`, `test_hardening.py` | Implemented |
 | P13 identity/channel coupling | `identity.py`, `channel.py` | `test_hardening.py`, `test_web.py` | Implemented |
 | P14 channel + allowlist gate | `channel.py`, `identity.py`, `app.py` | `test_web.py`, `test_schema.py` | Implemented |
