@@ -89,12 +89,11 @@ def test_engine_returns_correlation(tables):
         measure=Measure(fn="corr", x="monthly_spend_selfreport", y="wemwbs_score"),
     ))
     # influence and n_donors are internal helpers (like dominance): present in
-    # engine output, dropped by the gateway before release
-    assert list(df.columns) == ["value", "p_value", "n", "influence", "n_donors"]
+    # engine output, dropped by the gateway before release. p_value is NOT here:
+    # it is derived post-finalize from the rounded n (hardening #26)
+    assert list(df.columns) == ["value", "n", "influence", "n_donors"]
     assert len(df) == 1
     assert df["value"].between(-1, 1).all()
-    assert df["p_value"].between(0, 1).all()
-    assert (df["p_value"] * 1000).round().eq(df["p_value"] * 1000).all()
     assert int(df["n"].iloc[0]) > 10
     assert df["influence"].ge(0).all()          # max single-donor |Δr|, non-negative
 
@@ -110,7 +109,7 @@ def test_engine_returns_donor_level_age_spend_correlation_with_composite_filters
         ],
     )
     df = eng.run(spec)
-    assert list(df.columns) == ["value", "p_value", "n", "influence", "n_donors"]
+    assert list(df.columns) == ["value", "n", "influence", "n_donors"]
     assert len(df) == 1
     assert df["value"].between(-1, 1).all()
     assert int(df["n"].iloc[0]) >= 10
@@ -239,6 +238,42 @@ def test_service_correlation_released(tables):
     assert r.output is not None
     assert list(r.output.columns) == ["value", "p_value", "n"]
     assert r.spec["measure"]["fn"] == "corr"
+    assert r.output["p_value"].between(0, 1).all()
+    assert (r.output["p_value"] * 1000).round().eq(r.output["p_value"] * 1000).all()
+
+
+def test_corr_p_value_is_function_of_released_numbers(tables):
+    """Hardening #26: a released p_value must be recomputable, bit for bit,
+    from the released (value, n) pair alone — i.e. derived from the FINALIZED
+    (base-5 rounded) n, never the exact pre-rounding count."""
+    svc = QueryService(tables)
+    r = svc.handle("correlation between monthly spend and wellbeing", MockPlanner())
+    assert r.status == "released"
+    row = r.output.iloc[0]
+    released_n = int(row["n"])
+    assert released_n % 5 == 0                       # n is finalized
+    assert row["p_value"] == round(pearson_p_value(float(row["value"]), released_n), 3)
+
+
+def test_corr_p_value_never_computed_from_exact_count():
+    """Hardening #26, the mismatch half, pinned deterministically: push a corr
+    cell with an off-lattice exact count (n=13) through the real gateway
+    pipeline and check the shaped p comes from the rounded n (15), not 13.
+    r=0.5 is chosen so the two round differently at 3 decimals."""
+    from safetre.procedures import get_procedure
+
+    raw = pd.DataFrame({"value": [0.5], "n": [13], "influence": [0.01],
+                        "n_donors": [13]})
+    released, action, _ = DisclosurePolicy().apply(raw)
+    assert action == "release"
+    assert int(released["n"].iloc[0]) == 15
+    spec = QuerySpec(dataset="wellbeing",
+                     measure=Measure(fn="corr", x="monthly_spend_selfreport",
+                                     y="wemwbs_score"))
+    shaped = get_procedure("corr").postprocess(released, spec)
+    p = float(shaped["p_value"].iloc[0])
+    assert p == round(pearson_p_value(0.5, 15), 3)
+    assert p != round(pearson_p_value(0.5, 13), 3)
 
 
 def test_service_composite_age_spend_correlation_released(tables):

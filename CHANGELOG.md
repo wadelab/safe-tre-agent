@@ -6,6 +6,17 @@ and fixes are in [docs/hardening-log.md](docs/hardening-log.md).
 
 ## Unreleased
 
+### Security
+
+- **Fixed a p-value side channel on `corr` (hardening #26):** released-value
+  shaping (`postprocess`) ran in the engine, before gateway finalization, so
+  a released correlation's `p_value` was computed from the exact pre-rounding
+  cell count — fine-grained information about the `n` that base-5 rounding
+  exists to blur. Shaping now runs on the gateway-finalized frame on both the
+  plain and the model path: the released `(value, p_value, n)` triple is
+  self-consistent, and every released number is recomputable from numbers
+  already released.
+
 ### Added
 
 - **Literal spec entry (spec R17).** A request that is a single JSON object

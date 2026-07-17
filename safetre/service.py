@@ -16,7 +16,7 @@ from . import disclosure as D
 from .analyst import check_grouping_coherence, check_term_coherence, vet_request
 from .disclosure import simulatable_cohort_bound
 from .engine import QueryEngine
-from .procedures import model_registry
+from .procedures import get_procedure, model_registry
 from .query import QuerySpec
 
 
@@ -186,6 +186,10 @@ class QueryService:
                           spec=spec.model_dump(), findings=findings, trace=trace)
 
         auditor.record_cohort(spec.dataset, cohort)
+        # Released-value shaping runs on the FINALIZED frame: corr's p_value is
+        # computed from the rounded n, never the exact one, so every released
+        # number is a function of numbers already released (hardening #26).
+        released = get_procedure(spec.measure.fn).postprocess(released, spec)
         status = "redacted" if action == "redacted" else "released"
         record(status, spec.model_dump(), findings, released)
         return Result(status, output=released, spec=spec.model_dump(),
@@ -280,7 +284,10 @@ class QueryService:
                                "released for this model")]
                 return deny(f, "blocked by safe-outputs gateway: the model's "
                                "design-cell table cannot be fully released")
-            finalized[role] = released
+            # value shaping on the finalized cells, as on the plain path
+            # (hardening #26): the fitter and the released artifact consume
+            # identical finalized-then-shaped frames (P21)
+            finalized[role] = get_procedure(agg.measure.fn).postprocess(released, agg)
             cohorts.append((agg.dataset, cohort))
 
         problems = proc.preconditions(finalized, spec)

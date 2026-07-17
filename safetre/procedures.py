@@ -92,7 +92,12 @@ class AggregateProcedure:
         return ("value", "n")
 
     def postprocess(self, df: pd.DataFrame, spec: QuerySpec) -> pd.DataFrame:
-        """Released-value shaping (rounding, derived statistics). No new data."""
+        """Released-value shaping (rounding, derived statistics). No new data.
+
+        Runs on the gateway-FINALIZED frame — after suppression and count
+        rounding, never on raw aggregates — so anything derived here is a
+        function of numbers already released (hardening #26).
+        """
         return df
 
     # --- O3: influence witnesses -----------------------------------------------
@@ -232,7 +237,10 @@ class Corr(AggregateProcedure):
 
     def postprocess(self, df: pd.DataFrame, spec: QuerySpec) -> pd.DataFrame:
         # p_value is derived in postprocessing, so it appears in the output
-        # contract but not in the compiled SQL's payload_columns
+        # contract but not in the compiled SQL's payload_columns. It is
+        # computed from the FINALIZED (base-5 rounded) n, so the released
+        # p carries no information beyond the released (value, n) pair
+        # (hardening #26).
         from .stats import pearson_p_value
 
         df["value"] = df["value"].round(4)

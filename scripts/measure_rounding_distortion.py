@@ -31,6 +31,7 @@ from safetre import synth                          # noqa: E402
 from safetre.disclosure import DisclosurePolicy    # noqa: E402
 from safetre.engine import QueryEngine             # noqa: E402
 from safetre.glm import GLMProcedure               # noqa: E402
+from safetre.procedures import get_procedure       # noqa: E402
 from safetre.query import CATALOGUE                # noqa: E402
 
 HELPERS = ["dominance", "influence", "n_donors"]
@@ -48,7 +49,9 @@ def _fit_pair(engine: QueryEngine, policy: DisclosurePolicy, proc: GLMProcedure,
         released, action, _ = policy.apply(df)
         if action != "release":
             return None
-        finalized[role] = released
+        # mirror the service pipeline (hardening #26): value shaping runs on
+        # the finalized cells; the raw side stays genuinely raw
+        finalized[role] = get_procedure(agg.measure.fn).postprocess(released, agg)
         raw[role] = df.drop(columns=HELPERS, errors="ignore")
     if proc.preconditions(finalized, spec) or proc.preconditions(raw, spec):
         return None

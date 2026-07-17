@@ -3,6 +3,26 @@
 A dated record of self-red-team findings and the fixes applied. New findings get
 appended; the table is the quick index, the notes below give detail.
 
+## 2026-07-17 — round 5 (found while scoping the value-level noninterference model)
+
+| # | Finding | Sev | Status | Fix | Where |
+|---|---|---|---|---|---|
+| 26 | **corr's `p_value` was a function of the exact count.** `postprocess` ran in the engine, before gateway finalization, so the released p was computed from the exact pre-rounding `n` — a released number carrying fine-grained information about the count that base-5 rounding exists to blur (the same class hardening #25 closed for counts) | Med | **Fixed** | released-value shaping moved after finalization: the service applies `postprocess` to the gateway-finalized frame on both the plain and the model path, so `p_value` is computed from the rounded `n` and every released number is recomputable from numbers already released | `safetre/engine.py`, `service.py`, `tests/test_secure.py` |
+
+### Notes
+
+**#26 p_value from the exact count.** Found while scoping the value-level
+noninterference model (roadmap item 2): the intended factoring
+`release = postprocess ∘ finalize ∘ vet` did not hold, because `QueryEngine.run`
+applied `postprocess` before the gateway saw the frame. For `mean`/`sum`/`sum_sq`
+the two orders commute (value rounding and count rounding touch disjoint
+columns), so releases are bit-identical; `corr` was the one procedure where
+order mattered. After the fix the released `(value, p_value, n)` triple is
+self-consistent — an analyst recomputing p from the released r and n gets the
+released p, bit for bit — which is exactly the declassification statement the
+noninterference model will pin. The leak was fine-grained (p at 3 decimals
+moves only for small cells) and the gateway's thresholds were unaffected.
+
 ## 2026-07-06 — round 4 (found while planning the GLM extension)
 
 | # | Finding | Sev | Status | Fix | Where |

@@ -322,10 +322,16 @@ class QueryEngine:
         self._marginals: dict | None = None
 
     def run(self, spec: QuerySpec) -> pd.DataFrame:
+        """Raw aggregate frame: exact values, safety helpers attached.
+
+        Deliberately NOT postprocessed: released-value shaping (rounding,
+        derived statistics such as corr's p_value) runs on the gateway-
+        finalized frame in the service layer, so every shaped number is a
+        function of data already released (hardening #26).
+        """
         proc = get_procedure(spec.measure.fn)
         plan = compile_query(spec)
         result = self.con.execute(plan.sql, plan.params).df()
-        result = proc.postprocess(result, spec)
 
         # every procedure that reads individual values attaches its declared
         # influence witness (O3) — dominance for sums/means, leave-one-out for
