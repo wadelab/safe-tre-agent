@@ -219,8 +219,7 @@ O3 is *inherited* rather than re-proven, and a new obligation (O5) replaces it.
    leverage) are not expressible and are refused at intent (P20).
 6. **Skeleton export (O6).** `skeleton()` feeds `formal/skeleton.json`, the
    exhaustive enumeration, and the generated Alloy and Lean catalogues; the
-   pytest sync hops (see [formal/README.md](../formal/README.md)) pin the
-   chain.
+   pytest sync hops (listed in `formal/README.md`) pin the chain.
 
 The engine-side route (row-level fitting with leverage witnesses and a
 dof floor) remains the template for procedures whose sufficient statistics are
