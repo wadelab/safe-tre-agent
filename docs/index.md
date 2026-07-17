@@ -2,9 +2,9 @@
 
 ## What this is, simply
 
-Hospitals, statistics agencies and universities hold data that is valuable
+Hospitals, statistics agencies and universities hold data that are valuable
 for research but too sensitive to hand out. The standard answer is a
-**Trusted Research Environment (TRE)**: the data stays inside, researchers
+**Trusted Research Environment (TRE)**: the data stay inside, researchers
 send questions in, and only checked, aggregated answers come out.
 
 This project asks what happens when an **AI helps with the asking** — and
@@ -102,7 +102,7 @@ exposed to a tailnet via `tailscale serve`.
 
 ## Status
 
-Phase 1 (secure web interface) is built and tested. The data is **synthetic**.
+Phase 1 (secure web interface) is built and tested. The data are **synthetic**.
 See [Security model § Limitations](security.md#limitations-and-roadmap) for what
 is and isn't production-ready, and the [roadmap](roadmap.md) for what comes
 next (ACRO integration first, then the last slice of the formal model, then a

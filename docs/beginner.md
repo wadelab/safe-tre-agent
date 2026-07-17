@@ -63,7 +63,7 @@ panels:
 |---|---|
 | `released` | The query was valid and the output passed disclosure checks. |
 | `redacted` | Some unsafe cells were suppressed, but the remaining table was safe. |
-| `denied` | No data was returned. The request or the query sequence was unsafe. |
+| `denied` | No data were returned. The request or the query sequence was unsafe. |
 
 Denied requests are important. They are a safety feature, not a crash.
 

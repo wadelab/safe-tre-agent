@@ -80,7 +80,7 @@ Every request returns one of three statuses:
 |---|---|
 | `released` | the aggregate passed validation and disclosure checks |
 | `redacted` | some cells were suppressed, but the remaining aggregate is safe |
-| `denied` | no data is returned |
+| `denied` | no data are returned |
 
 Released tables include an `n` column. Counts may be rounded. Small cells,
 dominated cells, and unsafe combinations are suppressed or denied.

@@ -26,7 +26,7 @@ Guidance for coding agents working in this repository.
 
 ## Safepod requirements
 
-- Real data belongs inside a safepod: the data host, local model, and raw data are physically controlled, and only aggregate outputs leave.
+- Real data belong inside a safepod: the data host, local model, and raw data are physically controlled, and only aggregate outputs leave.
 - Plan for capable local models, roughly 120B-class, but never rely on model capability for safety.
 - The restricted channel is a security boundary. Keep `SAFETRE_RESTRICTED_CHANNEL=1` by default and keep `SAFETRE_CHANNEL_ALLOW_NETS` narrow.
 - Channel decisions must use the real peer address reported by ASGI, not `X-Forwarded-For` or other caller-controlled forwarding headers.

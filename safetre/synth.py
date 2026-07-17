@@ -7,7 +7,7 @@ heavy-tailed spend, a planted prompt-injection record in the survey free-text,
 and a handful of deliberately *polluted* donor rows (see POISON_DONORS) that
 smuggle adversarial payloads into ordinary categorical fields for red-teaming.
 
-The data is not noise: a latent per-donor propensity drives spend, loot-box
+The data are not noise: a latent per-donor propensity drives spend, loot-box
 use and the psychometrics together, so the analyses the demo invites actually
 find something —
 

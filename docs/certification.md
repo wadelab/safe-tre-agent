@@ -45,7 +45,7 @@ others layer on depending on the data and route to access.
 - **ISO 27001** — an information security management system (ISMS). The baseline
   for any contract that handles data, and increasingly a hard requirement.
 - **ISO 27701** — the privacy extension to 27001, aligning the ISMS with GDPR
-  obligations. Add it when the data is personal.
+  obligations. Add it when the data are personal.
 - **Cyber Essentials / Cyber Essentials Plus** — the UK baseline technical
   controls; often the floor for public-sector work, and no substitute for 27001.
 - **NHS DSPT** (Data Security and Protection Toolkit) — a mandatory annual

@@ -13,7 +13,7 @@ see [reproducing the captures](#reproducing-the-captures).
 Before any query runs, the interface declares its own constraints: the
 executable tools, the queryable datasets, and the disclosure policy — minimum
 cell size 10, counts rounded to 5, raw rows released **never**. The banner
-states that all data is synthetic, and the sidebar links the data dictionary
+states that all data are synthetic, and the sidebar links the data dictionary
 and the hashed tool manifest, so what the planner may propose is public and
 versioned.
 

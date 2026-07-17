@@ -34,7 +34,7 @@ data, the data and server sit inside a **safepod** and researchers communicate
 through a **restricted channel**. The model never needs raw data to leave —
 which is *why* a production deployment must use a **local** model (a remote API
 would itself be an egress channel). Remote models are fine here only because the
-data is synthetic.
+data are synthetic.
 
 ```
 NL request
@@ -174,7 +174,7 @@ genre-coherent catalogue — *Lucky Lorry Slots*, *Penalty Kings*, …), `events
 (two-wave PGSI / IGDS / WEMWBS + free text). Column roles (DI/QI/S/R) drive the
 disclosure rules. See `safetre/schema.py`.
 
-The data is not noise: a latent per-donor propensity makes the invited analyses
+The data are not noise: a latent per-donor propensity makes the invited analyses
 find real effects (loot-box spend correlates with PGSI, total spend negatively
 with wellbeing, self-report under-reports observed spend), while deterministic
 disclosure anchors — Northern Ireland and sex `X` pinned below the min-cell

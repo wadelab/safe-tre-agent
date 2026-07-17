@@ -273,7 +273,7 @@ query reconstructing a finer suppressed cell — are #4's job, not this one's.
 | # | Finding | Sev | Status | Fix | Where |
 |---|---|---|---|---|---|
 | 12 | Safepod ingress was documented as "bind localhost", but the app did not independently enforce the restricted-channel assumption if uvicorn or firewall config drifted | High | **Fixed** | restricted-channel middleware checks the real ASGI peer address against `SAFETRE_CHANNEL_ALLOW_NETS`, ignores forwarded headers, and denies before request handling | `safetre_web/channel.py`, `safetre_web/app.py` |
-| 13 | Physical boundary was implicit; deployment docs did not state the safepod controls needed to make "no raw data leaves" true operationally | Med | **Fixed in docs** | new safepod model covering physical controls, restricted-channel properties, failure modes, and production env defaults | `docs/safepod.md`, `docs/security.md`, `docs/deployment.md` |
+| 13 | Physical boundary was implicit; deployment docs did not state the safepod controls needed to make "no raw data leave" true operationally | Med | **Fixed in docs** | new safepod model covering physical controls, restricted-channel properties, failure modes, and production env defaults | `docs/safepod.md`, `docs/security.md`, `docs/deployment.md` |
 
 ### Notes
 
