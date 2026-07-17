@@ -16,11 +16,14 @@ not new controls.
 
 The disclosure gateway is a stand-in, and it says so. The SDC community will
 judge the whole claim on whether the output checking is real, so wrapping
-[ACRO](https://github.com/AI-SDC/ACRO) comes before everything else. It also
-subsumes work the stand-in only approximates: full multi-dimensional secondary
-suppression (an LP problem), class disclosure, and production p%-dominance.
-The agent-specific layer — session auditor, lineage, budget — stays ours and
-sits on top.
+[ACRO](https://github.com/AI-SDC/ACRO) comes before everything else. It brings
+the community's production rules — frequency threshold, p% and NK dominance,
+missing/negative checks — in the community's own implementation. It does NOT
+bring optimal secondary suppression: ACRO's `suppress` masks the failing
+cells only (verified against the 0.4.x source), and LP-based complementary
+suppression remains τ-Argus/sdcTable territory — so the stand-in's
+`_secondary_suppress` stays in force on top. The agent-specific layer —
+session auditor, lineage, budget — stays ours and sits on top too.
 
 The cells-first procedure framework composes with it cleanly: ACRO slots in
 *underneath* the GLM layer (it vets cells; models consume vetted cells),
@@ -28,8 +31,11 @@ rather than needing its own regression checking on day one. Non-gaussian
 models with continuous predictors stay parked until ACRO lands (see
 [verifiable-extensions §5](verifiable-extensions.md)).
 
-Deliverables: integration design; a comparison of ACRO's decisions against the
-stand-in's over the red-team corpus; compatibility notes for TRE operators;
+Deliverables: integration design; ~~a comparison of ACRO's decisions against
+the stand-in's over the red-team corpus~~ *delivered 2026-07-17
+([ACRO comparison](acro-comparison.md)): over 310 comparable cells ACRO is
+never stricter, and every stand-in-stricter cell is complementary
+suppression*; compatibility notes for TRE operators (started, same page);
 an updated gateway section in the preprint.
 
 ## 2. Formal executable specification (fellowship WP2)

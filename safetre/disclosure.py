@@ -149,8 +149,10 @@ class DisclosurePolicy:
         Exact for one group-by dimension (margin = the grand total, obtainable
         as a coarser query). For >=2 dimensions it conservatively applies the
         same rule per dimension level; complete multi-dimensional suppression
-        is an LP problem whose proper home is ACRO (round 3). Cross-query
-        margin attacks are the lineage auditor's job, not this one's.
+        is an LP problem whose proper home is tau-Argus-class tooling — ACRO
+        masks failing cells only, so this rule stays in force on top of it
+        (roadmap item 1). Cross-query margin attacks are the lineage
+        auditor's job, not this one's.
         """
         count_cols = _count_cols(original)
         # group dims are categorical/int; float columns are measures, not margins

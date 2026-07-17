@@ -38,6 +38,21 @@ jobs:
       - name: Dependency audit (CVEs)
         run: uv run pip-audit            # relax to advisory (continue-on-error) if it blocks on an unfixable transitive CVE
 
+  acro-compare:
+    # Roadmap item 1, slice 1: ACRO's cell decisions vs the stand-in's over
+    # the red-team corpus. Gates on HARNESS integrity (translation and
+    # execution), not on agreement — divergence is the measurement, printed
+    # in the job log. Separate environment because ACRO 0.4.x pins
+    # pandas < 3 ([tool.uv] conflicts in pyproject.toml).
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+      - name: Compare ACRO decisions with the stand-in gateway
+        run: uv run --frozen --no-default-groups --group acro python redteam/run_acro_compare.py
+
   formal:
     # The machine-checked layer (R16): Alloy bounded model checks (the GLM
     # release path, the disclosure-policy lineage rule, and the temporal

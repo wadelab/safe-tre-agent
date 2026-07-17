@@ -50,6 +50,12 @@ llm = [
 ]
 
 [dependency-groups]
+acro = [
+    # the decision-comparison harness only (redteam/run_acro_compare.py);
+    # ACRO stays OUT of the runtime install surface until roadmap item 1's
+    # integration slice
+    "acro>=0.4.12",
+]
 dev = [
     "pytest>=8.0",
     "hypothesis>=6.100",
@@ -70,6 +76,12 @@ decks = [
 # The research core (safetre) is an installable library so TRE/SDC teams can
 # wrap the gateway without adopting the demo web shell. safetre_web ships too,
 # but is a reference deployment, not part of the security claim (see README).
+[tool.uv]
+# ACRO 0.4.x pins pandas < 3; the project runtime is on pandas 3. The groups
+# resolve separately so the comparison harness gets its own environment:
+#   uv run --no-default-groups --group acro python redteam/run_acro_compare.py
+conflicts = [[{ group = "acro" }, { group = "dev" }]]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

@@ -8,6 +8,20 @@ and fixes are in [docs/hardening-log.md](docs/hardening-log.md).
 
 ### Added
 
+- **ACRO decision-comparison harness (roadmap item 1, first slice).**
+  `redteam/run_acro_compare.py` replays every plain QuerySpec in the
+  service-path red-team corpus (model specs expanded to their planned
+  design-cell aggregates) through both the stand-in gateway and ACRO
+  0.4.12's own check implementations, feeding ACRO one row per donor per
+  cell so its threshold counts donors (P5/D4). First numbers, method and
+  compatibility findings in
+  [docs/acro-comparison.md](docs/acro-comparison.md): over 310 comparable
+  cells ACRO is never stricter than the stand-in, and every
+  stand-in-stricter cell is complementary suppression — a rule ACRO does
+  not have, so `_secondary_suppress` stays in force on top (the roadmap's
+  contrary claim is corrected). New CI job `acro-compare` gates on harness
+  integrity; ACRO lives in a separate dependency group because 0.4.x pins
+  `pandas < 3`.
 - **Temporal session model (roadmap item 2, third slice).**
   `formal/temporal_session.als` model-checks the auditor's
   `observe → apply → record` event order in Alloy 6 temporal logic: spend is

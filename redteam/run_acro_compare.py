@@ -1,0 +1,290 @@
+"""Compare ACRO's cell decisions with the stand-in gateway's (roadmap item 1).
+
+Read-only: nothing here touches the release path. Every plain QuerySpec in
+the service-path red-team corpus (plus the divergence-targeted fixtures
+below) is run twice — through the stand-in `DisclosurePolicy`, and through
+ACRO's `crosstab` over the same microdata — and the per-cell decisions are
+classified:
+
+    agree_release / agree_suppress   the two gateways decide alike
+    acro_stricter                    ACRO suppresses a cell the stand-in
+                                     releases: candidate under-suppression
+    standin_stricter                 the stand-in suppresses a cell ACRO
+                                     releases (expected for complementary
+                                     suppression, which ACRO does not do)
+    not_comparable                   corr/influence cells (D6) and specs the
+                                     validation boundary refuses before any
+                                     gateway runs — recorded, never skipped
+
+Protection unit: ACRO is fed ONE ROW PER DONOR per cell (the donor's summed
+contribution from the dataset's unit view), so its frequency threshold
+counts donors exactly as the stand-in's `n_donors` check does (spec P5,
+best-practice D4). For `mean` this makes ACRO's cell *value* a mean of
+donor means — the decisions stay comparable, the values do not. The session
+auditor (lineage, budget) is deliberately absent: those controls sit above
+ACRO in the integration design and have no ACRO analogue.
+
+The exit code reports HARNESS integrity, not agreement: any translation or
+execution failure exits nonzero (no silent skips, R13); divergence is the
+measurement, written to redteam/acro_results.csv.
+
+Usage:
+    uv run --no-default-groups --group acro python redteam/run_acro_compare.py
+
+(The dedicated environment matters: ACRO 0.4.x pins pandas < 3, the project
+runtime uses pandas 3 — see [tool.uv] conflicts in pyproject.toml.)
+"""
+
+from __future__ import annotations
+
+import csv
+import os
+import sys
+
+import pandas as pd
+import yaml
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+import acro as acro_mod                                          # noqa: E402, F401 - asserts the env; version reported in the summary
+
+from safetre import synth                                        # noqa: E402
+from safetre.disclosure import DisclosurePolicy                  # noqa: E402
+from safetre.engine import QueryEngine, _ident, _where           # noqa: E402
+from safetre.procedures import get_procedure, model_registry     # noqa: E402
+from safetre.query import QuerySpec                              # noqa: E402
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+OUT_CSV = os.path.join(HERE, "acro_results.csv")
+
+# Divergence-targeted fixtures beyond the corpus: the deterministic anchors
+# (sub-threshold Northern Ireland and sex X), a dominance-shaped sum, and a
+# whole-population baseline. Each is an ordinary QuerySpec dict.
+FIXTURES = [
+    ("fixture_count_by_region_threshold_edge",
+     {"dataset": "spend", "measure": {"fn": "count"}, "group_by": ["region"]}),
+    ("fixture_count_by_sex_anchor",
+     {"dataset": "spend", "measure": {"fn": "count"}, "group_by": ["sex"]}),
+    ("fixture_mean_spend_by_region",
+     {"dataset": "spend", "measure": {"fn": "mean", "column": "amount_gbp"},
+      "group_by": ["region"]}),
+    ("fixture_donor_sum_by_region_dominance",
+     {"dataset": "donor_spend",
+      "measure": {"fn": "sum", "column": "total_spend_gbp"},
+      "group_by": ["region"]}),
+    ("fixture_total_spend_no_groupby",
+     {"dataset": "spend", "measure": {"fn": "sum", "column": "amount_gbp"}}),
+]
+
+_CONTRIB = {
+    "sum": "SUM({c})",
+    "mean": "SUM({c})",          # the donor's contribution to the cell
+    "sum_sq": "SUM({c} * {c})",
+}
+_AGGFUNC = {"sum": "sum", "mean": "mean", "sum_sq": "sum"}
+
+
+def donor_frame(engine: QueryEngine, spec: QuerySpec) -> pd.DataFrame:
+    """One row per donor per cell from the dataset's unit view: the group-by
+    dimensions plus the donor's summed contribution (`v`) for value measures."""
+    dims = ", ".join(_ident(g) for g in spec.group_by)
+    dims_prefix = f"{dims}, " if spec.group_by else ""
+    fn = spec.measure.fn
+    if fn in _CONTRIB:
+        contrib = _CONTRIB[fn].format(c=_ident(spec.measure.column)) + " AS v, "
+    else:                                   # count: donor presence only
+        contrib = ""
+    # the procedure's own NOT-NULL guards, exactly as compile_query applies
+    # them (corr is the only procedure that declares any today)
+    _, extra = get_procedure(fn).select_exprs(spec.measure)
+    where, params = _where(spec, extra)
+    sql = (f"SELECT {dims_prefix}{contrib}donor_id "        # nosec - harness
+           f"FROM {_ident(f'_{spec.dataset}_u')}{where} "
+           f"GROUP BY {dims_prefix}donor_id")
+    frame = engine.con.execute(sql, params).df()
+    if fn in _CONTRIB:
+        # a NULL contribution has no value for ACRO's dominance arithmetic;
+        # dropping the donor row here means ACRO's threshold counts one donor
+        # fewer than the stand-in's n_donors on such cells (recorded as a
+        # method caveat in docs/acro-comparison.md)
+        frame = frame[frame["v"].notna()]
+    return frame
+
+
+def acro_decisions(frame: pd.DataFrame, spec: QuerySpec) -> dict[tuple, str]:
+    """ACRO's per-cell verdicts on the donor frame: cell key -> rule string
+    ('ok' means release).
+
+    Uses ACRO's own check implementations via `create_crosstab_masks` rather
+    than `ACRO.crosstab`, because of C1 (docs/acro-comparison.md): 0.4.12's
+    crosstab deletes empty/zero rows from the values table but builds its
+    masks from the raw series, and the misaligned frames make its own
+    `apply_suppression` raise ValueError. The masks ARE the decisions, so
+    the harness composes the outcome from them directly, exactly as
+    `apply_suppression` would have.
+    """
+    from acro.acro_tables import create_crosstab_masks, get_aggfuncs
+
+    n = len(frame)
+    const = pd.Series(["all"] * n, index=frame.index, name="total")
+    dims = [frame[g] for g in spec.group_by]
+    if len(dims) == 0:
+        index, columns = const, const.rename("t2")
+    elif len(dims) == 1:
+        index, columns = dims[0], const
+    else:
+        index, columns = dims[:-1] if len(dims) > 2 else dims[0], dims[-1]
+    values, aggfunc = None, None
+    if spec.measure.fn in _AGGFUNC:
+        values = frame["v"]
+        aggfunc = get_aggfuncs(_AGGFUNC[spec.measure.fn])
+    masks = create_crosstab_masks(index, columns, values, None, None, aggfunc,
+                                  False, "All", True, False)
+
+    decisions: dict[tuple, str] = {}
+    for name, mask in masks.items():
+        for row_key, row in mask.iterrows():
+            for col_key, hit in row.items():
+                key_parts = (row_key if isinstance(row_key, tuple)
+                             else (row_key,))
+                if len(spec.group_by) >= 2:
+                    # with an aggfunc the mask columns are a MultiIndex of
+                    # (aggregation, column value); the cell key wants the value
+                    col = col_key[-1] if isinstance(col_key, tuple) else col_key
+                    key_parts = key_parts + (col,)
+                key = (tuple(str(k) for k in key_parts) if spec.group_by
+                       else ("total",))
+                if pd.notna(hit) and bool(hit):
+                    decisions[key] = decisions.get(key, "") + f"{name}; "
+                else:
+                    decisions.setdefault(key, "")
+    return {k: (v.strip() if v else "ok") for k, v in decisions.items()}
+
+
+def standin_decisions(engine: QueryEngine, policy: DisclosurePolicy,
+                      spec: QuerySpec) -> dict[tuple, str]:
+    """Per-cell decision of the stand-in gateway: release / suppress / deny."""
+    df = engine.run(spec)
+    released, action, _ = policy.apply(df)
+
+    def key(row) -> tuple:
+        if not spec.group_by:
+            return ("total",)
+        return tuple(str(row[g]) for g in spec.group_by)
+
+    all_keys = [key(r) for _, r in df.iterrows()]
+    if action == "deny" or released is None:
+        return {k: "deny" for k in all_keys}
+    kept = {key(r) for _, r in released.iterrows()}
+    return {k: ("release" if k in kept else "suppress") for k in all_keys}
+
+
+def classify(standin: str, acro_rule: str) -> str:
+    acro = "release" if acro_rule == "ok" else "suppress"
+    if standin == "release":
+        return "agree_release" if acro == "release" else "acro_stricter"
+    return "standin_stricter" if acro == "release" else "agree_suppress"
+
+
+def iter_specs(attacks: list) -> list[tuple[str, dict]]:
+    """(scenario_name, spec_dict) for every service-path step, with model
+    specs expanded to their planned aggregates."""
+    out = []
+    for atk in attacks:
+        if atk.get("path") != "service":
+            continue
+        for i, step in enumerate(atk["steps"]):
+            out.append((f"{atk['name']}[{i}]", step["spec"]))
+    return out
+
+
+def main() -> int:
+    tables = (synth.load_csvs()
+              if os.path.isdir("data") and os.listdir("data") else synth.generate())
+    engine = QueryEngine(tables)
+    policy = DisclosurePolicy()
+    attacks = yaml.safe_load(open(os.path.join(HERE, "attacks.yaml")))
+
+    rows, errors = [], []
+    for name, raw in iter_specs(attacks) + FIXTURES:
+        # model specs expand to their planned design-cell aggregates — the
+        # exact frames _handle_model vets one by one (P19)
+        if isinstance(raw, dict) and "tool" in raw:
+            proc = model_registry().get(raw.get("tool"))
+            try:
+                spec_obj = proc.validate(raw)
+                aggs = proc.plan_aggregates(spec_obj)
+            except Exception as exc:            # noqa: BLE001
+                rows.append({"scenario": name, "cell": "-", "standin": "-",
+                             "acro": "-", "acro_rules": "-",
+                             "classification": "not_comparable",
+                             "reason": f"validation_refused: {exc}"})
+                continue
+            specs = [(f"{name}/{role}", a) for role, a in
+                     zip(proc.table_roles(spec_obj), aggs, strict=True)]
+        else:
+            try:
+                specs = [(name, QuerySpec(**raw))]
+            except Exception as exc:            # noqa: BLE001
+                rows.append({"scenario": name, "cell": "-", "standin": "-",
+                             "acro": "-", "acro_rules": "-",
+                             "classification": "not_comparable",
+                             "reason": f"validation_refused: {exc}"})
+                continue
+
+        for sub_name, spec in specs:
+            if spec.measure.fn == "corr":
+                rows.append({"scenario": sub_name, "cell": "-", "standin": "-",
+                             "acro": "-", "acro_rules": "-",
+                             "classification": "not_comparable",
+                             "reason": "corr/influence has no ACRO analogue (D6)"})
+                continue
+            try:
+                standin = standin_decisions(engine, policy, spec)
+                acro = acro_decisions(donor_frame(engine, spec), spec)
+            except Exception as exc:            # noqa: BLE001
+                errors.append(f"{sub_name}: {exc!r}")
+                continue
+            for cell, decision in sorted(standin.items()):
+                rule = acro.get(cell)
+                if rule is None:
+                    errors.append(f"{sub_name}: cell {cell} missing from ACRO outcome")
+                    continue
+                rows.append({"scenario": sub_name, "cell": "|".join(cell),
+                             "standin": decision, "acro":
+                             "release" if rule == "ok" else "suppress",
+                             "acro_rules": rule, "classification":
+                             classify(decision, rule), "reason": ""})
+
+    with open(OUT_CSV, "w", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=[
+            "scenario", "cell", "standin", "acro", "acro_rules",
+            "classification", "reason"])
+        writer.writeheader()
+        writer.writerows(rows)
+
+    counts: dict[str, int] = {}
+    for r in rows:
+        counts[r["classification"]] = counts.get(r["classification"], 0) + 1
+    from importlib.metadata import version
+    print(f"\nacro {version('acro')} vs stand-in DisclosurePolicy")
+    print(f"cells compared: {sum(v for k, v in counts.items() if k != 'not_comparable')}")
+    for k in ("agree_release", "agree_suppress", "acro_stricter",
+              "standin_stricter", "not_comparable"):
+        print(f"{k:18s}: {counts.get(k, 0)}")
+    for r in rows:
+        if r["classification"] == "acro_stricter":
+            print(f"  ACRO STRICTER: {r['scenario']} cell={r['cell']} "
+                  f"rules={r['acro_rules']}")
+    print(f"results -> {OUT_CSV}")
+
+    if errors:
+        print(f"\n{len(errors)} harness error(s) — the comparison is incomplete:")
+        for e in errors:
+            print(f"  ERROR: {e}")
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
