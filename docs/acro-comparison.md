@@ -69,10 +69,9 @@ rows in the list are the same effect inside saturated designs.
   make its own `apply_suppression` raise `ValueError` — with `suppress`
   either on or off, since the outcome frame is computed unconditionally.
   Triggered by the dataset's planted adversarial categories (one-donor,
-  zero-sum cells). Reported upstream as
-  [AI-SDC/ACRO#400](https://github.com/AI-SDC/ACRO/issues/400) (together
-  with the underlying zero-sum-equals-empty deletion semantics); the
-  harness sidesteps it by consuming the check masks directly.
+  zero-sum cells). Reported to the maintainers (together with the
+  underlying zero-sum-equals-empty deletion semantics); the harness
+  sidesteps it by consuming the check masks directly.
 - **C2 — no complementary suppression.** Confirmed against the source:
   ACRO masks the failing cells only. LP-based secondary suppression is
   τ-Argus/sdcTable territory. The stand-in's `_secondary_suppress` must
