@@ -1,7 +1,7 @@
 % Preprint — not peer reviewed. Build: make (pdflatex + bibtex).
 % Sources of truth in the repository: docs/specification.md (normative
 % clauses), docs/security.md (threat model), docs/planner-eval.md (numbers),
-% docs/elif.md (the cells-first model account), formal/ (the Alloy model).
+% docs/elif.md (the cells-first model account), formal/ (the Lean and Alloy models).
 \documentclass[11pt,a4paper]{article}
 
 \usepackage[margin=2.5cm]{geometry}
@@ -42,8 +42,10 @@ by fitting them \emph{only} from aggregates the gateway has already checked, so
 a model release inherits the cells' safety and adds no row-level surface. The
 design is stated as a normative specification --- seventeen requirements and
 twenty-two prohibitions, each traced to enforcing code and tests --- and the
-finite request space of every procedure is exported as data and checked by a
-bounded model in a solver. A red-team harness replays twenty-two scenarios with
+finite request space of every procedure is exported as data and checked by
+bounded models in a solver, while the query boundary itself --- what a query
+may name, and what SQL it may become --- is proved in a theorem prover, pinned
+to the running code. A red-team harness replays twenty-two scenarios with
 the gateway off and on: eight leak row-level data without it; all eighteen
 attacks are blocked with it, while benign analysis passes. Measuring a local
 model as planner shows why the boundary must not trust refusal: the model
@@ -241,16 +243,26 @@ space; they surfaced a fail-open crash --- floating-point cancellation drove a
 variance product negative and the influence query raised instead of suppressing
 --- exactly the class of bug the fail-closed prohibition names, fixed by making
 the degenerate case suppress. Exhaustive enumeration then covers what sampling
-might miss: the query skeleton, and all 718 points of the model skeleton, are
-walked in full. A red-team harness exercises the prohibitions end to end
-(\S\ref{sec:redteam}). Finally, the layer the earlier design only anticipated is
-now real: each procedure exports its finite request space as data, and a bounded
-model of the release path, generated from that export, is checked in a solver on
-every point --- that suppressing any design cell denies the model, and that a
-model is a function of finalized cells alone. Two synchronisation tests pin code
-to the exported skeleton and the skeleton to the model, so a change to the code
-that outran the proof would fail the build, and the solver runs in continuous
-integration against a version-pinned binary.
+might miss: the query skeleton, and all 767 points of the model skeleton (718
+GLM, 49 one-way ANOVA), are walked in full. A red-team harness exercises the
+prohibitions end to end (\S\ref{sec:redteam}). Finally, the layer the earlier
+design only anticipated is now real, split by the shape of each claim. Where
+the claim is a search for bad instances, a bounded model generated from the
+exported request space is checked in a solver: suppressing any design cell
+denies the model; a released model is a function of finalized cells alone; and
+the session auditor's differencing rule blocks rare-category isolation, with
+the rule's two documented residuals exhibited by the solver as satisfiable
+runs rather than asserted in prose. Where the claim is universal, it is
+proved: a theorem prover shows that no valid query names an identifier,
+free-text or timestamp column, that internal-only columns never reach a
+grouping or a release, and that every compiled query is a single read-only
+SELECT over its declared view with every filter value a bound parameter ---
+over the whole space of specs, not a bounded fragment. Three synchronisation
+tests pin the code to the exported skeleton and the skeleton to the models,
+the prover's compiled-SQL claim is pinned byte-for-byte against 414 queries
+rendered by the live engine, and both toolchains are replayed in continuous
+integration against version-pinned binaries, so a change to the code that
+outran the proofs would fail the build.
 
 \section{Red-team evaluation}
 \label{sec:redteam}
