@@ -159,10 +159,20 @@ accredited software will want anyway.
 
 ## 6. Rollout
 
-1. Extract `CellVetter` and move the existing rules behind it, with no
-   behaviour change. The release-equality and red-team suites are the
-   regression: if any decision changes, the refactor is wrong.
-2. Add the ACRO vetter and the composite, defaulted **off**.
+1. ~~Extract `CellVetter` and move the existing rules behind it, with no
+   behaviour change.~~ **Delivered 2026-07-25.** `CellVetter`,
+   `StandinVetter` and `CompositeVetter` live in `disclosure.py`;
+   `DisclosurePolicy` carries a `vetter` field and reads its thresholds at
+   call time, so a policy built from `config.yaml` cannot vet on stale ones.
+   Behaviour preservation was checked directly rather than inferred: the
+   pre-seam `apply` was run beside the new one over all 2622 skeleton points,
+   and the action, the released frame and the finding sequence were identical
+   on every one. `tests/test_cell_vetter.py` pins the seam's two properties —
+   the stand-in vetter suppresses exactly what the old filtering dropped, and
+   composition is a monotone union.
+2. Add the ACRO vetter and the composite, defaulted **off**. *(The composite
+   landed with step 1; what remains here is the ACRO vetter itself and the
+   process boundary of §4.)*
 3. Run both in shadow: the comparison harness already does exactly this, so
    promote it from a research script to the CI regression, reporting per-rule
    contribution counts rather than a pass/fail.

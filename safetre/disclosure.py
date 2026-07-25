@@ -129,6 +129,111 @@ def leak_detector(df: pd.DataFrame | None, threshold: int | None = None,
 SUPPRESSABLE = {"small_cell", "dominance", "influence"}
 
 
+@dataclass(frozen=True)
+class VettingParameters:
+    """The safety parameters a vetter decides with.
+
+    Passed at call time rather than captured at construction, so a policy
+    built from `config.yaml` cannot end up with a vetter deciding on stale
+    thresholds — the configured value is the one that bites (spec R10).
+    """
+
+    threshold: int
+    max_rows: int
+    dom_threshold: float
+    influence_threshold: float
+
+
+@dataclass(frozen=True)
+class Verdicts:
+    """One vetter's decisions about one cell table.
+
+    `suppress` is a boolean Series indexed like the frame: True means the cell
+    must not be released. `deny` marks a finding no suppression can fix — an
+    identifier in the output, free text, un-aggregated sensitive columns —
+    where the whole table is withheld rather than trimmed. `findings` explain
+    both, and are what the caller shows and audits.
+    """
+
+    suppress: pd.Series
+    findings: list[Finding]
+    deny: bool
+
+
+class CellVetter:
+    """Decides, cell by cell, what a table may release.
+
+    The seam ACRO enters through (roadmap item 1, `docs/acro-integration.md`).
+    A vetter only ever *decides*: it never computes a released value, never
+    rounds and never reorders. Everything downstream — complementary
+    suppression, finalization, released-value shaping — is therefore
+    unaffected by which vetter runs, which is what keeps hardening #27 and #28
+    and the release-equality property (`tests/test_release_equality.py`) true
+    however the decision is made.
+    """
+
+    name: str
+
+    def vet(self, df: pd.DataFrame, params: VettingParameters) -> Verdicts:
+        raise NotImplementedError
+
+
+class StandinVetter(CellVetter):
+    """The prototype's own rules: distinct-donor threshold, single-contributor
+    dominance, leave-one-donor-out influence, and the egress checks that deny
+    outright. `leak_detector` states them once, for both the findings it
+    returns and the red-team's ground-truth oracle; the masks here select the
+    same cells it complains about.
+    """
+
+    name = "standin"
+
+    def vet(self, df: pd.DataFrame, params: VettingParameters) -> Verdicts:
+        findings = leak_detector(df, params.threshold, params.max_rows,
+                                 params.dom_threshold, params.influence_threshold)
+        deny = any(f.severity == "high" and f.rule not in SUPPRESSABLE
+                   for f in findings)
+        # a cell survives only if it passes every applicable rule, so the
+        # suppression mask is the complement — and an unresolved witness
+        # (NaN/inf) fails every comparison, which is the fail-closed default
+        suppress = pd.Series(False, index=df.index)
+        for column in _count_cols(df):
+            suppress |= ~(df[column] >= params.threshold)
+        if "dominance" in df.columns:
+            suppress |= ~(df["dominance"] <= params.dom_threshold)
+        if "influence" in df.columns:
+            suppress |= ~(df["influence"] <= params.influence_threshold)
+        return Verdicts(suppress=suppress, findings=findings, deny=deny)
+
+
+class CompositeVetter(CellVetter):
+    """Runs several vetters and suppresses a cell if **any** of them does.
+
+    The union is the only composition the ACRO comparison supports: neither
+    rule set subsumes the other (`docs/acro-comparison.md`), so dropping
+    either loses protection that was measured, not hypothesised. It is also
+    monotone — adding a vetter can never release a cell that was suppressed
+    without it — so composing cannot regress protection by construction.
+    """
+
+    def __init__(self, *vetters: CellVetter, name: str | None = None):
+        if not vetters:
+            raise ValueError("a composite vetter needs at least one vetter")
+        self.vetters = tuple(vetters)
+        self.name = name or "+".join(v.name for v in self.vetters)
+
+    def vet(self, df: pd.DataFrame, params: VettingParameters) -> Verdicts:
+        suppress = pd.Series(False, index=df.index)
+        findings: list[Finding] = []
+        deny = False
+        for vetter in self.vetters:
+            verdicts = vetter.vet(df, params)
+            suppress |= verdicts.suppress
+            findings.extend(verdicts.findings)
+            deny = deny or verdicts.deny
+        return Verdicts(suppress=suppress, findings=findings, deny=deny)
+
+
 @dataclass
 class DisclosurePolicy:
     # Class constants: the oracle/default meaning of the thresholds (not fields).
@@ -139,6 +244,15 @@ class DisclosurePolicy:
     dom_threshold: float = DOM_THRESHOLD
     influence_threshold: float = INFLUENCE_THRESHOLD
     round_base: int = ROUND_BASE
+    # which rules decide a cell. Swapping this swaps the *decision* only:
+    # suppression, finalization and shaping below are the policy's own
+    # (docs/acro-integration.md).
+    vetter: CellVetter = field(default_factory=StandinVetter)
+
+    def parameters(self) -> VettingParameters:
+        return VettingParameters(threshold=self.threshold, max_rows=self.max_rows,
+                                 dom_threshold=self.dom_threshold,
+                                 influence_threshold=self.influence_threshold)
 
     def _finalize(self, df: pd.DataFrame) -> pd.DataFrame:
         """Drop internal helper columns, round released counts, and order the
@@ -234,24 +348,17 @@ class DisclosurePolicy:
 
         action in {"release", "redacted", "deny"}.
         """
-        findings = leak_detector(df, self.threshold, self.max_rows,
-                                 self.dom_threshold, self.influence_threshold)
         if df is None:
+            return None, "deny", leak_detector(None)
+
+        verdicts = self.vetter.vet(df, self.parameters())
+        findings = list(verdicts.findings)
+        # findings no suppression can fix (identifier/free-text/raw) -> deny outright
+        if verdicts.deny:
             return None, "deny", findings
 
-        high = [f for f in findings if f.severity == "high"]
-        # non-suppressable high findings (identifier/free-text/raw) -> deny outright
-        if any(f.rule not in SUPPRESSABLE for f in high):
-            return None, "deny", findings
-
-        if any(f.rule in SUPPRESSABLE for f in high):
-            redacted = df.copy()
-            for c in _count_cols(redacted):
-                redacted = redacted[redacted[c] >= self.threshold]
-            if "dominance" in redacted.columns:
-                redacted = redacted[redacted["dominance"] <= self.dom_threshold]
-            if "influence" in redacted.columns:
-                redacted = redacted[redacted["influence"] <= self.influence_threshold]
+        if bool(verdicts.suppress.any()):
+            redacted = df[~verdicts.suppress].copy()
             redacted, extra = self._secondary_suppress(df, redacted)
             if extra:
                 findings.append(Finding(

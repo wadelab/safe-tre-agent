@@ -4,6 +4,25 @@ All notable changes to safe-tre-agent. The normative record of safety
 behaviour is [docs/specification.md](docs/specification.md); security findings
 and fixes are in [docs/hardening-log.md](docs/hardening-log.md).
 
+## Unreleased
+
+### Added
+
+- **The cell-vetting seam (roadmap item 1, rollout step 1).** `CellVetter` is
+  the interface ACRO will enter through: it decides which cells may be
+  released and does nothing else, so complementary suppression, finalization
+  and released-value shaping stay the policy's own — which is what keeps
+  hardening #27 and #28 and the release-equality property true whatever rules
+  run. `StandinVetter` holds today's rules unchanged; `CompositeVetter` runs
+  several and suppresses a cell if any of them does, the union being the only
+  composition the ACRO comparison supports (neither rule set subsumes the
+  other) and a monotone one, so composing cannot regress protection.
+  `DisclosurePolicy` gained a `vetter` field and reads its thresholds at call
+  time, so a policy built from `config.yaml` cannot vet on stale ones.
+  Behaviour preservation was checked directly, not inferred: the pre-seam
+  `apply` ran beside the new one over all 2622 skeleton points with identical
+  action, released frame and findings on every one.
+
 ## 0.4.0 — 2026-07-25
 
 The release-equality round: the query path's released output is now proved to
