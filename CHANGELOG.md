@@ -24,6 +24,24 @@ and fixes are in [docs/hardening-log.md](docs/hardening-log.md).
 
 ### Added
 
+- **ACRO integration design (roadmap item 1, slice 2 — the design, not the
+  code).** [docs/acro-integration.md](docs/acro-integration.md) fixes what to
+  build from the first slice's measurements: the seam is a `CellVetter`
+  protocol *inside* the gateway's vetting step, so complementary suppression,
+  finalization (which owns hardening #27 and #28) and released-value shaping
+  stay ours and the release-equality proof survives; the three rule sets
+  compose as a union, because the measurements show none subsumes another;
+  the checker runs out of process on its own pinned environment (C3) and
+  fails closed and loudly on any error, with its version recorded per release
+  in the audit chain; and the dominance parameters become a function of the
+  output contract's disclosure class, so the second-moment cell's treatment
+  is a stated policy rather than an accident. Compatibility shims carry
+  explicit removal conditions, and the rollout starts with a
+  behaviour-preserving refactor the existing suites regress.
+- **CI runs the exhaustive skeleton passes.** A new `exhaustive` job runs the
+  `-m slow` suite — every query-skeleton point through the release-equality
+  properties and every model-skeleton point through the P21 reproducibility
+  meta-test — so "exhaustive, not sampled" is checked rather than asserted.
 - **Measured: the dispersion cell, not the frequency threshold, is what
   refuses a cells-first model.** A gaussian model needs group means *and*
   group sums of squares, and P19 denies it if either is suppressed — but

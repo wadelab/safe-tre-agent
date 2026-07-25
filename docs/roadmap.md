@@ -31,7 +31,12 @@ rather than needing its own regression checking on day one. Non-gaussian
 models with continuous predictors stay parked until ACRO lands (see
 [verifiable-extensions §5](verifiable-extensions.md)).
 
-Deliverables: integration design; ~~a comparison of ACRO's decisions against
+Deliverables: ~~integration design~~ *delivered 2026-07-25
+([ACRO integration](acro-integration.md)): the seam sits inside the gateway's
+vetting step, the three rule sets compose as a union because none subsumes
+another, the checker runs out of process and fails closed, and the
+second-moment cell's parameters become a stated policy rather than an
+accident*; ~~a comparison of ACRO's decisions against
 the stand-in's over the red-team corpus~~ *delivered 2026-07-17, extended
 2026-07-25 with planted dominance anchors ([ACRO comparison](acro-comparison.md)):
 over 337 comparable cells the two rule sets disagree in both directions —

@@ -61,6 +61,7 @@ nav:
       - Hardening log: hardening-log.md
       - Best-practice review: best-practice-review.md
       - ACRO comparison: acro-comparison.md
+      - ACRO integration design: acro-integration.md
       - GOV.UK restyle record: govuk-ui-plan.md
       - Formal methods: FORMAL_METHODS_ANALYSIS.md
       - Verifiable extensions: verifiable-extensions.md

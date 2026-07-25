@@ -38,6 +38,25 @@ jobs:
       - name: Dependency audit (CVEs)
         run: uv run pip-audit            # relax to advisory (continue-on-error) if it blocks on an unfixable transitive CVE
 
+  exhaustive:
+    # The whole-space passes the default run samples: every point of the query
+    # skeleton through the release-equality properties, and every point of the
+    # model skeleton through the P21 reproducibility meta-test. They are marked
+    # `slow` and excluded from `pytest -q` (pyproject addopts) because they run
+    # in minutes rather than seconds — but "exhaustive, not sampled" is the
+    # claim the formal argument rests on, so it is checked here rather than on
+    # a developer's word.
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+      - name: Sync (frozen — exactly uv.lock)
+        run: uv sync --all-extras --frozen
+      - name: Exhaustive skeleton passes
+        run: uv run pytest -m slow -q
+
   acro-compare:
     # Roadmap item 1, slice 1: ACRO's cell decisions vs the stand-in's over
     # the red-team corpus. Gates on HARNESS integrity (translation and

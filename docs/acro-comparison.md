@@ -123,10 +123,11 @@ neither rule set dominates the other, not that the stand-in is a superset.
 
 ## Next
 
-Slice 2 chooses the integration seam using these numbers: ACRO's checks
-under the cells-first layer (`DisclosurePolicy` stays the protocol; ACRO
-becomes an implementation that vets cell tables), with `_secondary_suppress`
-**and the single-contributor bound** retained on top — the D3 measurement
-says ACRO's defaults do not cover the latter. The comparison then becomes a
-CI regression: today's harness already gates on its own integrity in the
-`acro-compare` job.
+Slice 2 chose the integration seam using these numbers, and the design is
+written up separately in [ACRO integration](acro-integration.md): ACRO's
+checks go *inside* the gateway's vetting step as one `CellVetter` among
+several, with complementary suppression **and the single-contributor bound**
+retained on top — the D3 measurement says ACRO's defaults do not cover the
+latter — and the checker runs out of process because of C3. The comparison
+then becomes a CI regression: today's harness already gates on its own
+integrity in the `acro-compare` job.
