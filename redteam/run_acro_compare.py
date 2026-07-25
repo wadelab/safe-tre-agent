@@ -49,13 +49,16 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import acro as acro_mod                                          # noqa: E402, F401 - asserts the env; version reported in the summary
 
 from safetre import synth                                        # noqa: E402
-from safetre.disclosure import DisclosurePolicy                  # noqa: E402
+from safetre.disclosure import (                                 # noqa: E402
+    DisclosurePolicy, VettingParameters,
+)
 from safetre.engine import QueryEngine, _ident, _where           # noqa: E402
 from safetre.procedures import get_procedure, model_registry     # noqa: E402
 from safetre.query import QuerySpec                              # noqa: E402
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from acro_boundary import ExternalAcroVetter                    # noqa: E402
 from acro_vetter import AGGFUNC, AcroVetter                      # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -64,6 +67,11 @@ OUT_CSV = os.path.join(HERE, "acro_results.csv")
 # must match scripts/make_data.py, so the numbers are the same with or without
 # a generated `data/` directory
 DEMO_SEED, DEMO_DONORS = 7, 800
+
+# ACRO decides with its own configuration, so these are inert for the ACRO
+# side; they are the stand-in's, passed for interface conformance only.
+VETTING = VettingParameters(threshold=10, max_rows=100,
+                            dom_threshold=0.5, influence_threshold=0.5)
 
 # Divergence-targeted fixtures beyond the corpus: the deterministic anchors
 # (sub-threshold Northern Ireland and sex X), the planted dominance anchors,
@@ -164,6 +172,36 @@ def standin_decisions(engine: QueryEngine, policy: DisclosurePolicy,
     return {k: ("release" if k in kept else "suppress") for k in all_keys}
 
 
+def verify_boundary(engine: QueryEngine) -> list[str]:
+    """Check the out-of-process checker agrees with the in-process vetter.
+
+    The comparison runs ACRO in this process; production cannot (C3), so it
+    calls the same rules across the boundary of `acro_boundary.py`. If the two
+    ever disagree, the numbers this harness publishes describe rules the
+    gateway does not actually apply — so this runs on every comparison, with
+    the real `uv run --group acro` entry rather than a shortcut, and any
+    disagreement is a harness error.
+    """
+    spec = QuerySpec(dataset="donor_spend",
+                     measure={"fn": "sum", "column": "total_spend_gbp"},
+                     group_by=["region"])
+    cells = engine.run(spec)
+    contributions = donor_frame(engine, spec)
+    aggfunc = AGGFUNC.get(spec.measure.fn)
+    here = AcroVetter(contributions, spec.group_by, aggfunc).vet(cells, VETTING)
+    there_vetter = ExternalAcroVetter(contributions, spec.group_by, aggfunc)
+    there = there_vetter.vet(cells, VETTING)
+
+    if there.deny:
+        return [f"boundary: checker denied — {[f.detail for f in there.findings]}"]
+    if not here.suppress.equals(there.suppress):
+        return [f"boundary: in-process and out-of-process decisions differ "
+                f"(in {here.suppress.tolist()}, out {there.suppress.tolist()})"]
+    print(f"boundary: checker {there_vetter.version} agrees in and out of "
+          f"process over {len(cells)} cell(s)")
+    return []
+
+
 def classify(standin: str, acro_rule: str) -> str:
     acro = "release" if acro_rule == "ok" else "suppress"
     if standin == "release":
@@ -195,7 +233,7 @@ def main() -> int:
     policy = DisclosurePolicy()
     attacks = yaml.safe_load(open(os.path.join(HERE, "attacks.yaml")))
 
-    rows, errors = [], []
+    rows, errors = [], verify_boundary(engine)
     for name, raw in iter_specs(attacks) + FIXTURES:
         # model specs expand to their planned design-cell aggregates — the
         # exact frames _handle_model vets one by one (P19)

@@ -8,8 +8,24 @@ and fixes are in [docs/hardening-log.md](docs/hardening-log.md).
 
 ### Added
 
+- **The external-checker boundary (roadmap item 1, rollout step 2, second
+  half).** `redteam/acro_checker.py` is the checker process and
+  `redteam/acro_boundary.py` the versioned JSON contract and client — which
+  imports nothing from ACRO, so it is constructible in the service
+  environment where ACRO cannot be installed at all (C3). **Every failure
+  denies:** non-zero exit, crash, timeout, unstartable command, malformed or
+  non-JSON response, protocol mismatch, a reported error, and a verdict list
+  that does not cover the table. There is deliberately no path that falls
+  back to the stand-in's rules and releases anyway — a release claims the
+  checks that ran, and a checker that is down is not a checker that approved.
+  `tests/test_acro_boundary.py` drives each failure with a fake checker, so
+  the suite needs neither ACRO nor its environment; the checker's reported
+  version is captured for a release to record. Cross-environment operation is
+  proved on every comparison run: the harness calls the real checker through
+  `uv run --group acro` and fails if the out-of-process verdicts differ from
+  the in-process ones.
 - **ACRO's rules now run through the seam (roadmap item 1, rollout step 2 —
-  the rules, not the boundary).** `redteam/acro_vetter.py` wraps ACRO's own
+  the rules).** `redteam/acro_vetter.py` wraps ACRO's own
   check implementations as a `CellVetter`, and the comparison harness drives
   its ACRO side through it instead of a bespoke code path. The regression is
   the published measurement itself: the rewired harness reproduces 337 cells,

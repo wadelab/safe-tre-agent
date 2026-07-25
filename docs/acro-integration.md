@@ -185,6 +185,31 @@ accredited software will want anyway.
    `tests/test_acro_vetter.py` covers the mapping, the rule attribution and
    the fail-closed treatment of a cell ACRO returned no verdict for, without
    needing ACRO installed.
+
+   **The boundary followed the same day.** `redteam/acro_checker.py` is the
+   checker process — it reads one request on stdin, calls the same rule
+   implementation, and writes one response, printing nothing else to stdout so
+   a stray `print` cannot corrupt the contract. `redteam/acro_boundary.py`
+   holds the versioned JSON contract and the client, which imports nothing
+   from ACRO and is therefore constructible in the service environment. Every
+   failure denies: non-zero exit, crash, timeout, unstartable command,
+   malformed or non-JSON response, protocol mismatch, a reported error, and a
+   verdict list that does not cover the table — each is a case in
+   `tests/test_acro_boundary.py`, driven by fake checkers so the suite needs
+   neither ACRO nor its environment. The checker's reported version is kept
+   for the release to record.
+
+   Cross-environment operation is proved where it can be: every comparison run
+   now calls the real checker through `uv run --no-default-groups --group
+   acro` and requires the out-of-process verdicts to equal the in-process
+   ones, failing the harness if they ever diverge. Otherwise the numbers this
+   project publishes would describe rules the gateway does not apply.
+
+   What is left before a TRE could switch this on: the engine must be able to
+   produce the donor-level contribution frame per spec (it is not derivable
+   from a cell table, which is why both vetters take it by construction), the
+   client needs a home in `safetre/` once something there calls it, and the
+   choice needs a configuration switch. Those are steps 3–5.
 3. Run both in shadow: the comparison harness already does exactly this, so
    promote it from a research script to the CI regression, reporting per-rule
    contribution counts rather than a pass/fail.
