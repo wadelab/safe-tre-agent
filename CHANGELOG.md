@@ -8,6 +8,19 @@ and fixes are in [docs/hardening-log.md](docs/hardening-log.md).
 
 ### Added
 
+- **ACRO's rules now run through the seam (roadmap item 1, rollout step 2 —
+  the rules, not the boundary).** `redteam/acro_vetter.py` wraps ACRO's own
+  check implementations as a `CellVetter`, and the comparison harness drives
+  its ACRO side through it instead of a bespoke code path. The regression is
+  the published measurement itself: the rewired harness reproduces 337 cells,
+  6 `acro_stricter` and 21 `standin_stricter` exactly. It lives in `redteam/`
+  deliberately — ACRO cannot be imported into the service environment (C3),
+  so production runs this logic behind the out-of-process boundary of §4 of
+  [the design](docs/acro-integration.md), which is what remains of the step.
+  `tests/test_acro_vetter.py` pins the cell-key mapping, the per-rule finding
+  attribution and the fail-closed treatment of a cell ACRO returned no
+  verdict for, all without ACRO installed.
+
 - **The cell-vetting seam (roadmap item 1, rollout step 1).** `CellVetter` is
   the interface ACRO will enter through: it decides which cells may be
   released and does nothing else, so complementary suppression, finalization

@@ -54,6 +54,10 @@ from safetre.engine import QueryEngine, _ident, _where           # noqa: E402
 from safetre.procedures import get_procedure, model_registry     # noqa: E402
 from safetre.query import QuerySpec                              # noqa: E402
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from acro_vetter import AGGFUNC, AcroVetter                      # noqa: E402
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT_CSV = os.path.join(HERE, "acro_results.csv")
 
@@ -113,7 +117,6 @@ _CONTRIB = {
     "mean": "SUM({c})",          # the donor's contribution to the cell
     "sum_sq": "SUM({c} * {c})",
 }
-_AGGFUNC = {"sum": "sum", "mean": "mean", "sum_sq": "sum"}
 
 
 def donor_frame(engine: QueryEngine, spec: QuerySpec) -> pd.DataFrame:
@@ -141,56 +144,6 @@ def donor_frame(engine: QueryEngine, spec: QuerySpec) -> pd.DataFrame:
         # method caveat in docs/acro-comparison.md)
         frame = frame[frame["v"].notna()]
     return frame
-
-
-def acro_decisions(frame: pd.DataFrame, spec: QuerySpec) -> dict[tuple, str]:
-    """ACRO's per-cell verdicts on the donor frame: cell key -> rule string
-    ('ok' means release).
-
-    Uses ACRO's own check implementations via `create_crosstab_masks` rather
-    than `ACRO.crosstab`, because of C1 (docs/acro-comparison.md): 0.4.12's
-    crosstab deletes empty/zero rows from the values table but builds its
-    masks from the raw series, and the misaligned frames make its own
-    `apply_suppression` raise ValueError. The masks ARE the decisions, so
-    the harness composes the outcome from them directly, exactly as
-    `apply_suppression` would have.
-    """
-    from acro.acro_tables import create_crosstab_masks, get_aggfuncs
-
-    n = len(frame)
-    const = pd.Series(["all"] * n, index=frame.index, name="total")
-    dims = [frame[g] for g in spec.group_by]
-    if len(dims) == 0:
-        index, columns = const, const.rename("t2")
-    elif len(dims) == 1:
-        index, columns = dims[0], const
-    else:
-        index, columns = dims[:-1] if len(dims) > 2 else dims[0], dims[-1]
-    values, aggfunc = None, None
-    if spec.measure.fn in _AGGFUNC:
-        values = frame["v"]
-        aggfunc = get_aggfuncs(_AGGFUNC[spec.measure.fn])
-    masks = create_crosstab_masks(index, columns, values, None, None, aggfunc,
-                                  False, "All", True, False)
-
-    decisions: dict[tuple, str] = {}
-    for name, mask in masks.items():
-        for row_key, row in mask.iterrows():
-            for col_key, hit in row.items():
-                key_parts = (row_key if isinstance(row_key, tuple)
-                             else (row_key,))
-                if len(spec.group_by) >= 2:
-                    # with an aggfunc the mask columns are a MultiIndex of
-                    # (aggregation, column value); the cell key wants the value
-                    col = col_key[-1] if isinstance(col_key, tuple) else col_key
-                    key_parts = key_parts + (col,)
-                key = (tuple(str(k) for k in key_parts) if spec.group_by
-                       else ("total",))
-                if pd.notna(hit) and bool(hit):
-                    decisions[key] = decisions.get(key, "") + f"{name}; "
-                else:
-                    decisions.setdefault(key, "")
-    return {k: (v.strip() if v else "ok") for k, v in decisions.items()}
 
 
 def standin_decisions(engine: QueryEngine, policy: DisclosurePolicy,
@@ -278,7 +231,12 @@ def main() -> int:
                 continue
             try:
                 standin = standin_decisions(engine, policy, spec)
-                acro = acro_decisions(donor_frame(engine, spec), spec)
+                # the ACRO side now goes through the CellVetter seam; the
+                # stand-in side stays at POLICY level because complementary
+                # suppression is part of the gateway being compared, not of
+                # its per-cell rules
+                acro = AcroVetter(donor_frame(engine, spec), spec.group_by,
+                                  AGGFUNC.get(spec.measure.fn)).decisions()
             except Exception as exc:            # noqa: BLE001
                 errors.append(f"{sub_name}: {exc!r}")
                 continue

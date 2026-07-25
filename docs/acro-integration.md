@@ -170,9 +170,21 @@ accredited software will want anyway.
    on every one. `tests/test_cell_vetter.py` pins the seam's two properties —
    the stand-in vetter suppresses exactly what the old filtering dropped, and
    composition is a monotone union.
-2. Add the ACRO vetter and the composite, defaulted **off**. *(The composite
-   landed with step 1; what remains here is the ACRO vetter itself and the
-   process boundary of §4.)*
+2. ~~Add the ACRO vetter and the composite, defaulted **off**.~~ **Rules
+   delivered 2026-07-25; the boundary is not.** `redteam/acro_vetter.py`
+   wraps ACRO's real check implementations in the seam, and the comparison
+   harness drives its ACRO side through it — reproducing the published
+   numbers exactly (337 cells, 6 `acro_stricter`, 21 `standin_stricter`),
+   which is the regression that says the rule mapping is faithful. It lives
+   in `redteam/` rather than `safetre/` on purpose: ACRO cannot be imported
+   into the service environment at all (C3), so the production path is the
+   §4 boundary calling this logic out of process, and **that boundary is
+   what remains of this step**. Two limits are recorded in the module: ACRO
+   decides with its own configuration rather than ours (§3 is not done), and
+   it never denies a whole table — egress checks stay the stand-in's.
+   `tests/test_acro_vetter.py` covers the mapping, the rule attribution and
+   the fail-closed treatment of a cell ACRO returned no verdict for, without
+   needing ACRO installed.
 3. Run both in shadow: the comparison harness already does exactly this, so
    promote it from a research script to the CI regression, reporting per-rule
    contribution counts rather than a pass/fail.
