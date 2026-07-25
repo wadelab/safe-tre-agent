@@ -4,7 +4,14 @@ All notable changes to safe-tre-agent. The normative record of safety
 behaviour is [docs/specification.md](docs/specification.md); security findings
 and fixes are in [docs/hardening-log.md](docs/hardening-log.md).
 
-## Unreleased
+## 0.4.0 — 2026-07-25
+
+The release-equality round: the query path's released output is now proved to
+be a function of the table the gateway approved, and two of this release's
+entries are leaks that proof found. The dataset gained the concentration its
+dominance rules had never been tested against, which turned the ACRO
+comparison from a one-sided result into a two-sided one, and the integration
+design was written from those numbers.
 
 ### Security
 
@@ -95,7 +102,6 @@ and fixes are in [docs/hardening-log.md](docs/hardening-log.md).
   fixtures, and the harness now generates the documented 800-donor dataset
   when `data/` is absent instead of a smaller one, so CI and the published
   numbers describe the same dataset.
-
 - **ACRO decision-comparison harness (roadmap item 1, first slice).**
   `redteam/run_acro_compare.py` replays every plain QuerySpec in the
   service-path red-team corpus (model specs expanded to their planned
