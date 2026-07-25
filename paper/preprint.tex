@@ -227,6 +227,34 @@ model skeleton, and the row-level fits are cross-checked against
 before rounding. The distortion is the honest price of never touching a row;
 its size is reported, not assumed negligible.
 
+\paragraph{The larger price: the dispersion cell decides availability.}
+Rounding is the price everyone anticipates. The one the design did not state is
+which cell refuses. A gaussian model needs two vetted tables --- the group means
+and the group sums of squares --- and either being suppressed denies the model.
+Both face the same dominance bound, that no donor holds more than half of a
+cell, but squaring is not share-preserving: a donor holding a fraction $p$ of a
+cell's total holds $p^2/(p^2 + (1-p)^2/(k-1))$ of its sum of squares when the
+cell's other $k-1$ donors are equal, crossing one half at
+$p = 1/(1+\sqrt{k-1})$ --- about $0.19$ for a twenty-donor cell and $0.09$ for a
+hundred-donor one, and lower still for the heavy-tailed cells real data produce.
+The same nominal rule is therefore far tighter on the second moment than on the
+first, and it is the second moment that gates release.
+
+We measure the gap. Across the design-cell space, 2650 of 2778 cells at or above
+the frequency threshold pass the bound on the linear scale, and 355 of those
+fail once squared; not one fails on the linear scale while passing on the
+squared, so here the squared bound is a strict tightening. Across the gaussian
+model skeleton, 47 points release and a further 36 are refused by the dispersion
+cell alone --- 43\% of the otherwise-available models. This is not a defect: a
+sum of squares dominated by one donor really would disclose that donor's value.
+But it means availability in a cells-first design is governed by a threshold
+nobody states. Analysts are told about the minimum cell size; what actually
+refuses them is the second moment. Families resting on counts or first moments
+do not inherit the ceiling, families needing a variance, a standard error or an
+$F$ do, and any output checker adopted for the cell layer should decide
+deliberately whether the second-moment cell is checked on the same parameters as
+the first.
+
 \section{Specification and verification}
 \label{sec:spec}
 
@@ -238,7 +266,7 @@ defence, and the code-execution sandbox is illustration, not a jail). A
 traceability table maps every prohibition to the module that enforces it and the
 test that checks it, with an honest implemented/partial status.
 
-Four verification layers now exist. Property-based tests sample the query
+Five verification layers now exist. Property-based tests sample the query
 space; they surfaced a fail-open crash --- floating-point cancellation drove a
 variance product negative and the influence query raised instead of suppressing
 --- exactly the class of bug the fail-closed prohibition names, fixed by making
@@ -263,6 +291,35 @@ the prover's compiled-SQL claim is pinned byte-for-byte against 414 queries
 rendered by the live engine, and both toolchains are replayed in continuous
 integration against version-pinned binaries, so a change to the code that
 outran the proofs would fail the build.
+
+\paragraph{The fifth layer: equalities the release must satisfy.}
+The layers above ask what the system rejects. The fifth asks what its output
+is a \emph{function of}. The model path already carried such a check: a helper
+refits a released model from the released cell table alone, and must reproduce
+it bit for bit. The query path now carries its analogue, in two directions.
+Over the query skeleton the released frame is recomputed from the
+gateway-finalized table and the specification alone and required to match byte
+for byte; and the engine's frame is then perturbed in every way finalization
+is supposed to erase --- cell counts moved inside their rounding bucket, the
+internal distinct-donor count and the dominance and influence witnesses moved
+inside their verdict, tied rows reordered --- with the release required to
+come back unchanged. The first direction says a verifier holding only what the
+gateway approved can reproduce the release; the second says that of each
+internal control, only its verdict reaches the output, never its value. A
+spread sample runs in continuous integration and the whole space on demand.
+
+The second direction is the one that pays. It found two channels through which
+released output was still a function of the exact, pre-rounding cell counts:
+which cell complementary suppression sacrifices, and the order in which
+released rows appear. Neither discloses a value, and a check that asks only
+whether the released numbers are safe cannot see either; but of two cells that
+both release as a count of ten, either channel told an analyst which was the
+smaller --- exactly the distinction rounding exists to remove. Both now rank
+on the released count and then the public cell key, which has the incidental
+benefit of making a release reproducible run to run, as ordering by a count
+with ties never was. This is the argument for the layer: an equality stated
+over released artefacts catches disclosure that a predicate over released
+values is not looking for.
 
 \section{Red-team evaluation}
 \label{sec:redteam}
