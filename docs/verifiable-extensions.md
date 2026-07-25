@@ -227,6 +227,61 @@ dof floor) remains the template for procedures whose sufficient statistics are
 predictors — and is deliberately parked behind ACRO integration (roadmap
 item 1), which would supply production-grade output checking to lean on.
 
+### 5.1 The price of the route: the dispersion cell decides availability
+
+Inheriting the disclosure controls (O3, above) has a consequence the design
+did not state, and it is not the one people expect. A gaussian model needs two
+cell tables — the group means and the group **sums of squares** — and P19
+denies the model if either is suppressed. Both are ordinary aggregates facing
+the same dominance bound: no donor may hold more than half of a cell. But
+squaring is not share-preserving. A donor holding a fraction *p* of a cell's
+total holds
+
+    p² / (p² + (1 − p)² / (k − 1))
+
+of its sum of squares when the cell's other *k* − 1 donors are equal, which
+crosses one half at *p* = 1 / (1 + √(k − 1)): **0.25** for a ten-donor cell,
+**0.19** at twenty, **0.09** at a hundred. Real cells are heavy-tailed, so the
+true squared share runs higher still. The same nominal 50% rule is therefore a
+far tighter rule on the second moment than on the first — and it is the second
+moment that decides whether the model may be released at all.
+
+Measured rather than argued (`scripts/measure_dispersion_sensitivity.py` →
+`artifacts/dispersion_sensitivity.json`), over the whole design-cell space and
+the gaussian model skeleton:
+
+| | cells | models |
+|---|---|---|
+| pass the bound on the linear scale | 2650 of 2778 | 47 gaussian points release |
+| **fail once squared** | **355** | **36 refused by the dispersion cell alone** |
+| pass squared but fail linear | 0 | — |
+
+So on this dataset the squared bound is a strict tightening of the linear one,
+and it costs **43% of the otherwise-releasable gaussian models**. That is not a
+bug — a cell whose sum of squares is dominated by one donor really would
+disclose that donor's value — but it means model availability in a cells-first
+TRE is governed by a threshold nobody writes down. The frequency threshold is
+what analysts are told about; the dispersion cell is what actually refuses
+them.
+
+Three consequences worth carrying forward:
+
+- **It is the binding constraint on the extension route.** Adding model
+  families that need second moments (anything with a variance, a standard
+  error, or an *F*) inherits this ceiling; families built on counts
+  (binomial) or first moments (poisson with a log-exposure offset) do not.
+- **It sharpens the ACRO question (roadmap item 1).** ACRO's NK-rule is
+  stricter than the single-contributor bound on concentrated cells (see the
+  [ACRO comparison](acro-comparison.md)), so applying ACRO's dominance rules
+  to a `sum_sq` cell would refuse strictly more than the current bound does.
+  Integration must decide deliberately whether the second-moment cell is
+  checked on the same parameters as the first — the answer is not obviously
+  yes.
+- **It is a reason to keep the engine-side route open.** A model fitted from
+  rows with a leverage witness answers a different question about one donor's
+  influence than a dominance bound on a squared aggregate does, and it may be
+  the more releasable of the two.
+
 ---
 
 ## 6. How this maps onto the roadmap

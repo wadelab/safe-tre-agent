@@ -230,7 +230,7 @@ formal/       machine-checked layer (R16) — Lean 4 proofs, Alloy models,
 scripts/      make_data.py, demo_query.py, make_figures.py,
               gen_alloy_catalogue.py, gen_lean_catalogue.py, make_decks.py,
               make_demo_screenshots.py, measure_rounding_distortion.py,
-              restart_web.sh, run_web.sh
+              measure_dispersion_sensitivity.py, restart_web.sh, run_web.sh
 redteam/      attacks.yaml, run_redteam.py
 evals/        planner-quality corpus + runner
 paper/        preprint.tex (builds with make)

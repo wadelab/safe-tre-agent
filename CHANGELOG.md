@@ -24,6 +24,22 @@ and fixes are in [docs/hardening-log.md](docs/hardening-log.md).
 
 ### Added
 
+- **Measured: the dispersion cell, not the frequency threshold, is what
+  refuses a cells-first model.** A gaussian model needs group means *and*
+  group sums of squares, and P19 denies it if either is suppressed — but
+  squaring is not share-preserving, so the same 50% dominance bound is far
+  tighter on the second moment (an equal-rest cell of `k` donors crosses it at
+  a linear share of `1/(1+√(k−1))` — 0.19 at twenty donors, 0.09 at a
+  hundred). `scripts/measure_dispersion_sensitivity.py` →
+  `artifacts/dispersion_sensitivity.json` quantifies it at both levels: 355 of
+  the 2650 design cells that pass the bound on the linear scale fail once
+  squared (none the other way), and 36 gaussian skeleton points are refused by
+  the dispersion cell alone against 47 that release — 43% of the
+  otherwise-available models. Not a defect, but a ceiling on the extension
+  route that nothing stated: written up in
+  [verifiable-extensions §5.1](docs/verifiable-extensions.md), with the
+  consequence for ACRO integration (whether the second-moment cell is checked
+  on the same parameters as the first is now a deliberate decision).
 - **Release equality for the query path (roadmap item 2).**
   `tests/test_release_equality.py` discharges, for the aggregate path, what
   the P21 reproducibility meta-test discharges for the model path: over the
