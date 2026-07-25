@@ -29,7 +29,13 @@ not drift with the seed):
 - ``ingame_currency`` is proportional to ``amount_gbp`` (a near-perfect
   correlation with p = 0.000 for the correlation demo);
 - every base donor has at least one event (the cohort-size identities in the
-  tests count donors through the event joins).
+  tests count donors through the event joins);
+- three ``DOMINANCE_ANCHORS`` regions whose spend is concentrated in one or
+  two donors, so the *dominance* controls have something to bite on. Sampled
+  spend is heavy-tailed but nowhere near concentrated enough: without the
+  anchors no cell of ten donors or more comes within a factor of two of
+  either the stand-in's or ACRO's dominance thresholds, and both rule sets
+  are dead code on the corpus.
 """
 
 from __future__ import annotations
@@ -57,6 +63,27 @@ REGION_WEIGHTS = {
 }
 N_NI_DONORS = 8   # pinned below the min-cell threshold (10); see module docstring
 N_X_DONORS = 6    # likewise pinned sub-threshold
+
+# Deterministic dominance anchors: region -> the share of that region's spend
+# held by its largest contributors, largest first. The rest is spread over the
+# region's remaining donors in proportion to what they already spent, so the
+# concentration is a redistribution *within* the region and nothing outside it
+# moves (`_plant_dominance` also caps the leaders, which costs some of the
+# region's total — see there).
+#
+# The three shapes are chosen to separate the two gateways' dominance rules,
+# which are not the same rule (docs/acro-comparison.md, D3):
+#   - the stand-in suppresses a cell where one donor holds more than 50%;
+#   - ACRO's defaults suppress on the p%-rule (p = 0.1) and the NK-rule
+#     (the top n = 2 donors holding k = 90% or more).
+# All three regions carry at least ten donors at the sizes the project
+# generates — 500 at seed 17 in the tests, 800 at seed 7 for the demo dataset
+# and the ACRO comparison — so the anchors are live in both.
+DOMINANCE_ANCHORS = {
+    "Scotland": (0.62,),          # one donor over 50%: the stand-in's rule alone
+    "Wales": (0.46, 0.46),        # neither over 50%, together over NK's 90%: ACRO's alone
+    "East Midlands": (0.60, 0.35),  # over both thresholds: the rules agree
+}
 
 REGIONS = list(REGION_WEIGHTS) + ["Northern Ireland"]
 AGE_BANDS = ["13-15", "16-17", "18-24", "25-34", "35-49", "50+"]
@@ -208,6 +235,64 @@ def _sample_income(rng, ages: np.ndarray) -> np.ndarray:
     return out
 
 
+def _plant_dominance(events: pd.DataFrame, donors: pd.DataFrame) -> dict[str, float]:
+    """Concentrate each anchor region's spend in its largest contributors.
+
+    Whole donor histories are rescaled and both money columns move together,
+    so `ingame_currency` stays proportional to `amount_gbp` and no event is
+    added or removed: every count — rows, donors, purchases, loot-box opens —
+    is untouched, and so is every threshold decision. What moves is the
+    *share* structure inside the anchor cells, which is what the dominance
+    controls read.
+
+    **No planted donor outspends the largest donor the sampler already
+    produced.** Dominance means an outlier, and an unbounded one does real
+    damage: on the squared scale a whale takes essentially all of `sum_sq`,
+    so a gaussian GLM anywhere near it loses its dispersion cell and the
+    whole model is refused (P19). Capping the leaders at the dataset's own
+    maximum keeps the planted concentration inside the observed spend range —
+    the price is that an anchor cell's total shrinks when its target share
+    cannot be reached any other way.
+
+    Returns the per-donor scale factor, so the spend accumulators that drive
+    the psychometrics can be scaled by the same amount rather than recomputed
+    (donors outside an anchor region stay bit-identical).
+    """
+    by_donor = events.groupby("donor_id")["amount_gbp"].sum()
+    cap = float(by_donor.max()) if len(by_donor) else 0.0
+    region_of = donors.set_index("donor_id")["region"]
+    factors: dict[str, float] = {}
+    for region, shares in DOMINANCE_ANCHORS.items():
+        members = region_of.index[region_of == region]
+        spend = by_donor[by_donor.index.isin(members) & (by_donor > 0)]
+        spend = spend.sort_values(ascending=False, kind="stable")
+        # too small to concentrate. The formal generators build 30-donor
+        # tables just to read view columns; anchors are a property of the
+        # demo-sized data, and tests/test_dataset_anchors.py is what pins
+        # that they are present there.
+        if len(spend) <= len(shares):
+            continue
+        leaders = list(spend.index[:len(shares)])
+        followers = list(spend.index[len(shares):])
+        # the cell total after planting: as much of the original as the cap on
+        # the largest leader allows
+        total = min(float(spend.sum()), cap / max(shares))
+        for donor, share in zip(leaders, shares, strict=True):
+            factors[donor] = share * total / float(spend[donor])
+        remainder = 1.0 - sum(shares)
+        follower_total = float(spend[followers].sum())
+        for donor in followers:
+            factors[donor] = remainder * total / follower_total
+
+    scale = events["donor_id"].map(factors)
+    planted = scale.notna()
+    events.loc[planted, "amount_gbp"] = (
+        events.loc[planted, "amount_gbp"] * scale[planted]).round(2)
+    events.loc[planted, "ingame_currency"] = (
+        events.loc[planted, "ingame_currency"] * scale[planted]).round(0)
+    return factors
+
+
 def generate(seed: int = 7, n_donors: int = 500, n_apps: int = 40):
     rng = np.random.default_rng(seed)
 
@@ -331,6 +416,14 @@ def generate(seed: int = 7, n_donors: int = 500, n_apps: int = 40):
             ))
             eid += 1
     events = pd.DataFrame(rows, columns=list(TABLES["events"].keys()))
+
+    # concentrate the anchor regions' spend (see DOMINANCE_ANCHORS), then carry
+    # the same factor into the spend accumulators so the psychometrics below
+    # still follow the spend a donor is now recorded as making
+    planted = _plant_dominance(events, donors)
+    dominance_scale = np.array([planted.get(d, 1.0) for d in donors["donor_id"]])
+    total_spend = total_spend * dominance_scale
+    loot_spend = loot_spend * dominance_scale
 
     # --- survey (psychometrics, two waves) -----------------------------------
     monthly = total_spend / 12.0

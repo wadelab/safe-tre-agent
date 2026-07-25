@@ -33,9 +33,14 @@ class RefusingPlanner:
         raise AssertionError("planner was consulted for a literal spec")
 
 
-BIG_REGIONS = ["London", "South East", "North West", "East of England",
-               "Yorkshire and The Humber", "West Midlands", "East Midlands",
-               "South West", "Scotland"]
+# Regions whose cells release: big enough to clear the frequency threshold,
+# and outside the planted dominance anchors — a concentrated design cell
+# denies the whole model (P19), which is a different test's business.
+BIG_REGIONS = [r for r in ("London", "South East", "North West",
+                           "East of England", "Yorkshire and The Humber",
+                           "West Midlands", "East Midlands", "South West",
+                           "Scotland")
+               if r not in synth.DOMINANCE_ANCHORS]
 
 
 def anova_request(**over) -> str:

@@ -82,7 +82,10 @@ enumerated source of truth — see R14.)*
 **R5** — The gateway MUST apply, to every result: a minimum distinct-donor
 threshold, contributor dominance (the p%-rule) for `sum`/`mean`, single-donor
 influence for `corr`, count rounding, and primary plus complementary
-suppression.
+suppression. *(Amended 2026-07-25: everything the released table reveals —
+which cell complementary suppression sacrifices, and the order the rows come
+in — MUST be determined by released quantities alone, never by the exact
+pre-rounding counts. See hardening #27 and #28.)*
 
 **R6** — The system MUST keep per-session lineage: record each released cohort,
 flag a new cohort within the differencing threshold of a prior one, and enforce
@@ -293,7 +296,7 @@ with a documented limitation.
 | P20 no per-observation model output | `glm.py` (output contract), `analyst.py` (intent) | `test_glm.py`, `test_procedure_conformance.py` | Implemented |
 | P21 fitter noninterference | `stats.py`, `glm.py` (pure fit) | reproducibility meta-test (`test_glm_properties.py`), `test_glm_noninterference.py`, Alloy `P21` | Implemented |
 | P22 refusals from released-equivalent data | `glm.py` (`preconditions`), `service.py` | `test_glm.py` (non-numeric, term-naming refusals) | Implemented |
-| R5 complementary suppression | `disclosure.py` (`_secondary_suppress`) | `test_disclosure.py` | Partial (single-dim exact, multi-dim conservative) |
+| R5 complementary suppression | `disclosure.py` (`_secondary_suppress`, `_finalize`) | `test_disclosure.py`, `test_release_equality.py` | Partial (single-dim exact, multi-dim conservative) |
 | R14 procedure registry | `procedures.py` | `test_procedure_conformance.py` | Implemented |
 | R15 GLM from vetted cells | `glm.py`, `stats.py`, `service.py` | `test_glm.py`, `test_formal_glm_enumeration.py`, `test_glm_oracle.py` | Implemented |
 | R16 skeleton export + model check | `procedures.py`, `formal/` | `test_skeleton_sync.py`, `test_formal_alloy_sync.py`, `test_formal_lean_sync.py`, CI `formal` job | Implemented |

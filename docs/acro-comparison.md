@@ -4,7 +4,7 @@ The first slice of [roadmap item 1](roadmap.md): before ACRO replaces the
 stand-in gateway, measure where the two disagree. The harness
 (`redteam/run_acro_compare.py`) is read-only — nothing in the release path
 changes — and compares per-cell decisions, not values, over every plain
-QuerySpec in the service-path red-team corpus plus five divergence-targeted
+QuerySpec in the service-path red-team corpus plus ten divergence-targeted
 fixtures. Model specs are expanded to their planned design-cell aggregates,
 the exact frames `_handle_model` vets (P19).
 
@@ -37,29 +37,62 @@ runtime install surface entirely.
   ACRO's frame (its dominance arithmetic has no value to work with); the
   stand-in's `n_donors` counts them, so on such cells ACRO sees one donor
   fewer.
+- **Dataset.** The demo dataset: 800 donors at seed 7, the defaults
+  `scripts/make_data.py` writes into `data/`. The harness generates it when
+  `data/` is absent (as in CI) rather than falling back to a smaller one, so
+  the numbers below do not depend on who ran it.
+- **Planted dominance.** Sampled spend is heavy-tailed but not
+  *concentrated*: measured over the whole skeleton, no cell of ten donors or
+  more reached even 0.35 single-donor share, so neither gateway's dominance
+  rule could fire and the comparison measured nothing on that axis. The
+  generator now plants three regions that separate the two rule sets
+  (`synth.DOMINANCE_ANCHORS`, pinned by `tests/test_dataset_anchors.py`):
+  Scotland with one donor at 62%, Wales with two at 46% each, East Midlands
+  at 60% + 35%. Leaders are capped at the largest donor total the sampler
+  already produced, so the plant introduces no spend outside the observed
+  range.
 
-## Results (2026-07-17, ACRO 0.4.12, seed-7 dataset)
+## Results (2026-07-25, ACRO 0.4.12, 800-donor seed-7 dataset)
 
 | classification | cells |
 |---|---|
-| agree_release | 248 |
-| agree_suppress | 46 |
-| **acro_stricter** | **0** |
-| standin_stricter | 16 |
+| agree_release | 239 |
+| agree_suppress | 71 |
+| **acro_stricter** | **6** |
+| standin_stricter | 21 |
 | not comparable (corr, D6) | 1 |
 
-**No candidate under-suppression: over 310 comparable cells, ACRO never
-suppresses a cell the stand-in releases.** This is the number the preprint's
-gateway section needs — the stand-in's decisions are, on this corpus, a
-superset of ACRO's protections.
+**The two rule sets are not ordered.** Over 337 comparable cells each
+gateway suppresses cells the other releases, and the disagreements fall into
+two clean groups.
 
-All 16 `standin_stricter` cells are explained by one rule ACRO does not
-have: **complementary suppression**. The canonical example is `count` by
-region: Northern Ireland (8 donors) is below threshold for both gateways,
-but the stand-in also suppresses North East (11 donors — safe by itself)
-because a margin with exactly one suppressed cell leaks it
-(`_secondary_suppress`, spec R5); ACRO releases it. The GLM design-cell
-rows in the list are the same effect inside saturated designs.
+**ACRO stricter (6 cells, all the Wales anchor, all `nk-rule`).** ACRO's
+NK-rule suppresses a cell whose top two donors hold 90% or more of it. The
+stand-in has no such rule: it bounds the *single* largest contributor at
+50%, so two donors at 46% each pass. This is a real gap in the stand-in, and
+the first candidate under-suppression the comparison has found — it appears
+on `sum` and `mean` of the same cell, and on a corpus scenario as well as
+the targeted fixtures.
+
+**Stand-in stricter (21 cells), from two different rules:**
+
+- *10 cells are the Scotland anchor* (`Scotland`, `Scotland|iOS`,
+  `Scotland|Android` across the sum/mean specs): one donor holds 62%, over
+  the stand-in's 50% bound. ACRO releases them — its NK-rule sees only 66%
+  in the top two, and its p%-rule wants the spend outside the top two to
+  fall below a tenth of the largest, which it does not. So the p%-rule as
+  ACRO configures it by default is *weaker* here than the bespoke 50% bound.
+- *11 cells are complementary suppression*, which ACRO does not implement at
+  all (C2). The canonical example is `count` by region: Northern Ireland (8
+  donors) is below threshold for both gateways, but the stand-in also
+  suppresses North East (11 donors — safe by itself) because a margin with
+  exactly one suppressed cell leaks it (`_secondary_suppress`, spec R5).
+
+The integration reading: ACRO's checks belong underneath, and
+`_secondary_suppress` stays on top of them (C2) — but the stand-in's
+single-contributor bound must *also* stay, because ACRO's defaults do not
+subsume it. The honest summary for the preprint's gateway section is that
+neither rule set dominates the other, not that the stand-in is a superset.
 
 ## Compatibility findings for the integration slice
 
@@ -81,16 +114,19 @@ rows in the list are the same effect inside saturated designs.
   project's runtime environment at all until upstream supports pandas 3;
   any integration slice must either vendor the checks or isolate ACRO
   behind a subprocess/service boundary.
-- **D3 lens.** ACRO's dominance defaults (p% = 0.1, NK n=2 k=0.9) fired on
-  no corpus cell that the stand-in's single-contributor 50% rule released —
-  no observed divergence yet, so calibrating the bespoke rules against
-  ACRO's needs sharper fixtures (planted dominant donors) in a later slice.
+- **D3 lens — measured.** With the dominance anchors in place, ACRO's
+  defaults (p% = 0.1, NK n = 2, k = 0.9) and the stand-in's 50% bound
+  disagree in *both* directions: the NK-rule catches a concentrated pair the
+  50% bound releases (Wales), and the 50% bound catches a single dominant
+  donor both of ACRO's rules release (Scotland). Neither is a superset of
+  the other, so the integration keeps both.
 
 ## Next
 
 Slice 2 chooses the integration seam using these numbers: ACRO's checks
 under the cells-first layer (`DisclosurePolicy` stays the protocol; ACRO
 becomes an implementation that vets cell tables), with `_secondary_suppress`
-and the session auditor retained on top. The red-team comparison then
-becomes a CI regression: today's harness already gates on its own
-integrity in the `acro-compare` job.
+**and the single-contributor bound** retained on top — the D3 measurement
+says ACRO's defaults do not cover the latter. The comparison then becomes a
+CI regression: today's harness already gates on its own integrity in the
+`acro-compare` job.

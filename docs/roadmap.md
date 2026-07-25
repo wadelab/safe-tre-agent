@@ -32,11 +32,14 @@ models with continuous predictors stay parked until ACRO lands (see
 [verifiable-extensions §5](verifiable-extensions.md)).
 
 Deliverables: integration design; ~~a comparison of ACRO's decisions against
-the stand-in's over the red-team corpus~~ *delivered 2026-07-17
-([ACRO comparison](acro-comparison.md)): over 310 comparable cells ACRO is
-never stricter, and every stand-in-stricter cell is complementary
-suppression*; compatibility notes for TRE operators (started, same page);
-an updated gateway section in the preprint.
+the stand-in's over the red-team corpus~~ *delivered 2026-07-17, extended
+2026-07-25 with planted dominance anchors ([ACRO comparison](acro-comparison.md)):
+over 337 comparable cells the two rule sets disagree in both directions —
+ACRO's NK-rule suppresses concentrated pairs the stand-in's 50% bound
+releases, and that bound catches single dominant donors ACRO's defaults
+release — so neither is a superset and the integration keeps both*;
+compatibility notes for TRE operators (started, same page); an updated
+gateway section in the preprint.
 
 ## 2. Formal executable specification (fellowship WP2)
 
@@ -68,10 +71,15 @@ exhaustion short-circuit (P17), the fail-closed gate (P7 — the clause the
 July round of property-testing showed real bugs land on), and
 differencing-pair serialisation under the per-Session lock (P16), with the
 hardening #18 race machine-exhibited once the lock assumption is dropped.
-What remains: value-level noninterference through the numeric path (see the
-§C design note in [formal methods](FORMAL_METHODS_ANALYSIS.md)); its
-prerequisite — released-value shaping running on the finalized frame —
-landed as hardening #26.
+A fourth slice delivered the tractable half of *value-level*
+noninterference on the query path: a release-equality test
+(`tests/test_release_equality.py`) requiring a released frame to be
+recomputable, bit for bit, from the gateway-finalized table and the spec, and
+to be unchanged when the engine's frame is perturbed in ways finalization
+erases. It found two places where released output was still a function of
+pre-rounding counts (hardening #27 and #28). What remains on this item is the
+quantitative step — replacing "insensitive up to the controls" with a bound —
+which is item 3 below, not more of item 2.
 
 This ranks above DP because it hardens the claim we already make, rather than
 adding a claim we do not yet make.

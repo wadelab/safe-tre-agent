@@ -48,7 +48,8 @@ def test_influence_below_threshold_released():
     assert action == "release"
     assert not any(f.rule == "influence" for f in findings)
     assert "influence" not in released.columns
-    assert list(released["region"]) == ["A", "B"]
+    # released rows come back ordered by the RELEASED count, descending (#28)
+    assert list(released["region"]) == ["B", "A"]
 
 
 def test_threshold_counts_donors_not_rows():
@@ -138,7 +139,7 @@ def test_secondary_suppression_single_dim():
     released, action, findings = DisclosurePolicy().apply(df)
     assert action == "redacted"
     assert any(f.rule == "secondary_suppression" for f in findings)
-    assert list(released["region"]) == ["C", "D"]
+    assert set(released["region"]) == {"C", "D"}
 
 
 def test_no_secondary_suppression_when_two_cells_suppressed():
@@ -149,7 +150,45 @@ def test_no_secondary_suppression_when_two_cells_suppressed():
     released, action, findings = DisclosurePolicy().apply(df)
     assert action == "redacted"
     assert not any(f.rule == "secondary_suppression" for f in findings)
-    assert list(released["region"]) == ["C", "D"]
+    assert set(released["region"]) == {"C", "D"}
+
+
+def test_complementary_suppression_choice_ignores_pre_rounding_counts():
+    # A is below threshold, so one further cell in the grand-total margin must
+    # go. B and C both release as n = 10, so which of them is sacrificed must
+    # not depend on their exact counts: ranking on the exact minimum told an
+    # analyst which of two equally-released cells was the smaller (#27). The
+    # choice is the released count first, then the public cell key.
+    def survivors(n_b, n_c):
+        df = pd.DataFrame({"region": ["A", "B", "C", "D"],
+                           "value": [1.0, 2.0, 3.0, 4.0],
+                           "n": [3, n_b, n_c, 50]})
+        released, action, findings = DisclosurePolicy().apply(df)
+        assert action == "redacted"
+        assert any(f.rule == "secondary_suppression" for f in findings)
+        return set(released["region"])
+
+    assert survivors(10, 12) == survivors(12, 10)
+    assert survivors(10, 12) == {"C", "D"}          # B loses the key tie-break
+
+
+def test_released_row_order_is_a_function_of_released_counts():
+    # the engine hands the gateway cells in ORDER BY n DESC on the EXACT
+    # count, so an order inherited from it ranks cells more finely than the
+    # released counts do (#28). Two engine frames that differ only inside a
+    # rounding bucket must release in the same order.
+    def order(cells):
+        df = pd.DataFrame({"region": [c for c, _ in cells],
+                           "value": [1.0] * len(cells),
+                           "n": [n for _, n in cells]})
+        released, action, _ = DisclosurePolicy().apply(df)
+        assert action == "release"
+        return list(zip(released["region"], released["n"], strict=True))
+
+    assert (order([("C", 50), ("A", 21), ("B", 19)])
+            == order([("C", 50), ("B", 21), ("A", 19)]))
+    assert order([("C", 50), ("A", 21), ("B", 19)]) == [("C", 50), ("A", 20),
+                                                        ("B", 20)]
 
 
 def test_secondary_suppression_two_dims_margin():

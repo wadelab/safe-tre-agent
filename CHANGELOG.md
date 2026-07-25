@@ -6,22 +6,74 @@ and fixes are in [docs/hardening-log.md](docs/hardening-log.md).
 
 ## Unreleased
 
+### Security
+
+- **Complementary suppression no longer picks its victim by the exact count
+  (hardening #27).** `_secondary_suppress` sacrificed the cell with the
+  smallest pre-rounding count, so of two cells that both release as `n = 10`
+  the analyst learned which was smaller. The victim is now ranked on the
+  released (rounded) count and tie-broken on the public cell key.
+- **Released rows are no longer ordered by the exact count (hardening #28).**
+  The engine hands the gateway cells in `ORDER BY n DESC` on the exact count
+  and the gateway preserved that order, so a released table ranked cells more
+  finely than its own released counts did. `_finalize` now re-sorts on the
+  rounded count, then the cell key — which also makes a release reproducible
+  run to run, as `ORDER BY` over tied counts is not. Suppression decisions and
+  released numbers are unchanged; only which cell is sacrificed and what order
+  rows appear in.
+
 ### Added
+
+- **Release equality for the query path (roadmap item 2).**
+  `tests/test_release_equality.py` discharges, for the aggregate path, what
+  the P21 reproducibility meta-test discharges for the model path: over the
+  enumerated skeleton (a spread sample by default, all 2622 points under
+  `-m slow`), a verifier holding the gateway-finalized table and the spec
+  recomputes the released frame bit for bit, and perturbing the engine's frame
+  in ways finalization erases — counts moved inside their rounding bucket, the
+  internal donor count and the dominance/influence witnesses moved inside
+  their verdict, tied rows reordered — leaves the release byte-identical. This
+  is the factoring `release = postprocess ∘ finalize ∘ vet` that hardening #26
+  established, now pinned; it found hardening #27 and #28.
+- **Planted dominance anchors in the synthetic data
+  (`synth.DOMINANCE_ANCHORS`).** Sampled spend is heavy-tailed but not
+  concentrated — no cell of ten donors or more reached 0.35 single-donor
+  share — so both the stand-in's and ACRO's dominance rules were dead code on
+  the whole corpus and the comparison measured nothing on that axis. Three
+  regions are now concentrated to shapes that separate the two rule sets
+  (Scotland 62% in one donor, Wales 46% + 46%, East Midlands 60% + 35%), by
+  redistribution within the region and with leaders capped at the largest
+  donor total the sampler already produced, so no event, donor or count moves
+  and no spend outside the observed range is introduced.
+  `tests/test_dataset_anchors.py` pins the shares, the invariants and the
+  divergence. The dataset-derived artifacts were regenerated against it:
+  `artifacts/rounding_distortion.json` (57 releasable models, down from 61 —
+  a few design cells are now concentrated enough to refuse) and the demo
+  screenshots.
+- **The ACRO comparison now measures dominance divergence in both
+  directions.** Six `acro_stricter` cells (the first found): ACRO's NK-rule
+  suppresses a cell whose top two donors hold 90%, which the stand-in's
+  single-contributor 50% bound releases — a real gap in the stand-in. Ten
+  of the 21 `standin_stricter` cells are the converse: one donor over 50%,
+  which neither of ACRO's default dominance rules catches. Neither rule set
+  subsumes the other, so the integration keeps both; results and the corrected
+  reading in [docs/acro-comparison.md](docs/acro-comparison.md). New targeted
+  fixtures, and the harness now generates the documented 800-donor dataset
+  when `data/` is absent instead of a smaller one, so CI and the published
+  numbers describe the same dataset.
 
 - **ACRO decision-comparison harness (roadmap item 1, first slice).**
   `redteam/run_acro_compare.py` replays every plain QuerySpec in the
   service-path red-team corpus (model specs expanded to their planned
   design-cell aggregates) through both the stand-in gateway and ACRO
   0.4.12's own check implementations, feeding ACRO one row per donor per
-  cell so its threshold counts donors (P5/D4). First numbers, method and
+  cell so its threshold counts donors (P5/D4). Numbers, method and
   compatibility findings in
-  [docs/acro-comparison.md](docs/acro-comparison.md): over 310 comparable
-  cells ACRO is never stricter than the stand-in, and every
-  stand-in-stricter cell is complementary suppression — a rule ACRO does
-  not have, so `_secondary_suppress` stays in force on top (the roadmap's
-  contrary claim is corrected). New CI job `acro-compare` gates on harness
-  integrity; ACRO lives in a separate dependency group because 0.4.x pins
-  `pandas < 3`.
+  [docs/acro-comparison.md](docs/acro-comparison.md); the headline is that
+  complementary suppression is a rule ACRO does not have, so
+  `_secondary_suppress` stays in force on top of it (the roadmap's contrary
+  claim is corrected). New CI job `acro-compare` gates on harness integrity;
+  ACRO lives in a separate dependency group because 0.4.x pins `pandas < 3`.
 - **Temporal session model (roadmap item 2, third slice).**
   `formal/temporal_session.als` model-checks the auditor's
   `observe → apply → record` event order in Alloy 6 temporal logic: spend is

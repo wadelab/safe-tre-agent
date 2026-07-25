@@ -29,7 +29,9 @@ donors, not rows, and the differencing auditor now decides from published donor
 marginals rather than the live donor sets (simulatable auditing). D7 is
 reassessed below — the prototype is already stricter than the OpenSAFELY rule it
 was measured against. D5 and D6 are addressed as documentation and configuration
-below. D3 (dominance parameterisation) and D2 (a DP accountant) remain planned.
+below. D3 (dominance parameterisation) is now *measured* against ACRO's own
+rules and stays open, with a corrected reading — neither rule set subsumes the
+other; D2 (a DP accountant) remains planned.
 
 | # | Deviation | Field | Severity | Recommendation |
 |---|-----------|-------|----------|----------------|
@@ -133,6 +135,20 @@ that claims ACRO-grade control would answer to a different test than it applies.
 Recommendation: replace the fixed 50% rule with configurable (n,k) and p% rules.
 This matters because the stated plan is to wrap ACRO in production; matching its
 parameters now avoids a silent change in what "dominated" means later.
+
+**Status: measured, not yet closed (2026-07-25).** The deviation now has
+numbers rather than an argument. The dataset was carrying no concentrated
+cells at all — no cell of ten donors or more reached 0.35 single-donor share —
+so neither rule could fire and the difference was untestable; three regions
+are now planted with shapes that separate the two rules
+(`synth.DOMINANCE_ANCHORS`). Against ACRO 0.4.12's own implementations, the
+rules disagree in **both** directions: the (n,k) rule suppresses a cell whose
+top two donors hold 92% and the 50% rule releases it, and the 50% rule
+suppresses a cell with one donor at 62% that both of ACRO's default rules
+release. So this is not simply a laxer rule to be replaced — adopting (n,k)
+and p% alone would *lose* protection the current rule provides, and the
+integration must keep both. Numbers in the
+[ACRO comparison](acro-comparison.md).
 
 ### D4 — No degrees-of-freedom floor for correlation or regression
 

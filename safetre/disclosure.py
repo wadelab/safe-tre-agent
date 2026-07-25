@@ -37,6 +37,18 @@ def _count_cols(df: pd.DataFrame) -> list[str]:
     return [c for c in df.columns if str(c).lower() in COUNT_COLUMNS]
 
 
+# payload and internal-helper columns: everything else in an aggregate frame is
+# a cell key. Group keys are categorical/int; float columns are measures.
+_NON_KEY_COLUMNS = COUNT_COLUMNS | {"value", "p_value", "dominance", "influence"}
+
+
+def _group_columns(df: pd.DataFrame) -> list[str]:
+    """The cell-key columns of an aggregate frame, in frame order."""
+    return [c for c in df.columns
+            if str(c).lower() not in _NON_KEY_COLUMNS
+            and not pd.api.types.is_float_dtype(df[c])]
+
+
 def leak_detector(df: pd.DataFrame | None, threshold: int | None = None,
                   max_rows: int | None = None, dom_threshold: float | None = None,
                   influence_threshold: float | None = None) -> list[Finding]:
@@ -129,16 +141,34 @@ class DisclosurePolicy:
     round_base: int = ROUND_BASE
 
     def _finalize(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Drop internal helper columns and round released counts.
+        """Drop internal helper columns, round released counts, and order the
+        rows by released quantities alone.
 
         `n_donors` is an internal distinct-donor count used to enforce the
         frequency threshold on individuals; it is dropped here (before the count
         columns are rounded) so it is never released.
+
+        The engine returns cells in `ORDER BY n DESC` — the *exact* count — so
+        the row order of a released table used to rank cells more finely than
+        the released counts do: of two cells both released as `n = 10`, the
+        order said which had more rows (hardening #28). Re-sorting on the
+        rounded count, tie-broken on the public cell key, makes the order a
+        function of what is already released — and makes a release
+        reproducible run to run, which `ORDER BY` over tied counts is not.
         """
         out = df.drop(columns=["dominance", "influence", "n_donors"], errors="ignore").copy()
-        for c in _count_cols(out):
+        counts = _count_cols(out)
+        for c in counts:
             out[c] = (out[c] / self.round_base).round().astype(int) * self.round_base
-        return out
+        ordering = pd.DataFrame(index=out.index)
+        if counts:
+            ordering["_count"] = -out[counts[0]]           # released count, descending
+        for key in _group_columns(out):
+            ordering[f"_key_{key}"] = out[key].astype(str)
+        if len(ordering.columns):
+            out = out.loc[ordering.sort_values(list(ordering.columns),
+                                               kind="stable").index]
+        return out.reset_index(drop=True)
 
     def _secondary_suppress(self, original: pd.DataFrame,
                             released: pd.DataFrame) -> tuple[pd.DataFrame, int]:
@@ -155,11 +185,7 @@ class DisclosurePolicy:
         auditor's job, not this one's.
         """
         count_cols = _count_cols(original)
-        # group dims are categorical/int; float columns are measures, not margins
-        group_cols = [c for c in original.columns
-                      if str(c).lower() not in COUNT_COLUMNS | {"value", "p_value",
-                                                                "dominance", "influence"}
-                      and not pd.api.types.is_float_dtype(original[c])]
+        group_cols = _group_columns(original)
         if not count_cols or not group_cols or len(released) == len(original):
             return released, 0
         size = count_cols[0]
@@ -181,10 +207,27 @@ class DisclosurePolicy:
                     orig_slice = orig_slice[orig_slice[dim] == lvl]
                     rel_slice = rel_slice[rel_slice[dim] == lvl]
                 if len(orig_slice) - len(rel_slice) == 1 and len(rel_slice) > 0:
-                    released = released.drop(index=rel_slice[size].idxmin())
+                    released = released.drop(index=self._sacrifice(rel_slice, size))
                     extra += 1
                     changed = True
         return released, extra
+
+    def _sacrifice(self, candidates: pd.DataFrame, size: str):
+        """Which cell complementary suppression gives up.
+
+        Still the smallest cell — but ranked on the count as it will be
+        *released* (base-5 rounded) and tie-broken on the public cell key,
+        never on the exact count. Ranking on the exact count made the identity
+        of the sacrificed cell a function of pre-rounding counts: of two cells
+        that both release as `n = 10`, an analyst learned which one was
+        smaller, which is the information rounding exists to blur (hardening
+        #27, the same class as #26).
+        """
+        rounded = (candidates[size] / self.round_base).round().astype(int)
+        keys = candidates[_group_columns(candidates)].astype(str).apply(
+            lambda row: "|".join(row), axis=1)
+        return pd.DataFrame({"count": rounded, "key": keys}).sort_values(
+            ["count", "key"], kind="stable").index[0]
 
     def apply(self, df: pd.DataFrame | None):
         """Return (released_df_or_None, action, findings).

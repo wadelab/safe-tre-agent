@@ -3,6 +3,32 @@
 A dated record of self-red-team findings and the fixes applied. New findings get
 appended; the table is the quick index, the notes below give detail.
 
+## 2026-07-25 — round 6 (found by the release-equality test, roadmap item 2)
+
+| # | Finding | Sev | Status | Fix | Where |
+|---|---|---|---|---|---|
+| 27 | **Complementary suppression chose its victim on the exact count.** `_secondary_suppress` sacrificed the cell with the smallest *pre-rounding* count, so the identity of the sacrificed cell was a function of counts the release blurs: of two cells that both release as `n = 10`, an analyst learned which one was smaller. Complementary suppression fires on 1013 of the 2622 skeleton points, and on 546 of those the sacrificed cell ties, on the released count, with a cell that survived | Med | **Fixed** | the victim is ranked on the count as it will be released (base-5 rounded) and tie-broken on the public cell key, so the choice is a function of released quantities alone | `disclosure.py` (`_sacrifice`), `tests/test_disclosure.py`, `tests/test_release_equality.py` |
+| 28 | **Released row order ranked cells more finely than the released counts did.** The engine returns cells `ORDER BY n DESC` on the exact count and the gateway preserved that order, so the order of a released table distinguished cells whose released counts are equal. 1820 of 2551 released multi-row frames over the skeleton carry adjacent rows that share a released `n` but differ in the exact one | Med | **Fixed** | `_finalize` re-sorts on the rounded count, then the cell key; a release is now also reproducible run to run, which `ORDER BY` over tied counts is not | `disclosure.py` (`_finalize`), `tests/test_disclosure.py`, `tests/test_release_equality.py` |
+
+### Notes
+
+**#27 and #28 are one defect in two places**, and the same class as #26:
+something the analyst can see — which cell was sacrificed, what order the rows
+came in — was computed from the exact cell counts rather than from the
+released ones. Neither leaks a value directly; both leak an *ordering* below
+the granularity base-5 rounding exists to impose, which is enough to tell two
+cells apart that the release presents as identical. Found by the query path's
+release-equality test (`tests/test_release_equality.py`), which perturbs the
+engine's frame in ways finalization is supposed to erase — counts moved inside
+their rounding bucket, witnesses moved inside their verdict, tied rows
+reordered — and requires the released frame to come back byte-identical.
+
+The fixes change *which* cell complementary suppression gives up and the order
+released rows appear in; they change no suppression decision and no released
+number. The row-order change also removes a smaller nuisance: `ORDER BY n
+DESC` leaves tied cells in an unspecified order, so two runs of the same query
+could previously return the same table with rows in different positions.
+
 ## 2026-07-17 — round 5 (found while scoping the value-level noninterference model)
 
 | # | Finding | Sev | Status | Fix | Where |

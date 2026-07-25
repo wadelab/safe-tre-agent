@@ -255,7 +255,11 @@
   path: service
   expect_block: false
   steps:
-    - request: '{"tool": "anova", "dataset": "spend", "response": "amount_gbp", "factor": "region", "filters": [{"column": "region", "op": "in", "value": ["London", "South East", "North West", "East of England", "Yorkshire and The Humber", "West Midlands", "East Midlands", "South West", "Scotland"]}]}'
+    # regions that clear the frequency threshold AND lie outside the planted
+    # dominance anchors (synth.DOMINANCE_ANCHORS) — a concentrated design cell
+    # denies the whole model, which is what glm_saturated_recovery_of_suppressed_cell
+    # and literal_spec_small_cell_design are for
+    - request: '{"tool": "anova", "dataset": "spend", "response": "amount_gbp", "factor": "region", "filters": [{"column": "region", "op": "in", "value": ["London", "South East", "North West", "East of England", "Yorkshire and The Humber", "West Midlands", "South West"]}]}'
       spec:
         tool: anova
         dataset: spend
@@ -264,8 +268,7 @@
         filters:
           - {column: region, op: in, value: [London, South East, North West,
                                              East of England, Yorkshire and The Humber,
-                                             West Midlands, East Midlands,
-                                             South West, Scotland]}
+                                             West Midlands, South West]}
 
 - name: literal_spec_small_cell_design
   type: small_cell

@@ -57,9 +57,21 @@ from safetre.query import QuerySpec                              # noqa: E402
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT_CSV = os.path.join(HERE, "acro_results.csv")
 
+# must match scripts/make_data.py, so the numbers are the same with or without
+# a generated `data/` directory
+DEMO_SEED, DEMO_DONORS = 7, 800
+
 # Divergence-targeted fixtures beyond the corpus: the deterministic anchors
-# (sub-threshold Northern Ireland and sex X), a dominance-shaped sum, and a
-# whole-population baseline. Each is an ordinary QuerySpec dict.
+# (sub-threshold Northern Ireland and sex X), the planted dominance anchors,
+# and a whole-population baseline. Each is an ordinary QuerySpec dict.
+#
+# The dominance fixtures are the D3 lens. The two gateways' dominance rules
+# are different rules — the stand-in suppresses a cell where one donor holds
+# more than half of it, ACRO's defaults fire on the p%-rule and on the top two
+# donors holding 90% — so the corpus alone cannot calibrate them: sampled
+# spend is nowhere near concentrated enough for either to fire. The generator
+# plants three regions that separate them (`synth.DOMINANCE_ANCHORS`):
+# Scotland one donor at 62%, Wales two at 46% each, East Midlands 60% + 35%.
 FIXTURES = [
     ("fixture_count_by_region_threshold_edge",
      {"dataset": "spend", "measure": {"fn": "count"}, "group_by": ["region"]}),
@@ -72,6 +84,26 @@ FIXTURES = [
      {"dataset": "donor_spend",
       "measure": {"fn": "sum", "column": "total_spend_gbp"},
       "group_by": ["region"]}),
+    ("fixture_donor_mean_by_region_dominance",
+     {"dataset": "donor_spend",
+      "measure": {"fn": "mean", "column": "total_spend_gbp"},
+      "group_by": ["region"]}),
+    ("fixture_event_sum_by_region_dominance",
+     {"dataset": "spend", "measure": {"fn": "sum", "column": "amount_gbp"},
+      "group_by": ["region"]}),
+    # one cell each, so the results file names the verdict per anchor shape
+    ("fixture_anchor_scotland_single_donor_over_half",
+     {"dataset": "donor_spend",
+      "measure": {"fn": "sum", "column": "total_spend_gbp"},
+      "filters": [{"column": "region", "op": "==", "value": "Scotland"}]}),
+    ("fixture_anchor_wales_top_two_over_nk",
+     {"dataset": "donor_spend",
+      "measure": {"fn": "sum", "column": "total_spend_gbp"},
+      "filters": [{"column": "region", "op": "==", "value": "Wales"}]}),
+    ("fixture_anchor_east_midlands_over_both",
+     {"dataset": "donor_spend",
+      "measure": {"fn": "sum", "column": "total_spend_gbp"},
+      "filters": [{"column": "region", "op": "==", "value": "East Midlands"}]}),
     ("fixture_total_spend_no_groupby",
      {"dataset": "spend", "measure": {"fn": "sum", "column": "amount_gbp"}}),
 ]
@@ -199,8 +231,13 @@ def iter_specs(attacks: list) -> list[tuple[str, dict]]:
 
 
 def main() -> int:
+    # the demo dataset, whether it has been written out or not: `data/` is not
+    # in the repository, so CI generates it — with the same seed and size
+    # `scripts/make_data.py` uses, or the published numbers would describe a
+    # dataset nobody else can reproduce
     tables = (synth.load_csvs()
-              if os.path.isdir("data") and os.listdir("data") else synth.generate())
+              if os.path.isdir("data") and os.listdir("data")
+              else synth.generate(seed=DEMO_SEED, n_donors=DEMO_DONORS))
     engine = QueryEngine(tables)
     policy = DisclosurePolicy()
     attacks = yaml.safe_load(open(os.path.join(HERE, "attacks.yaml")))
@@ -268,6 +305,7 @@ def main() -> int:
         counts[r["classification"]] = counts.get(r["classification"], 0) + 1
     from importlib.metadata import version
     print(f"\nacro {version('acro')} vs stand-in DisclosurePolicy")
+    print(f"dataset: {len(tables['donors'])} donors, {len(tables['events'])} events")
     print(f"cells compared: {sum(v for k, v in counts.items() if k != 'not_comparable')}")
     for k in ("agree_release", "agree_suppress", "acro_stricter",
               "standin_stricter", "not_comparable"):

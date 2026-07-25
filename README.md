@@ -177,8 +177,13 @@ disclosure rules. See `safetre/schema.py`.
 The data are not noise: a latent per-donor propensity makes the invited analyses
 find real effects (loot-box spend correlates with PGSI, total spend negatively
 with wellbeing, self-report under-reports observed spend), while deterministic
-disclosure anchors — Northern Ireland and sex `X` pinned below the min-cell
-threshold — keep the suppression and differencing demos honest across seeds.
+disclosure anchors keep the suppression and differencing demos honest across
+seeds — Northern Ireland and sex `X` pinned below the min-cell threshold, and
+three regions whose spend is concentrated in one or two donors so the
+*dominance* rules have something to bite on (sampled spend, being merely
+heavy-tailed, left them dead code). See `synth.DOMINANCE_ANCHORS` and
+[the ACRO comparison](docs/acro-comparison.md), where the anchors separate the
+stand-in's dominance rule from ACRO's.
 
 ## Threat model / red-team
 
