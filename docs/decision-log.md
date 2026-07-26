@@ -28,7 +28,8 @@ alongside the reasoning that replaced it.
 | D2 | [Rule sets compose as a union, and the checker runs out of process](decisions/D2-acro-composition.md) | accepted | R5 |
 | D3 | [Second-moment cells get their own bound, and their own failure mode](decisions/D3-second-moment-parameters.md) | accepted | R5, R15, P19 |
 | D4 | [Inference from a dispersion that cannot be released](decisions/D4-robust-dispersion.md) | **parked** | R15, P21 |
-| D5 | [What to do about the response-time channel](decisions/D5-timing-channel.md) | **open** | R3, R5, R6 |
+| D5 | [What to do about the response-time channel](decisions/D5-timing-channel.md) | accepted | R3, R5, R6, R18 |
+| D6 | [An external checker is used by default when one is configured](decisions/D6-checker-default.md) | accepted | R5 |
 
 ## D1 — Models fit from vetted cells, not from rows
 
@@ -72,13 +73,23 @@ A coefficient without a standard error is rarely publishable. Can inference — 
 
 ## D5 — What to do about the response-time channel
 
-*2026-07-26 · open*
+*2026-07-26 · accepted*
 
 Query latency tracks cohort size closely enough to put sub-threshold cells in size order within a session's query budget. Should responses be padded to a constant time, quantised to a coarse bucket, or documented and left?
 
-**What would change our mind.** Open. The measurement exists and the options are costed below; what is missing is a judgement about how much usability to spend on a channel that needs an authenticated, audited analyst spending their query budget to exploit. Two things would settle it in one direction or the other: an end-to-end measurement over the real restricted channel, which would say how much of the signal survives network jitter, and the DP accountant, which closes this channel along with the rest of the release-decision oracle.
+**What would change our mind.** Quantisation attenuates rather than eliminates, and the residual is written below: a patient attacker across sessions can still order some pairs at 26-70 samples. Revisit if cross-session accounting arrives (roadmap item 4) and makes that bound meaningful rather than notional; if a deployment reports the ceiling refusing legitimate work, which would mean the quantum and ceiling need re-fitting to a larger dataset; or if anyone wants the channel closed rather than narrowed, which needs constant time — available today by setting the quantum equal to the ceiling, at the cost of every query paying it.
 
 [Read the record](decisions/D5-timing-channel.md)
+
+## D6 — An external checker is used by default when one is configured
+
+*2026-07-26 · accepted*
+
+Should the shipped default vet with the prototype's own rules alone, or compose them with an external output checker?
+
+**What would change our mind.** The measured cost was 5% of gaussian model availability on synthetic data whose concentration was deliberately planted. Real data could be worse, and a deployment that finds the composite refusing analyses researchers need should re-run `scripts/measure_composite_cost.py` against its own data rather than assume these numbers transfer. Revisit also if a checker ever gains rules that are not monotone with ours — the whole argument rests on the union only ever suppressing more.
+
+[Read the record](decisions/D6-checker-default.md)
 
 
 ## Adding a record

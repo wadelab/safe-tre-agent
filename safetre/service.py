@@ -175,7 +175,8 @@ class QueryService:
 
         released, action, findings = self.policy.apply(df, self._context(spec))
         findings = findings + audit_findings
-        trace.append(f"gateway: {action} ({[f.rule for f in findings]})")
+        trace.append(f"gateway: {action} by {self.policy.vetter.describe()} "
+                     f"({[f.rule for f in findings]})")
 
         # Fail closed: any auditor flag, an explicit deny, or an unrecognised
         # action withholds all data.
@@ -300,7 +301,9 @@ class QueryService:
 
             released, action, findings = self.policy.apply(
                 df, self._context(agg))
-            trace.append(f"gateway[{role}]: {action} ({[f.rule for f in findings]})")
+            trace.append(f"gateway[{role}]: {action} by "
+                         f"{self.policy.vetter.describe()} "
+                         f"({[f.rule for f in findings]})")
             # P19: the model fits on a complete vetted table or not at all. A
             # redaction means some design cell is unsafe to release, so the
             # message names the aggregate role only — never which cell or why.

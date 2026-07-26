@@ -45,11 +45,20 @@ NAMES = [f.name for f in PARAMETERS]
 PROBES: dict[type, object] = {int: 7, float: 0.25, str: "standin"}
 
 
+# Coupled parameters need coherent probes: the response ceiling must be a whole
+# number of quanta, so a generic "try 7" would be rejected by validation rather
+# than by the route being broken, and the test would be measuring the wrong
+# thing.
+_COUPLED = {"response_quantum_ms": 100, "response_ceiling_ms": 500}
+
+
 def _probe(field):
     if field.name == "vetter":                 # a Literal-ish field: use the
         return "standin+external"              # other legal value
     if field.name == "checker_cmd":
         return "/bin/true"
+    if field.name in _COUPLED:
+        return _COUPLED[field.name]
     kind = type(field.default) if field.default is not None else float
     return PROBES[kind]
 

@@ -143,6 +143,35 @@ class PolicyConfig:
         evidence="artifacts/dispersion_sensitivity.json",
         unset_means="second moments are checked at `dom_threshold`, the "
                     "stricter reading")
+    response_quantum_ms: int = _dial(
+        50,
+        controls="the interval every response is rounded up to at the "
+                 "deployment boundary",
+        means="a response is held until the next multiple of this many "
+              "milliseconds, so requests doing similar work become "
+              "indistinguishable by latency. It does not need to hide "
+              "everything: cells at or above the frequency threshold have "
+              "their counts published anyway, so the quantum only has to "
+              "exceed the spread of work done on the SUB-threshold cohorts "
+              "whose counts are withheld. Measured, those sit within a few "
+              "milliseconds of each other, so 50 puts them all in one bucket. "
+              "Set to 0 to disable, which reopens the channel.",
+        clause="R18", yaml_key="disclosure.response_quantum_ms",
+        pinned_by="tests/test_timing_channel.py",
+        evidence="artifacts/timing_channel_standin.json")
+    response_ceiling_ms: int = _dial(
+        1000,
+        controls="the longest a response may take before the request is "
+                 "refused",
+        means="work that would exceed this is refused and the refusal is "
+              "still padded, because an overflow is itself a signal: without "
+              "a ceiling the slowest queries advertise their size by running "
+              "long. It is a compute cap in the same family as the row and "
+              "memory limits, and like them it bounds cost as well as "
+              "disclosure. Must be a multiple of the quantum to avoid a "
+              "half-bucket at the top.",
+        clause="R18", yaml_key="disclosure.response_ceiling_ms",
+        pinned_by="tests/test_timing_channel.py")
     vetter: str = _dial(
         "standin",
         controls="which rules decide whether a cell may be released",
@@ -154,7 +183,11 @@ class PolicyConfig:
               "suppression.",
         clause="R5", yaml_key="disclosure.vetter",
         pinned_by="tests/test_cell_vetter.py",
-        evidence="docs/acro-integration.md")
+        evidence="artifacts/composite_cost.json",
+        unset_means="an external checker is used IF `checker_cmd` is "
+                    "configured, and not otherwise — measured, composing "
+                    "costs about 5% of gaussian model availability. Name a "
+                    "vetter explicitly to require one")
     checker_cmd: str = _dial(
         "",
         controls="the command that starts that external checker",
@@ -182,6 +215,8 @@ _ENV_OVERRIDES: dict[str, tuple[str, type]] = {
     "SAFETRE_INFLUENCE_THRESHOLD": ("influence_threshold", float),
     "SAFETRE_ROUND_BASE": ("round_base", int),
     "SAFETRE_MOMENT2_DOM_THRESHOLD": ("moment2_dom_threshold", float),
+    "SAFETRE_RESPONSE_QUANTUM_MS": ("response_quantum_ms", int),
+    "SAFETRE_RESPONSE_CEILING_MS": ("response_ceiling_ms", int),
     "SAFETRE_VETTER": ("vetter", str),
     "SAFETRE_CHECKER_CMD": ("checker_cmd", str),
 }
@@ -229,6 +264,17 @@ def load_policy_config(path: str | None = None) -> PolicyConfig:
             except ValueError as exc:
                 raise ValueError(f"{env_name}={raw!r} is not a valid {cast.__name__}") from exc
 
+    # The default is to USE an external checker when one is configured. The
+    # package cannot require one — it is a library a TRE embeds, and ACRO
+    # cannot even be imported into the service environment — so "on by
+    # default" can only mean "on when available". That is not a silent
+    # downgrade: every release records which vetter decided it
+    # (`CellVetter.describe`), so an output never implies checks that did not
+    # run. An operator who wants the checker GUARANTEED sets `vetter`
+    # explicitly and gets a startup failure if it is missing.
+    if "vetter" not in values and values.get("checker_cmd", "").strip():
+        values["vetter"] = "standin+external"
+
     cfg = PolicyConfig(**values)
     _validate(cfg)
     return cfg
@@ -248,6 +294,14 @@ def _validate(cfg: PolicyConfig) -> None:
     if cfg.moment2_dom_threshold is not None and not (
             0.0 < cfg.moment2_dom_threshold <= 1.0):
         raise ValueError("moment2_dom_threshold must be in (0, 1]")
+    if cfg.response_quantum_ms < 0:
+        raise ValueError("response_quantum_ms must be >= 0")
+    if cfg.response_quantum_ms and cfg.response_ceiling_ms % cfg.response_quantum_ms:
+        raise ValueError(
+            "response_ceiling_ms must be a whole number of quanta, or the top "
+            "bucket is a different size from the others and says so")
+    if cfg.response_ceiling_ms <= 0:
+        raise ValueError("response_ceiling_ms must be > 0")
     if cfg.vetter not in VETTERS:
         raise ValueError(f"vetter must be one of {VETTERS}, not {cfg.vetter!r}")
     # asking for an external checker without saying how to start it must fail

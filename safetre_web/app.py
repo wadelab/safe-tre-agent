@@ -12,9 +12,11 @@ Security posture:
 
 from __future__ import annotations
 
-import os
-import pathlib
+import asyncio
 import math
+import os
+import time
+import pathlib
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -114,6 +116,69 @@ async def restricted_channel(request: Request, call_next):
             status_code=403,
         )
     return await call_next(request)
+
+
+def sleep_to_boundary(elapsed: float, quantum: float) -> float:
+    """How long to wait so that `elapsed` becomes a whole number of quanta.
+
+    Pure, so the arithmetic is tested exhaustively rather than by watching a
+    clock. Note it rounds *up to the next* boundary even when elapsed is
+    already an exact multiple: landing exactly on a boundary is itself
+    information about how long the work took.
+    """
+    if quantum <= 0:
+        return 0.0
+    return (math.floor(elapsed / quantum) + 1) * quantum - elapsed
+
+
+# Registered LAST so it is the OUTERMOST middleware: everything else — the
+# channel rejection, the identity gate, template rendering — happens inside
+# its window and is therefore covered. A fast-fail path that skipped the
+# padding would become the channel it is here to close (spec R18).
+@app.middleware("http")
+async def constant_response_time(request: Request, call_next):
+    """Hold every response until the next multiple of the quantum.
+
+    Latency tracks how much work a query did, and work tracks cohort size —
+    closely enough, measured, to put sub-threshold cells in size order within
+    a few queries, which is exactly what suppression exists to prevent
+    (`scripts/measure_timing_channel.py`, decision D5).
+
+    Quantising rather than fixing the time is deliberate. Cells at or above
+    the frequency threshold have their counts published in the marginals
+    already, so hiding *those* differences buys nothing; what must be
+    indistinguishable is the sub-threshold work, and that varies by only a few
+    milliseconds. A quantum comfortably larger than that spread puts all of it
+    in one bucket at a fraction of the cost of padding every request to the
+    worst case.
+
+    The ceiling is part of the control, not a performance guard: without it
+    the slowest requests advertise themselves by overrunning the top bucket.
+    Work that exceeds it is answered with a refusal — padded like everything
+    else, because an unpadded refusal would be its own signal.
+    """
+    quantum = _cfg.response_quantum_ms / 1000.0
+    ceiling = _cfg.response_ceiling_ms / 1000.0
+    started = time.monotonic()
+
+    async def hold() -> None:
+        await asyncio.sleep(
+            max(0.0, sleep_to_boundary(time.monotonic() - started, quantum)))
+
+    try:
+        response = await call_next(request)
+    except Exception:
+        # an error path that answered faster than every other path would be
+        # the channel wearing a different hat
+        await hold()
+        raise
+    if time.monotonic() - started > ceiling:
+        response = JSONResponse(
+            {"detail": "refused: this request exceeded the response-time "
+                       "ceiling", "ceiling_ms": _cfg.response_ceiling_ms},
+            status_code=503)
+    await hold()
+    return response
 
 
 @app.get("/", response_class=HTMLResponse)

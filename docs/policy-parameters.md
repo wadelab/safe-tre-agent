@@ -150,6 +150,36 @@ Dominance for second-moment cells (sums of squares), which back a model's standa
 | Pinned by | `tests/test_second_moment.py` |
 | Measured cost | [artifacts/dispersion_sensitivity.json](https://github.com/wadelab/safe-tre-agent/blob/main/artifacts/dispersion_sensitivity.json) |
 
+## `response_quantum_ms`
+
+The interval every response is rounded up to at the deployment boundary.
+
+**What the value means.** a response is held until the next multiple of this many milliseconds, so requests doing similar work become indistinguishable by latency. It does not need to hide everything: cells at or above the frequency threshold have their counts published anyway, so the quantum only has to exceed the spread of work done on the SUB-threshold cohorts whose counts are withheld. Measured, those sit within a few milliseconds of each other, so 50 puts them all in one bucket. Set to 0 to disable, which reopens the channel.
+
+| | |
+|---|---|
+| Default | `50` |
+| Environment | `SAFETRE_RESPONSE_QUANTUM_MS` |
+| `config.yaml` | `disclosure.response_quantum_ms` |
+| Clause | [R18](specification.md) |
+| Pinned by | `tests/test_timing_channel.py` |
+| Measured cost | [artifacts/timing_channel_standin.json](https://github.com/wadelab/safe-tre-agent/blob/main/artifacts/timing_channel_standin.json) |
+
+## `response_ceiling_ms`
+
+The longest a response may take before the request is refused.
+
+**What the value means.** work that would exceed this is refused and the refusal is still padded, because an overflow is itself a signal: without a ceiling the slowest queries advertise their size by running long. It is a compute cap in the same family as the row and memory limits, and like them it bounds cost as well as disclosure. Must be a multiple of the quantum to avoid a half-bucket at the top.
+
+| | |
+|---|---|
+| Default | `1000` |
+| Environment | `SAFETRE_RESPONSE_CEILING_MS` |
+| `config.yaml` | `disclosure.response_ceiling_ms` |
+| Clause | [R18](specification.md) |
+| Pinned by | `tests/test_timing_channel.py` |
+| Measured cost | *not measured* |
+
 ## `vetter`
 
 Which rules decide whether a cell may be released.
@@ -158,12 +188,12 @@ Which rules decide whether a cell may be released.
 
 | | |
 |---|---|
-| Default | `'standin'` |
+| Default | `'standin'` — an external checker is used IF `checker_cmd` is configured, and not otherwise — measured, composing costs about 5% of gaussian model availability. Name a vetter explicitly to require one |
 | Environment | `SAFETRE_VETTER` |
 | `config.yaml` | `disclosure.vetter` |
 | Clause | [R5](specification.md) |
 | Pinned by | `tests/test_cell_vetter.py` |
-| Measured cost | [docs/acro-integration.md](acro-integration.md) |
+| Measured cost | [artifacts/composite_cost.json](https://github.com/wadelab/safe-tre-agent/blob/main/artifacts/composite_cost.json) |
 
 ## `checker_cmd`
 

@@ -113,6 +113,7 @@ the argument is honest about being incomplete rather than quiet about it.
 | R15 GLM from vetted cells | `glm.py`, `stats.py`, `service.py` | `test_glm.py`, `test_formal_glm_enumeration.py`, `test_glm_oracle.py`, `test_second_moment.py` | ✓ |
 | R16 skeleton export + model check | `procedures.py`, `formal/` | `test_skeleton_sync.py`, `test_formal_alloy_sync.py`, `test_formal_lean_sync.py`, CI `formal` job | ✓ |
 | R17 literal spec entry | `service.py` (`_literal_spec`) | `test_literal_spec.py` | ✓ |
+| R18 response time reveals nothing | `safetre_web/app.py` (`constant_response_time`) | `test_timing_channel.py`, `scripts/measure_timing_channel.py` | **undeveloped** |
 
 ## Where the argument is unfinished
 
@@ -120,11 +121,11 @@ the argument is honest about being incomplete rather than quiet about it.
 
 - P11 — simulatable differencing (Partial (one-bit residual, N1))
 - R5 — complementary suppression (Partial (single-dim exact, multi-dim conservative))
+- R18 — response time reveals nothing (Partial (the deployment boundary; a library embedder pads at their own))
 
 **Unanswered decisions** — *open* means the work has not been done; *parked* means it was scoped and deliberately left undone, with the reasoning recorded:
 
 - **[D4](decisions/D4-robust-dispersion.md)** (parked) Inference from a dispersion that cannot be released — A coefficient without a standard error is rarely publishable. Can inference — an interval, or even a significance class — be restored when the second-moment cell is too concentrated to release?
-- **[D5](decisions/D5-timing-channel.md)** (open) What to do about the response-time channel — Query latency tracks cohort size closely enough to put sub-threshold cells in size order within a session's query budget. Should responses be padded to a constant time, quantised to a coarse bucket, or documented and left?
 
 ## How to read a gap
 

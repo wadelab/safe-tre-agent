@@ -230,6 +230,16 @@ class CellVetter:
     # something actually reads it.
     needs_contributions: bool = False
 
+    def describe(self) -> str:
+        """What ran, for the trace and the audit trail.
+
+        A release must never imply checks that did not happen. When an
+        external checker is used the description carries its version, because
+        "which rules approved this output?" is a question asked long after
+        the session, and the answer cannot be reconstructed from the result.
+        """
+        return self.name
+
     def vet(self, df: pd.DataFrame, params: VettingParameters,
             context: CellContext | None = None) -> Verdicts:
         raise NotImplementedError
@@ -284,6 +294,9 @@ class CompositeVetter(CellVetter):
     @property
     def needs_contributions(self) -> bool:
         return any(v.needs_contributions for v in self.vetters)
+
+    def describe(self) -> str:
+        return "+".join(v.describe() for v in self.vetters)
 
     def vet(self, df: pd.DataFrame, params: VettingParameters,
             context: CellContext | None = None) -> Verdicts:

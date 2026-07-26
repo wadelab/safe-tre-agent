@@ -2,26 +2,32 @@
 id: D5
 title: What to do about the response-time channel
 date: 2026-07-26
-status: open
+status: accepted
 question: >
   Query latency tracks cohort size closely enough to put sub-threshold cells
   in size order within a session's query budget. Should responses be padded to
   a constant time, quantised to a coarse bucket, or documented and left?
-clauses: [R3, R5, R6]
+clauses: [R3, R5, R6, R18]
 evidence:
   - artifacts/timing_channel_standin.json
   - artifacts/timing_channel_external.json
+  - artifacts/timing_channel_web_unpadded.json
+  - artifacts/timing_channel_padded.json
 revisit_when: >
-  Open. The measurement exists and the options are costed below; what is
-  missing is a judgement about how much usability to spend on a channel that
-  needs an authenticated, audited analyst spending their query budget to
-  exploit. Two things would settle it in one direction or the other: an
-  end-to-end measurement over the real restricted channel, which would say how
-  much of the signal survives network jitter, and the DP accountant, which
-  closes this channel along with the rest of the release-decision oracle.
+  Quantisation attenuates rather than eliminates, and the residual is written
+  below: a patient attacker across sessions can still order some pairs at
+  26-70 samples. Revisit if cross-session accounting arrives (roadmap item 4)
+  and makes that bound meaningful rather than notional; if a deployment
+  reports the ceiling refusing legitimate work, which would mean the quantum
+  and ceiling need re-fitting to a larger dataset; or if anyone wants the
+  channel closed rather than narrowed, which needs constant time — available
+  today by setting the quantum equal to the ceiling, at the cost of every
+  query paying it.
 ---
 
-**Status: open.** The measurement is done; the response is not chosen.
+**Status: accepted 2026-07-26 — quantise with a ceiling.** Implemented as
+middleware at the deployment boundary (spec R18, `response_quantum_ms` and
+`response_ceiling_ms`).
 
 ## What was measured
 
@@ -77,3 +83,50 @@ latency, and how many previously-answerable queries the ceiling now refuses.
 A defence that merely raises the number of samples needed from 3 to 15 has not
 closed anything; it has bought a smaller budget's worth of protection, which
 the budget already provides.
+
+---
+
+## What was built, and what it achieved
+
+Quantisation, not constant time, for the reason the measurement made clear:
+the differences worth hiding are small. Cells at or above the threshold have
+their counts published, so collapsing *their* latency differences buys
+nothing; what must be indistinguishable is the sub-threshold work, and that
+varies by a few milliseconds. A 50 ms quantum puts all of it in one bucket at
+a fraction of the cost of padding every request to the worst case.
+
+Three things make the implementation match the argument. It sits in the
+**outermost** middleware, so the channel rejection, the identity gate and
+template rendering all happen inside the window — a fast-fail path that
+skipped it would become the channel. It pads to the next boundary measured
+**from arrival**, not by adding a fixed pause, which would shift the
+distribution without collapsing it. And the ceiling **refuses** rather than
+merely warning, with the refusal padded like everything else, because an
+unpadded refusal is the fast answer that means "your query was expensive".
+
+Measured at the same boundary, 12 samples per cohort:
+
+| | sub-threshold pairs orderable within the budget | fewest samples | Spearman |
+|---|---|---|---|
+| service call, no padding | 9 of 15 | 2 | +0.86 |
+| web boundary, padding off | 7 of 15 | 6 (a **1-donor** gap) | — |
+| web boundary, padding on | **0 of 15** | 26 | +0.30 |
+
+The criterion set in advance was that the orderable count reach zero. It does.
+
+## The residual, stated plainly
+
+Quantisation attenuates; it does not eliminate. What it leaves is a
+bucket-crossing probability: two cohorts whose work differs slightly cross the
+boundary at slightly different rates, so with enough samples the ordering
+returns — 26 for the closest pair here, 70 for the furthest. That is above the
+20-query session budget, which is what the criterion asked for, but the budget
+is a per-session bound and this project does not defend across sessions. A
+patient attacker opening fresh sessions is not stopped by it.
+
+Closing the channel rather than narrowing it needs constant time, and the
+implementation already expresses that: set the quantum equal to the ceiling
+and every response takes exactly one bucket. It was not made the default
+because every query would then pay the ceiling, and the measured exposure did
+not justify that. An operator who disagrees can have it with one setting,
+which is the point of putting the policy in a dial rather than in the code.

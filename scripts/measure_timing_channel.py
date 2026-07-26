@@ -73,8 +73,33 @@ def cohorts(tables, threshold: int) -> list[dict]:
     return sorted(out, key=lambda c: c["donors"])
 
 
-def time_query(service: QueryService, dimension: str, value: str
-               ) -> tuple[float, str]:
+class _web_client:
+    """Drives the real app, so the measurement sees what an analyst sees.
+
+    The response-time control is middleware at the deployment boundary, which
+    is the only place it can be: padding inside the library would leave every
+    later stage — template rendering, serialisation — outside the window and
+    back in the channel.
+    """
+
+    def __init__(self):
+        os.environ.setdefault("SAFETRE_ALLOW_TEST_CLIENT", "1")
+        from fastapi.testclient import TestClient
+
+        from safetre_web.app import app
+
+        self._client = TestClient(app)
+
+    def handle(self, request: str, planner=None, auditor=None):
+        response = self._client.post("/api/query", json={"question": request})
+
+        class _R:
+            status = ("denied" if response.status_code >= 400
+                      else "released")
+        return _R()
+
+
+def time_query(service, dimension: str, value: str) -> tuple[float, str]:
     spec = {"dataset": "donor_spend",
             "measure": {"fn": "sum", "column": "total_spend_gbp"},
             "filters": [{"column": dimension, "op": "==", "value": value}]}
@@ -122,12 +147,18 @@ def main() -> int:
     parser.add_argument("--samples", type=int, default=SAMPLES)
     parser.add_argument("--budget", type=int, default=20,
                         help="per-session query budget the attacker is capped by")
+    parser.add_argument("--through-web", action="store_true",
+                        help="measure the deployment boundary, where the "
+                             "response-time control lives, rather than the "
+                             "library call underneath it")
     parser.add_argument("--json", dest="json_out", default=None)
     args = parser.parse_args()
 
     tables = synth.generate(seed=DEMO_SEED, n_donors=DEMO_DONORS)
     policy = DisclosurePolicy(vetter=build_vetter(args.vetter, args.checker))
     service = QueryService(tables, policy)
+    if args.through_web:
+        service = _web_client()
 
     rows = []
     for entry in cohorts(tables, policy.threshold):

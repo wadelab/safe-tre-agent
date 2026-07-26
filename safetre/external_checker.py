@@ -196,6 +196,9 @@ class ExternalCheckerVetter(CellVetter):
             raise ValueError(f"checker stopped answering{detail}")
         return line
 
+    def describe(self) -> str:
+        return f"{self.name}({self.version})" if self.version else self.name
+
     def _ask(self) -> tuple[dict[tuple, str], str]:
         request_id = next(self._ids)
         payload = json.dumps(build_request(self.contributions, self.keys,

@@ -8,6 +8,44 @@ and fixes are in [docs/hardening-log.md](docs/hardening-log.md).
 
 ### Added
 
+- **An external checker is now used by default when one is configured
+  ([D6](docs/decisions/D6-checker-default.md)).** "By default" cannot mean
+  "required": this is a library a TRE embeds and the checker cannot be
+  imported into the service environment, so demanding one would make the
+  software fail to start for everyone who has not set it up. Leaving
+  `SAFETRE_VETTER` unset now composes with an external checker whenever
+  `SAFETRE_CHECKER_CMD` is set; naming the vetter explicitly requires one and
+  fails at startup without it. **This is not a silent downgrade, because every
+  release records which rules decided it** — `CellVetter.describe()` puts the
+  vetter and the checker's version in the trace, so a release reads
+  `gateway: redacted by standin+external(0.4.12)`, and one taken without a
+  checker says so. The rule held to is not "a checker always ran" but "a
+  release never implies checks that did not run". Failure behaviour is
+  unchanged and still strict: once configured, every way the checker can fail
+  denies.
+- **Response time no longer ranks the cohorts suppression hides (spec R18,
+  [D5](docs/decisions/D5-timing-channel.md)).** The deployment boundary holds
+  every response to the next multiple of `response_quantum_ms` and refuses
+  work past `response_ceiling_ms`. Quantising rather than fixing the time is
+  the point: cells at or above the threshold have their counts published
+  anyway, so only the sub-threshold work needs to be indistinguishable, and
+  that varies by a few milliseconds — one 50 ms bucket holds all of it at a
+  fraction of the cost of padding to the worst case. Measured at the same
+  boundary, sub-threshold pairs orderable within a session's budget fall from
+  **7 of 15 to 0 of 15**, closest pair from 6 samples to 26.
+  Three details carry the argument: the middleware is outermost, so no
+  fast-fail path escapes it; padding runs to the next boundary *from arrival*
+  rather than adding a fixed pause, which would shift the distribution without
+  collapsing it; and the ceiling refuses, with the refusal padded too, since
+  an unpadded refusal is the fast answer meaning "your query was expensive".
+  **Narrowed, not closed** — quantisation leaves a bucket-crossing
+  probability, so a cross-session attacker can still order pairs at 26–70
+  samples. Constant time is one setting away (quantum = ceiling) and was not
+  made the default because every query would then pay the ceiling.
+  The demo's "Completed in Nms" is measured client-side around the fetch, so
+  it reports the padded round-trip and cannot hand an analyst the unpadded
+  time — checked, because a UI that printed the real duration would have
+  defeated the control entirely.
 - **Measured: what composing an external checker actually costs.**
   `scripts/measure_composite_cost.py` → `artifacts/composite_cost.json`. The
   worry was that composing would apply ACRO's dominance rules to second-moment

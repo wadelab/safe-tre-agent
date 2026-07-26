@@ -150,6 +150,16 @@ MUST remain reproducible from its released cell table.)*
 data, and CI MUST both check the committed formal model against that export
 (generation drift fails the build) and run the bounded model check.
 
+**R18** — Response time MUST NOT reveal what suppression conceals. The
+deployment boundary MUST quantise every response to a fixed interval and MUST
+refuse any request whose work would exceed a stated ceiling, so that requests
+whose results are withheld are indistinguishable from each other by latency.
+*(Added 2026-07-26 from the measurement in
+[D5](decisions/D5-timing-channel.md): latency tracked cohort size closely
+enough to put sub-threshold cells in size order within a few queries, which is
+what suppression exists to prevent. A ceiling is part of the clause, not an
+optimisation: without one the overflow is itself a signal.)*
+
 **R17** — The system MUST accept a literal spec — a request that is a single
 JSON object — in place of a natural-language request, bypassing the planner.
 A literal spec is subject to every downstream control unchanged: typed
@@ -338,6 +348,7 @@ SQL plan to be inspectable, and it was exposed nowhere until `Result.plans`.
 | R15 GLM from vetted cells | `glm.py`, `stats.py`, `service.py` | `test_glm.py`, `test_formal_glm_enumeration.py`, `test_glm_oracle.py`, `test_second_moment.py` | Implemented |
 | R16 skeleton export + model check | `procedures.py`, `formal/` | `test_skeleton_sync.py`, `test_formal_alloy_sync.py`, `test_formal_lean_sync.py`, CI `formal` job | Implemented |
 | R17 literal spec entry | `service.py` (`_literal_spec`) | `test_literal_spec.py` | Implemented |
+| R18 response time reveals nothing | `safetre_web/app.py` (`constant_response_time`) | `test_timing_channel.py`, `scripts/measure_timing_channel.py` | Partial (the deployment boundary; a library embedder pads at their own) |
 
 The red-team suite (`redteam/run_redteam.py`, R12) exercises P1–P6, P10–P11,
 and P19–P22 end to end, off gateway versus on. The bounded formal model

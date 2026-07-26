@@ -158,11 +158,17 @@ closed:
   proportionally (7 of 15 pairs, against 9 without it), so the channel is in
   the engine's own work, not the checker's.
 
-  What to do about it is [D5](decisions/D5-timing-channel.md), which is open:
-  a constant response time closes it but must pay the worst case on every
-  query and refuse anything exceeding it, and coarse quantisation is cheaper
-  but only narrows the channel. The DP accountant is the principled end state
-  here as elsewhere.
+  **Narrowed, 2026-07-26** ([D5](decisions/D5-timing-channel.md), spec R18).
+  The deployment boundary now holds every response until the next multiple of
+  a quantum and refuses work past a ceiling. Measured at the same boundary,
+  the sub-threshold pairs orderable within a session's budget fall from 7 of
+  15 to **0 of 15**, and the closest pair needs 26 samples rather than 6.
+  Narrowed, not closed: quantisation leaves a bucket-crossing probability, so
+  a patient attacker across sessions — which nothing here bounds — can still
+  order some pairs at 26 to 70 samples. Constant time closes it and is one
+  setting away (quantum = ceiling), at the price of every query paying the
+  ceiling; the measured exposure did not justify making that the default. The
+  DP accountant remains the principled end state here as elsewhere.
 
 - **Audit-lock contention (accepted, low).** Every request serialises briefly on
   the audit log's write lock. That serialisation is a *correctness requirement*
