@@ -8,6 +8,35 @@ and fixes are in [docs/hardening-log.md](docs/hardening-log.md).
 
 ### Added
 
+- **An assurance case ([assurance-case.md](docs/assurance-case.md)).** The
+  safety argument as a structure rather than a narrative: a conditional top
+  claim, decomposed by the **Five Safes** — the framework TRE accreditation
+  already speaks — with each clause naming what enforces and checks it, the
+  trust assumptions carried in as context, and the gaps marked rather than
+  omitted. Generated from the specification's traceability table and the
+  decision records, so it moves when they do.
+  `tests/test_assurance_case.py` enforces the property that makes such a
+  document worth trusting instead of merely reassuring: it cannot quietly
+  omit anything. Every clause must be assigned a purpose, every clause the
+  specification states must be argued, every *Partial* clause must appear as
+  a gap, and every open decision must be listed.
+  **It found one immediately.** The traceability table is scoped to the
+  prohibitions, so twelve requirements — R1–R4, R6–R13, including the audit
+  chain and the restricted-channel gate — are claimed by the specification
+  with no recorded evidence. They are enforced and tested; what is missing is
+  the record saying where, and an argument may not cite evidence it cannot
+  point at. They now appear as **unevidenced** rather than being dropped,
+  which would have made the case look complete.
+- **A plan for D4**, the open question about inference from a dispersion that
+  cannot be released. It reduces architecturally to a new registered
+  procedure (a winsorised second moment, whose cell is vetted like any other,
+  so P21 needs no new argument) and statistically to an experiment, with
+  **acceptance criteria fixed in advance**: coverage of nominal 95% intervals
+  at or above 95%, a majority of the 36 affected models recovered, and the
+  robust cell passing dominance at the *default* bound. The comparison
+  deliberately includes relaxing `moment2_dom_threshold` instead — the two
+  buy the same availability, one by losing accuracy and the other by losing
+  protection, and choosing between them requires measuring both.
 - **A decision log, with the field that usually goes missing
   ([decision-log.md](docs/decision-log.md)).** The hardening log records what
   went wrong; this records what was *chosen* where more than one answer was

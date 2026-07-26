@@ -39,6 +39,7 @@ nav:
       - Architecture: architecture.md
       - Specification: specification.md
       - Policy parameters: policy-parameters.md
+      - Assurance case: assurance-case.md
       - Safepod model: safepod.md
       - Model runtime: model-runtime.md
       - Tool manifest: tool-manifest.md

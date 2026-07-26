@@ -59,7 +59,7 @@ A dominance bound calibrated for sums is a far tighter rule on sums of squares, 
 
 A coefficient without a standard error is rarely publishable. Can inference — an interval, or even a significance class — be restored when the second-moment cell is too concentrated to release?
 
-**What would change our mind.** This is open, so what it needs is not a trigger but an answer to two questions. First, statistical: is a winsorised or trimmed dispersion something a researcher would publish, given it is optimistic unless corrected? Second, empirical: how much of the 36-model gap does it actually recover, which is measurable with the existing sweep once an estimator is chosen.
+**What would change our mind.** Open, so what it needs is an answer rather than a trigger — and the acceptance criteria are stated below BEFORE the experiment, so the result decides the question rather than the question being fitted to the result. Close this record either way: a robust dispersion that fails its coverage criterion is a finding worth keeping, not a dead end to forget.
 
 [Read the record](decisions/D4-robust-dispersion.md)
 
