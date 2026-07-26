@@ -194,7 +194,7 @@ def _as_observed(counts: dict, key: str):
     return next(k for k in counts if str(k) == key)
 
 
-def test_differencing_refusal_has_no_numeric_bound(tables):
+def test_differencing_refusal_has_no_numeric_bound(tables, audit_spy):
     n_ni = int((tables["donors"]["region"] == "Northern Ireland").sum())
     svc = QueryService(tables)
     auditor = SessionAuditor(threshold=n_ni + 1)
@@ -211,12 +211,16 @@ def test_differencing_refusal_has_no_numeric_bound(tables):
          "filters": [{"column": "region", "op": "!=", "value": "Northern Ireland"}]},
     )
     svc.handle("sum spend by age band", planner, auditor=auditor)
-    second = svc.handle("same, excluding Northern Ireland", planner, auditor=auditor)
+    second = svc.handle("same, excluding Northern Ireland", planner,
+                        auditor=auditor, audit_log=audit_spy)
     assert second.status == "denied"
-    detail = " ".join(f.detail for f in second.findings if f.rule == "differencing")
-    assert detail                                             # the finding fired
-    assert str(n_ni) not in detail                           # but leaks no count
-    assert not any(ch.isdigit() for ch in detail)            # no numbers at all
+    # the audit log records which control fired, with its numbers
+    assert "differencing" in audit_spy.rules()
+    # the analyst gets one canonical refusal carrying no quantity at all —
+    # not the bound, not the cell counts, not even which rule decided it
+    shown = " ".join(f"{f.rule} {f.detail}" for f in second.findings) + second.message
+    assert str(n_ni) not in shown
+    assert not any(ch.isdigit() for ch in shown)
 
 
 # --- A1: concurrency must not let both halves of a differencing pair through ----

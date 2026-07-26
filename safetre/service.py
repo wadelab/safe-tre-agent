@@ -20,6 +20,29 @@ from .procedures import get_procedure, model_registry
 from .query import QuerySpec
 
 
+# The single answer every data-derived refusal gives. A refusal decided from
+# the REQUEST — a spec that would not validate, an intent the gates block, an
+# exhausted budget — may be explained in full, because the analyst holds the
+# request and could reach the same verdict themselves. A refusal decided from
+# the DATA may not, because everything distinguishing one such refusal from
+# another is a fact about records the gateway has just withheld.
+#
+# Red-teamed 2026-07-26. Removing the row count from the trace was not enough:
+# a cohort matching nobody came back `released` with an empty table, while a
+# cohort matching one person came back `redacted` with a `small_cell` finding.
+# The status word alone answered "does anyone match this predicate?", and with
+# five filter slots over the catalogue that is a re-identification oracle. The
+# fix has to be that nothing released means one answer, not several.
+WITHHELD_MESSAGE = "blocked by safe-outputs gateway: nothing from this query " \
+                   "can be released"
+WITHHELD_TRACE = "gateway: nothing released"
+
+
+def _withheld() -> list:
+    return [D.Finding("high", "nothing_released", suppressable=True,
+                      detail="no part of this result passed the disclosure checks")]
+
+
 def _literal_spec(request: str) -> dict | None:
     """A request that is a single JSON object is an analyst-authored spec
     (R17): it bypasses the planner and the natural-language gates, and is
@@ -157,7 +180,16 @@ class QueryService:
 
         plans = [compile_query(spec).sql]
         df = self.engine.run(spec)
-        trace.append(f"engine: {len(df)} aggregate row(s) computed")
+        # No row count here, and none in the model path below. The trace is
+        # shown to the analyst for DENIED queries too, so a count of the cells
+        # the engine found is a number about data the gateway then withheld —
+        # and it is enough on its own: filter to a narrow cohort, group by a
+        # dimension, and "0" versus "1" answers "does anyone match?" for any
+        # predicate the catalogue can express. Red-teamed 2026-07-26: eight
+        # such queries, every one of them refused, recovered a unique donor's
+        # region, sex, income band and device. When a result IS released the
+        # analyst can count its rows; when it is not, they may not.
+        trace.append("engine: aggregate computed")
 
         total = float(df["n"].sum()) if "n" in df.columns else float(len(df))
         audit_findings = auditor.observe(spec.measure_key(), total)
@@ -171,20 +203,29 @@ class QueryService:
         audit_findings += auditor.observe_cohort(
             spec.dataset, cohort,
             lambda a, b: simulatable_cohort_bound(marginals, spec.dataset, a, b))
-        trace.append(f"auditor: {[f.rule for f in audit_findings]}")
 
         released, action, findings = self.policy.apply(df, self._context(spec))
         findings = findings + audit_findings
+
+        # Fail closed: any auditor flag, an explicit deny, an unrecognised
+        # action — or a result with no rows left in it. The last of those is
+        # the one that is easy to miss: an empty frame is not a release, and
+        # treating it as one told an analyst that their predicate matched
+        # nobody, which is a sub-threshold fact like any other. Every branch
+        # here produces the SAME status, message, findings and trace; the audit
+        # log keeps the real findings, so an output checker still sees which
+        # rule fired and on how many cells.
+        if (audit_findings or action not in ("release", "redacted")
+                or released is None or len(released) == 0):
+            trace.append(WITHHELD_TRACE)
+            record("denied", spec.model_dump(), findings, None)
+            return Result("denied", message=WITHHELD_MESSAGE,
+                          spec=spec.model_dump(), findings=_withheld(), trace=trace,
+                          plans=plans)
+
+        trace.append(f"auditor: {[f.rule for f in audit_findings]}")
         trace.append(f"gateway: {action} by {self.policy.vetter.describe()} "
                      f"({[f.rule for f in findings]})")
-
-        # Fail closed: any auditor flag, an explicit deny, or an unrecognised
-        # action withholds all data.
-        if audit_findings or action not in ("release", "redacted"):
-            record("denied", spec.model_dump(), findings, None)
-            return Result("denied", message="blocked by safe-outputs gateway",
-                          spec=spec.model_dump(), findings=findings, trace=trace,
-                          plans=plans)
 
         # Human-in-the-loop: suppression-resolved findings are settled, but any
         # residual medium/high finding escalates (and a residual high denies).
@@ -251,10 +292,16 @@ class QueryService:
         # any aggregate is planned, and the closure must not read an unset name
         plans: list[str] = []
 
-        def deny(findings: list[D.Finding], message: str) -> Result:
+        def deny(findings: list[D.Finding], message: str,
+                 public: list[D.Finding] | None = None) -> Result:
+            """`findings` is the truth, for the audit log. `public` is what the
+            analyst is shown: for a refusal decided from the DATA it is the one
+            canonical finding, because which rule fired on which role is a fact
+            about cells that were withheld."""
             record("denied", spec.model_dump(), findings, None)
             return Result("denied", message=message, spec=spec.model_dump(),
-                          findings=findings, trace=trace, plans=list(plans))
+                          findings=public if public is not None else findings,
+                          trace=trace, plans=list(plans))
 
         # Fidelity gate: does the model answer the question that was asked?
         # A literal spec IS the question, so there is no fidelity to check (R17).
@@ -287,7 +334,7 @@ class QueryService:
         notes: list[D.Finding] = []
         for role, agg in zip(roles, aggregates, strict=True):
             df = self.engine.run(agg)
-            trace.append(f"engine[{role}]: {len(df)} aggregate row(s) computed")
+            trace.append(f"engine[{role}]: aggregate computed")
 
             total = float(df["n"].sum()) if "n" in df.columns else float(len(df))
             audit_findings = auditor.observe(agg.measure_key(), total)
@@ -296,25 +343,27 @@ class QueryService:
                 agg.dataset, cohort,
                 lambda a, b: simulatable_cohort_bound(marginals, agg.dataset, a, b))
             if audit_findings:
-                trace.append(f"auditor[{role}]: {[f.rule for f in audit_findings]}")
-                return deny(audit_findings, "blocked by safe-outputs gateway")
+                trace.append(WITHHELD_TRACE)
+                return deny(audit_findings, WITHHELD_MESSAGE, public=_withheld())
 
             released, action, findings = self.policy.apply(
                 df, self._context(agg))
-            trace.append(f"gateway[{role}]: {action} by "
-                         f"{self.policy.vetter.describe()} "
-                         f"({[f.rule for f in findings]})")
+            if action == "release" and (released is None or len(released) == 0):
+                # an empty design-cell table is not a table this model can be
+                # fitted from, and saying so per role would name which one
+                action = "redacted"
             # P19: the model fits on a complete vetted table or not at all. A
             # redaction means some design cell is unsafe to release, so the
             # message names the aggregate role only — never which cell or why.
             if action != "release":
+                trace.append(f"gateway[{role}]: withheld")
                 if role in optional:
                     # the fit goes ahead without it, and the output says so:
                     # a coefficient computed from vetted means is releasable
                     # even when the dispersion behind its standard error is
                     # not. Nothing derived from this table is released.
-                    trace.append(f"gateway[{role}]: withheld; the model "
-                                 "releases without what it would have provided")
+                    trace.append("the model releases without what it would "
+                                 "have provided")
                     notes.append(D.Finding(
                         "low", "model_table_withheld", suppressable=True,
                         detail=f"the {role!r} table could not be released; the "
@@ -322,12 +371,14 @@ class QueryService:
                     continue
                 f = [D.Finding("high", "model_incomplete_cell_table",
                                "an underlying design-cell table cannot be fully "
-                               "released for this model")]
-                return deny(f, "blocked by safe-outputs gateway: the model's "
-                               "design-cell table cannot be fully released")
+                               "released for this model",
+                               audit_detail=f"role {role!r} came back {action!r}")]
+                return deny(f, WITHHELD_MESSAGE, public=_withheld())
             # value shaping on the finalized cells, as on the plain path
             # (hardening #26): the fitter and the released artifact consume
             # identical finalized-then-shaped frames (P21)
+            trace.append(f"gateway[{role}]: released by "
+                         f"{self.policy.vetter.describe()}")
             finalized[role] = get_procedure(agg.measure.fn).postprocess(released, agg)
             cohorts.append((agg.dataset, cohort))
 

@@ -79,14 +79,16 @@ def test_poisson_model_released(service):
     assert list(r.artifacts["cells"].columns) == ["age_band", "sum", "n"]
 
 
-def test_hostile_undeclared_dim_value_stays_subthreshold_and_denies(service):
+def test_hostile_undeclared_dim_value_stays_subthreshold_and_denies(service, audit_spy):
     # the synthetic data plants an injection payload as an undeclared
     # device_os value held by one donor (A2/P12). Its design cell is
     # sub-threshold, so a model over device_os is denied outright — the
     # hostile string never reaches a released cell table.
-    r = service.handle("poisson glm of purchase events on device os", MockPlanner())
+    r = service.handle("poisson glm of purchase events on device os", MockPlanner(),
+                       audit_log=audit_spy)
     assert r.status == "denied"
-    assert any(f.rule == "model_incomplete_cell_table" for f in r.findings)
+    assert [f.rule for f in r.findings] == ["nothing_released"]
+    assert "model_incomplete_cell_table" in audit_spy.rules()
     assert r.artifacts is None
 
 
@@ -104,14 +106,18 @@ def test_released_model_is_reproducible_from_artifacts(service):
 
 # --- fail-closed denials ---------------------------------------------------------
 
-def test_suppressed_design_cell_denies_whole_model(service):
+def test_suppressed_design_cell_denies_whole_model(service, audit_spy):
     # age band x sex includes the deliberate sub-threshold sex-X donors: the
     # equivalent group-by would be redacted, so the model must be DENIED (P19)
     # — never fitted on silently merged or dropped cells.
-    r = service.handle("regress total spend on age band and sex", MockPlanner())
+    r = service.handle("regress total spend on age band and sex", MockPlanner(),
+                       audit_log=audit_spy)
     assert r.status == "denied"
     assert r.output is None and r.artifacts is None
-    assert any(f.rule == "model_incomplete_cell_table" for f in r.findings)
+    # the analyst is told only that nothing could be released; naming the rule
+    # or the role would say which design cell was too small
+    assert [f.rule for f in r.findings] == ["nothing_released"]
+    assert "model_incomplete_cell_table" in audit_spy.rules()
     assert not re.search(r"\d", r.message)               # non-numeric refusal
 
 

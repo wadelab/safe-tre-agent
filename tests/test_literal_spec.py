@@ -95,12 +95,14 @@ def test_literal_unknown_tool_refused(service):
     assert "unknown tool" in r.message
 
 
-def test_literal_spec_gateway_still_denies_small_cells(service):
+def test_literal_spec_gateway_still_denies_small_cells(service, audit_spy):
     # No filter: sub-threshold regions are in the design, so P19 denies the
     # whole model exactly as it would for a planner-proposed spec.
-    r = service.handle(anova_request(filters=[]), RefusingPlanner())
+    r = service.handle(anova_request(filters=[]), RefusingPlanner(),
+                       audit_log=audit_spy)
     assert r.status == "denied"
-    assert [f.rule for f in r.findings] == ["model_incomplete_cell_table"]
+    assert [f.rule for f in r.findings] == ["nothing_released"]
+    assert "model_incomplete_cell_table" in audit_spy.rules()
 
 
 def test_literal_spec_budget_still_denies_first(service):

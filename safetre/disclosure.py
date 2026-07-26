@@ -30,6 +30,15 @@ MAX_HISTORY = 1000
 class Finding:
     severity: str   # "high" | "medium" | "low"
     rule: str
+    # What the ANALYST is told. It must not carry a count, a size or any other
+    # quantity read off the data: a refusal is shown for queries whose output
+    # was withheld, so a number in it is a released number that skipped the
+    # gateway. The auditor's findings were written this way from the start —
+    # "the exact total delta is itself the quantity a differencing attack is
+    # trying to recover" — and the gateway's were not. Red-teamed 2026-07-26:
+    # a denied cross-tab reported how many cells existed, how many fell below
+    # the threshold and how many were dominated, which is a numeric profile of
+    # exactly the cells suppression had just withheld.
     detail: str
     # True when suppressing the offending cells resolves this finding. The
     # human-in-the-loop step escalates on what is left, so a vetter whose
@@ -37,6 +46,11 @@ class Finding:
     # happened the first time an external checker ran end to end, because
     # suppressability was a fixed list of the stand-in's own rule names.
     suppressable: bool = False
+    # The same finding with its numbers, for the audit log and nowhere else.
+    # `service.record` serialises the whole finding, so this reaches the log by
+    # construction; an output checker reviewing a session sees the quantities,
+    # an analyst holding the refusal does not.
+    audit_detail: str = ""
 
 
 def _count_cols(df: pd.DataFrame) -> list[str]:
@@ -98,9 +112,12 @@ def leak_detector(df: pd.DataFrame | None, threshold: int | None = None,
     for c in _count_cols(df):
         small = df[df[c].isna() | (df[c] < threshold)]
         if len(small) > 0:
-            findings.append(Finding("high", "small_cell", suppressable=True, detail=
-                                    f"{len(small)} cell(s) in '{c}' below threshold "
-                                    f"{threshold}"))
+            findings.append(Finding(
+                "high", "small_cell", suppressable=True,
+                detail=f"cells with fewer than {threshold} underlying individuals "
+                       f"were suppressed",
+                audit_detail=f"{len(small)} cell(s) in '{c}' below threshold "
+                             f"{threshold}"))
 
     # dominance (p%-rule): one contributor dominates a cell's sum/mean.
     # Missing/NaN dominance is fail-closed (the engine fills unresolved cells with
@@ -109,9 +126,13 @@ def leak_detector(df: pd.DataFrame | None, threshold: int | None = None,
         dom = pd.to_numeric(df["dominance"], errors="coerce")
         dominated = df[dom.isna() | (dom > dom_threshold)]
         if len(dominated) > 0:
-            findings.append(Finding("high", "dominance", suppressable=True, detail=
-                                    f"{len(dominated)} cell(s) where one contributor "
-                                    f"exceeds {dom_threshold:.0%} of the total (or was unresolved)"))
+            findings.append(Finding(
+                "high", "dominance", suppressable=True,
+                detail=f"cells where one contributor exceeds {dom_threshold:.0%} of "
+                       f"the total (or the check was unresolved) were suppressed",
+                audit_detail=f"{len(dominated)} cell(s) where one contributor "
+                             f"exceeds {dom_threshold:.0%} of the total (or was "
+                             f"unresolved)"))
 
     # influence (corr analogue of the p%-rule): one donor drives a correlation.
     # Same fail-closed treatment: an unresolved influence (NaN/inf) is a violation.
@@ -119,15 +140,20 @@ def leak_detector(df: pd.DataFrame | None, threshold: int | None = None,
         inf = pd.to_numeric(df["influence"], errors="coerce")
         influential = df[inf.isna() | (inf > influence_threshold)]
         if len(influential) > 0:
-            findings.append(Finding("high", "influence", suppressable=True, detail=
-                                    f"{len(influential)} correlation cell(s) where removing "
-                                    f"one donor shifts r by more than {influence_threshold} "
-                                    "(or was unresolved)"))
+            findings.append(Finding(
+                "high", "influence", suppressable=True,
+                detail=f"correlation cells where removing one donor shifts r by more "
+                       f"than {influence_threshold} (or the check was unresolved) "
+                       f"were suppressed",
+                audit_detail=f"{len(influential)} correlation cell(s) where removing "
+                             f"one donor shifts r by more than {influence_threshold} "
+                             f"(or was unresolved)"))
 
     # excessive granularity (looks like a row dump)
     if len(df) > max_rows and not _count_cols(df):
         findings.append(Finding("medium", "too_granular",
-                                f"{len(df)} rows with no aggregation"))
+                                f"more than {max_rows} rows with no aggregation",
+                                audit_detail=f"{len(df)} rows with no aggregation"))
     return findings
 
 
@@ -468,7 +494,9 @@ class DisclosurePolicy:
             if extra:
                 findings.append(Finding(
                     "low", "secondary_suppression",
-                    f"{extra} complementary cell(s) suppressed to protect margins"))
+                    "complementary cells were suppressed to protect margins",
+                    audit_detail=f"{extra} complementary cell(s) suppressed to "
+                                 f"protect margins"))
             return self._finalize(redacted), "redacted", findings
 
         return self._finalize(df), "release", findings

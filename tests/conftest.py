@@ -24,3 +24,36 @@ os.environ.setdefault("SAFETRE_ALLOW_TEST_CLIENT", "1")
 os.environ.setdefault("SAFETRE_AUDIT_DB",
                       os.path.join(tempfile.mkdtemp(prefix="safetre-audit-"), "audit.db"))
 os.environ.setdefault("SAFETRE_AUDIT_KEY", "test-session-key")
+
+
+import pytest
+
+
+class RecordingLog:
+    """An audit log that keeps what was written, so a test can assert the
+    separation the gateway now enforces: the analyst sees one canonical
+    refusal, the audit log still names the rule that fired and how many cells
+    it fired on."""
+
+    def __init__(self):
+        self.records: list[dict] = []
+
+    def append(self, **kwargs):
+        self.records.append(kwargs)
+        return "recorded"
+
+    @property
+    def last(self) -> dict:
+        assert self.records, "nothing was written to the audit log"
+        return self.records[-1]
+
+    def rules(self) -> list[str]:
+        return [f["rule"] for f in self.last["findings"]]
+
+    def audit_details(self) -> str:
+        return " ".join(f.get("audit_detail", "") for f in self.last["findings"])
+
+
+@pytest.fixture
+def audit_spy() -> RecordingLog:
+    return RecordingLog()

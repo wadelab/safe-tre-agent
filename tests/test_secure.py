@@ -511,7 +511,9 @@ def test_service_lineage_differencing_denied(tables):
     second = svc.handle("same, excluding Northern Ireland", planner, auditor=auditor)
     assert first.status in ("released", "redacted")
     assert second.status == "denied" and second.output is None
-    assert any(f.rule == "differencing" for f in second.findings)
+    # the analyst learns only that nothing was released; which control fired is
+    # in the audit log, not in the refusal
+    assert [f.rule for f in second.findings] == ["nothing_released"]
 
 
 def test_service_lineage_separated_cohorts_allowed(tables):

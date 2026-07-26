@@ -261,13 +261,16 @@ class ExternalCheckerVetter(CellVetter):
                 fired[name] = fired.get(name, 0) + 1
 
         findings = [Finding("high", f"acro_{name}", suppressable=True,
-                            detail=f"{count} cell(s) failed ACRO's {name}")
+                            detail=f"cells failed ACRO's {name}",
+                            audit_detail=f"{count} cell(s) failed ACRO's {name}")
                     for name, count in sorted(fired.items())]
         if unknown:
             # a table the checker only partly answered for is a table it did
             # not check: deny rather than release the part it happened to cover
-            findings.append(Finding("high", "checker_incomplete",
-                                    f"{unknown} cell(s) received no verdict"))
+            findings.append(Finding(
+                "high", "checker_incomplete",
+                "the checker did not return a verdict for every cell",
+                audit_detail=f"{unknown} cell(s) received no verdict"))
             return Verdicts(suppress=pd.Series(True, index=df.index, dtype=bool),
                             findings=findings, deny=True)
         return Verdicts(suppress=pd.Series(suppress, index=df.index, dtype=bool),

@@ -158,7 +158,7 @@ def test_a_model_still_dies_if_a_required_table_is_suppressed(tables):
            "response": "total_spend_gbp", "terms": ["age_band", "sex"]}
     result = _release(tables, raw)
     assert result.status == "denied"
-    assert any(f.rule == "model_incomplete_cell_table" for f in result.findings)
+    assert [f.rule for f in result.findings] == ["nothing_released"]
 
 
 def test_only_the_gaussian_dispersion_is_optional():

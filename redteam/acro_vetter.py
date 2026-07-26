@@ -125,10 +125,14 @@ class AcroVetter(CellVetter):
                 fired[name] = fired.get(name, 0) + 1
 
         findings = [Finding("high", f"acro_{name}", suppressable=True,
-                            detail=f"{count} cell(s) failed ACRO's {name}")
+                            detail=f"cells failed ACRO's {name}",
+                            audit_detail=f"{count} cell(s) failed ACRO's {name}")
                     for name, count in sorted(fired.items())]
         if unknown:
             findings.append(Finding("high", "acro_unchecked",
-                                    f"{unknown} cell(s) received no ACRO verdict"))
+                                    "the checker did not return a verdict for "
+                                    "every cell",
+                                    audit_detail=f"{unknown} cell(s) received no "
+                                                 f"ACRO verdict"))
         return Verdicts(suppress=pd.Series(suppress, index=df.index, dtype=bool),
                         findings=findings, deny=False)
