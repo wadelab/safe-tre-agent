@@ -58,7 +58,7 @@ claim.
 - **A5** — A real deployment runs a **local** model inside the safepod. A remote
   model endpoint is an egress channel and is permitted for synthetic data only,
   behind an explicit opt-in.
-- **A6** — The data in this repository is synthetic.
+- **A6** — The data in this repository are synthetic.
 
 ## Requirements — what it MUST do
 

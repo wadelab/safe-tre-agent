@@ -34,7 +34,7 @@ than the ones a release claims were applied is precisely the failure this
 project refuses elsewhere, and a checker that is down is not a checker that
 approved.
 
-What crosses the boundary is a donor-level contribution frame — data that has
+What crosses the boundary is a donor-level contribution frame — data that have
 not yet passed the gateway. The boundary is therefore *inside* the safepod and
 crosses no trust boundary; it is a dependency-isolation boundary, not a
 security one.

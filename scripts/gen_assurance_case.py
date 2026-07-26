@@ -75,7 +75,7 @@ stays worth reading.
 ## The claim
 
 > Under the stated assumptions, an untrusted language model placed between an
-> analyst and sensitive data does not weaken the disclosure guarantee: nothing
+> analyst and sensitive data do not weaken the disclosure guarantee: nothing
 > leaves the enclave that discloses an individual, and every release is
 > explicable and reproducible from what was released.
 

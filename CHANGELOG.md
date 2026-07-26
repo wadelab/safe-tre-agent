@@ -119,6 +119,33 @@ and fixes are in [docs/hardening-log.md](docs/hardening-log.md).
   `test_every_clause_has_a_traceability_row` closes the hole permanently: a
   clause may be *Partial*, but it may not be unaccounted for.
 
+### Changed
+
+- **`config.yaml` shows the response-time dials, and says why three others are
+  missing.** An operator reading the shipped policy file saw six dials where
+  twelve exist, with no way to tell deliberate omission from oversight. The
+  R18 quantum and ceiling are now written there with their defaults; the three
+  that stay out — `moment2_dom_threshold`, `vetter`, `checker_cmd` — stay out
+  *because unset is a distinct behaviour for each of them*, and the file now
+  says so. Pinning `vetter: standin` in a config file would silently switch
+  off the checker default that D6 just turned on, which is exactly the kind of
+  quiet regression a "let us complete the file" tidy-up would cause.
+- **Asynchronous delivery is recorded as the structural answer to the timing
+  channel**, in the [roadmap](docs/roadmap.md)'s parked list and the
+  [security model](docs/security.md) as well as in D5. Collect a result on a
+  schedule rather than return it on the call and delivery time stops being a
+  function of compute time, so there is nothing left to narrow; the security
+  model previously pointed at the DP accountant here, which is the end state
+  for the differencing residual and not for this one.
+- The ACRO rollout paragraph in the roadmap still said the default was
+  unchanged and the remaining question was whether to flip it. It is flipped;
+  what remains there is the preprint's gateway section.
+
+### Fixed
+
+- Four places wrote *data* with a singular verb, one of them the assurance
+  case's top-level claim (generated, so fixed at the generator).
+
 ## 0.5.0 — 2026-07-26
 
 The checker, and the case for it. An external output checker can now be

@@ -14,7 +14,7 @@ stays worth reading.
 ## The claim
 
 > Under the stated assumptions, an untrusted language model placed between an
-> analyst and sensitive data does not weaken the disclosure guarantee: nothing
+> analyst and sensitive data do not weaken the disclosure guarantee: nothing
 > leaves the enclave that discloses an individual, and every release is
 > explicable and reproducible from what was released.
 
@@ -29,7 +29,7 @@ the boundary — outside them nothing here is claimed at all.
 - **A3** — The operator supplies the network boundary and an upstream identity proxy. The app enforces the restricted channel and reads the proxy's identity header; it does not itself authenticate users.
 - **A4** — The audit HMAC key and the off-box chain anchor live outside the app host.
 - **A5** — A real deployment runs a **local** model inside the safepod. A remote model endpoint is an egress channel and is permitted for synthetic data only, behind an explicit opt-in.
-- **A6** — The data in this repository is synthetic.
+- **A6** — The data in this repository are synthetic.
 
 ## Strategy: decompose by the Five Safes
 

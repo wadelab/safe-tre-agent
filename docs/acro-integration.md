@@ -195,7 +195,7 @@ workaround:
   them.
 - The service sends a cell table and the policy parameters; the checker
   returns per-cell verdicts and rule names. The payload is aggregate cells and
-  a donor-level contribution frame — data that has not yet passed the gateway,
+  a donor-level contribution frame — data that have not yet passed the gateway,
   so the boundary is *inside* the safepod and crosses no trust boundary.
 - **Fail closed, loudly.** A non-zero exit, a timeout, a malformed response or
   a version mismatch suppresses everything and denies the request. There is no

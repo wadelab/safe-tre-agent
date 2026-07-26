@@ -47,14 +47,18 @@ compatibility notes for TRE operators (started, same page); an updated
 gateway section in the preprint.
 
 **Rollout, as it stands (2026-07-26).** The seam, the rules and the boundary
-are built and the switch exists; the default is unchanged. `CellVetter` is
-where rules enter, so ACRO decides *only* which cells release and never how a
-release is rounded, ordered or shaped. ACRO's own implementations run through
-it, and out of process behind a versioned contract where every failure denies,
-because it cannot be imported into the service environment at all (C3).
-`SAFETRE_VETTER=standin+external` turns it on. What is left is the operator's
-judgement rather than engineering: whether to make it the default, and the
-preprint's gateway section, which is rewritten when that happens.
+are built, and **a configured checker is now used by default**
+([D6](decisions/D6-checker-default.md)). `CellVetter` is where rules enter, so
+ACRO decides *only* which cells release and never how a release is rounded,
+ordered or shaped. ACRO's own implementations run through it, and out of
+process behind a versioned contract where every failure denies, because it
+cannot be imported into the service environment at all (C3). "Default" cannot
+mean "required" for a library a TRE embeds, so it means used whenever
+`SAFETRE_CHECKER_CMD` is set; naming the vetter explicitly requires one, and
+either way the release records which rules decided it. Measured cost of the
+composition: 23 more suppressed cells out of 4684, and 5 of 102 gaussian
+models (`artifacts/composite_cost.json`). What is left is the preprint's
+gateway section, which still describes the stand-in alone.
 
 ## 2. Formal executable specification (fellowship WP2)
 
@@ -139,6 +143,17 @@ elsewhere.
 
 ## Parked
 
+- **Asynchronous result delivery (submit-and-collect)** — the structural
+  answer to the response-time channel, recorded in
+  [D5](decisions/D5-timing-channel.md). If a result is collected on a schedule
+  rather than returned on the call, delivery time has nothing to do with
+  compute time and there is no channel to narrow; it also matches how output
+  checking really works, a queue and a human rather than a request and a
+  response, and blunts the wider release-decision oracle of which timing is
+  one face. Parked because it is an architectural change to the frozen shell
+  and the interactive demo is what reviewers use. Quantisation (spec R18) is
+  what makes the interactive version defensible meanwhile; unpark this if the
+  system is ever pointed at real data.
 - **FHE fixed-analysis backend** — a research experiment combining this
   project with a homomorphic-encryption toolbox: a fixed, manifest-validated
   encrypted statistic (correlation, linear regression) whose decrypted

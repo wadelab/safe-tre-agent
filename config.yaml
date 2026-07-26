@@ -10,9 +10,26 @@ disclosure:
   dom_threshold: 0.5       # p%-rule: suppress a cell one contributor dominates beyond this share
   influence_threshold: 0.5 # suppress a corr cell if removing one donor moves r by more than this
   round_base: 5            # released counts are rounded to this base
+  # Response-time control (R18): latency must not rank the cohorts suppression
+  # hides. Every response is held to the next multiple of the quantum; work
+  # past the ceiling is refused. Set the quantum equal to the ceiling for
+  # constant time, or to 0 to disable it and reopen the channel. The ceiling
+  # is deliberately generous — padding runs to the next quantum, never to the
+  # ceiling, so raising it slows nothing.
+  response_quantum_ms: 50
+  response_ceiling_ms: 5000
 session:
   query_budget: 20         # max released aggregates per session before review
   differencing_delta: 10   # flag same-measure totals / cohorts differing by < this
+# Three parameters are deliberately ABSENT rather than forgotten, because for
+# each of them "unset" is a distinct behaviour that writing a value would
+# destroy: `disclosure.moment2_dom_threshold` unset means second-moment cells
+# take the ordinary magnitude bound; `disclosure.vetter` unset means an
+# external checker is used whenever one is configured, so pinning it here
+# would silently switch that off; `disclosure.checker_cmd` is a deployment
+# detail that belongs in the environment, not in a file that ships. Each is
+# documented in docs/policy-parameters.md with what its absence means.
+#
 # There is deliberately nothing here for the human-in-the-loop policy or the
 # model backend. The HITL rule is fixed in code (a high finding denies, a
 # medium one escalates) because it is not a dial an operator should turn

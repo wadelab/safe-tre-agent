@@ -167,8 +167,13 @@ closed:
   a patient attacker across sessions — which nothing here bounds — can still
   order some pairs at 26 to 70 samples. Constant time closes it and is one
   setting away (quantum = ceiling), at the price of every query paying the
-  ceiling; the measured exposure did not justify making that the default. The
-  DP accountant remains the principled end state here as elsewhere.
+  ceiling; the measured exposure did not justify making that the default.
+  The structural end state for *this* residual is not the DP accountant but
+  **asynchronous delivery**: collect a result on a schedule rather than return
+  it on the call, and delivery time stops being a function of compute time, so
+  there is no channel left to narrow. It is parked as an architectural change
+  to a frozen shell ([roadmap](roadmap.md#parked)), and quantisation is what
+  makes the interactive version defensible meanwhile.
 
 - **Audit-lock contention (accepted, low).** Every request serialises briefly on
   the audit log's write lock. That serialisation is a *correctness requirement*
