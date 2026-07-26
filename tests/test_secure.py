@@ -450,7 +450,7 @@ class _ScriptedPlanner:
 
 
 def test_simulatable_cohort_bound(tables):
-    from safetre.disclosure import ALLOW_SENTINEL, simulatable_cohort_bound
+    from safetre.disclosure import simulatable_cohort_bound
     marg = QueryEngine(tables).marginal_donor_counts()
     n_ni = int((tables["donors"]["region"] == "Northern Ireland").sum())
 
@@ -464,11 +464,29 @@ def test_simulatable_cohort_bound(tables):
         marg, "donor_spend", (("region", "==", "London"),), (("region", "==", "South East"),))
     assert big >= DisclosurePolicy.DEFAULT_THRESHOLD
 
-    # differ on two dimensions -> out of scope for the single-dim bound
+    # differ on two dimensions -> the bound SUMS them. It used to return a
+    # never-denying sentinel here, which let an attacker refused one rare
+    # exclusion make two instead and walk through (red-team, 2026-07-26).
     two = simulatable_cohort_bound(
         marg, "donor_spend", (),
         (("region", "!=", "Northern Ireland"), ("sex", "==", "M")))
-    assert two == ALLOW_SENTINEL
+    n_not_m = sum(c for v, c in marg["donor_spend"]["sex"].items() if v != "M")
+    assert two == n_ni + n_not_m
+
+    # two rare exclusions, each individually denied, must not add up to an
+    # allow: the summed bound stays under the threshold and still denies
+    rare_sex = min((v for v in marg["donor_spend"]["sex"]
+                    if 0 < marg["donor_spend"]["sex"][v] < 5),
+                   key=lambda v: marg["donor_spend"]["sex"][v])
+    rare_age = min((v for v, c in marg["donor_spend"]["age_years"].items() if c == 1),
+                   default=None)
+    assert rare_age is not None, "expected a singleton age in the fixture"
+    combined = simulatable_cohort_bound(
+        marg, "donor_spend", (),
+        (("sex", "!=", rare_sex), ("age_years", "!=", rare_age)))
+    assert combined == (marg["donor_spend"]["sex"][rare_sex]
+                        + marg["donor_spend"]["age_years"][rare_age])
+    assert combined < DisclosurePolicy.DEFAULT_THRESHOLD   # -> denied
 
     # the bound depends only on the marginals + predicates: recomputing with a
     # copy of the marginals gives the same answer (nothing from live data)

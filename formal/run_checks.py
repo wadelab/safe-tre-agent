@@ -48,7 +48,6 @@ MODELS: dict[str, dict[str, set[str]]] = {
         "runs": {
             "someSession",
             "InteractionResidualExists",
-            "MultiDimSentinelResidual",
         },
     },
     "temporal_session.als": {

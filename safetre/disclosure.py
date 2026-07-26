@@ -495,9 +495,6 @@ def _dim_value_set(universe: set, predicates: list) -> set:
     return s
 
 
-ALLOW_SENTINEL = 10 ** 9
-
-
 def simulatable_cohort_bound(marginals: dict, dataset: str,
                              filters_a: tuple, filters_b: tuple) -> int:
     """A simulatable upper bound on |A △ B|, from published donor marginals only.
@@ -510,11 +507,25 @@ def simulatable_cohort_bound(marginals: dict, dataset: str,
     same public marginals could reproduce every decision, and a refusal reveals
     nothing new.
 
-    For two cohorts that differ on exactly one dimension, the whole-population
-    donor marginal of the differing values is an *upper* bound on the symmetric
-    difference. So a denial (bound < threshold) is always sound, and this catches
-    the canonical attack: isolating a globally-rare category by adding or
-    removing one predicate ("exclude age 69", "exclude sex X").
+    The bound is the sum, over every dimension the two cohorts select
+    differently, of the whole-population donor marginals of the values selected
+    by exactly one of them. That really is an upper bound on |A △ B|: a donor
+    in A but not B satisfies all of A's predicates and violates one of B's, so
+    on that dimension their value lies in A's selection and not in B's, and the
+    marginal of that value counts them. (Donors failing on several dimensions
+    are counted several times, which only makes the bound larger.) So a denial
+    — bound below the threshold — is always sound, and it catches the canonical
+    attack: isolating a globally-rare category by adding or removing one
+    predicate ("exclude age 69", "exclude sex X").
+
+    **Summing rather than giving up on multiple dimensions is load-bearing.**
+    This used to return a never-denying sentinel as soon as more than one
+    dimension differed, which meant an attacker refused a single rare exclusion
+    could simply make two of them: excluding sex 'Other' (3 donors) was denied,
+    excluding age 50 (1 donor) was denied, and excluding both — a true
+    symmetric difference of 4 — was allowed. Summing costs nothing, because the
+    sum is still a sound upper bound, and it removes a bypass that took two
+    queries.
 
     Being an upper bound, it does NOT catch differencing that isolates a small
     group through the *interaction* of a common category with an otherwise-narrow
@@ -522,8 +533,7 @@ def simulatable_cohort_bound(marginals: dict, dataset: str,
     large even though the real symmetric difference is small. That residual is
     the price of simulatability; it is largely covered by the per-cell donor
     threshold (a narrow cohort's cells are suppressed anyway) and fully by a DP
-    accountant. Cohorts differing on more than one dimension return a sentinel
-    that never denies and rely on the query-budget and total-delta checks.
+    accountant.
     """
     dmap = marginals.get(dataset, {})
 
@@ -534,17 +544,13 @@ def simulatable_cohort_bound(marginals: dict, dataset: str,
         return grouped
 
     a, b = by_dim(filters_a), by_dim(filters_b)
-    differing = []
+    bound = 0
     for dim in set(a) | set(b):
         universe = set(dmap.get(dim, {}))
         sa = _dim_value_set(universe, a.get(dim, []))
         sb = _dim_value_set(universe, b.get(dim, []))
-        if sa != sb:
-            differing.append((dim, sa ^ sb))
-    if len(differing) != 1:
-        return ALLOW_SENTINEL
-    dim, symdiff_values = differing[0]
-    return sum(dmap[dim].get(v, 0) for v in symdiff_values)
+        bound += sum(dmap.get(dim, {}).get(v, 0) for v in sa ^ sb)
+    return bound
 
 
 @dataclass

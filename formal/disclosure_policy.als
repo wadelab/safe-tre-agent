@@ -5,38 +5,44 @@
 // population (the normalized filter predicate of a released QuerySpec), the
 // true symmetric difference between two cohorts, and the SIMULATABLE upper
 // bound the auditor actually decides from — the whole-population donor
-// marginal of the differing values when exactly one dimension differs, and
-// the never-denying sentinel otherwise
+// marginal of the values selected by exactly one cohort, summed over every
+// dimension on which the two selections differ
 // (safetre/disclosure.py::simulatable_cohort_bound, SessionAuditor.observe_cohort).
 //
 // The threshold is abstracted to 3 (the code's 10): the properties are
 // threshold-generic, and a small constant keeps the bounded search exact.
 //
 // What is checked (counterexample = CI failure):
-//   MarginalBoundSound          — the docstring's soundness claim: on a
-//                                 single differing dimension the marginal
-//                                 bound really is an upper bound on the true
-//                                 symmetric difference;
+//   MarginalBoundSound          — the docstring's soundness claim: the summed
+//                                 marginal bound really is an upper bound on
+//                                 the true symmetric difference, on ANY number
+//                                 of differing dimensions;
 //   RareCategoryIsolationBlocked — the canonical differencing attack
-//                                 (adding/removing a globally-rare category,
-//                                 e.g. "exclude sex X") cannot survive the
-//                                 auditor: a surviving single-dimension pair
-//                                 has identical cohorts or a bound >= T.
+//                                 (adding/removing globally-rare categories,
+//                                 e.g. "exclude sex X", or "exclude sex X AND
+//                                 age 50") cannot survive the auditor: a
+//                                 surviving pair has identical cohorts or a
+//                                 bound >= T, however many dimensions differ.
 //
 // What is SEARCHED FOR and expected to EXIST (unsatisfiable = CI failure,
 // because the model would then contradict the code's own documentation):
 //   someSession                 — the modelled space is inhabited;
 //   InteractionResidualExists   — a pair the auditor allows (bound >= T)
 //                                 whose true symmetric difference is small:
-//                                 the documented price of simulatability;
-//   MultiDimSentinelResidual    — a small-difference pair on >= 2 dimensions
-//                                 slips past the sentinel: the documented
-//                                 reliance on per-cell thresholds and budget.
+//                                 the documented price of simulatability.
 //
-// These two runs are the machine-checked form of the residual-risk paragraph
-// in simulatable_cohort_bound's docstring: the gaps are real, bounded, and
-// covered by the per-cell donor threshold and the DP roadmap item — not
-// silently absent from the model.
+// That run is the machine-checked form of the residual-risk paragraph in
+// simulatable_cohort_bound's docstring: the gap is real, bounded, and covered
+// by the per-cell donor threshold and the DP roadmap item — not silently
+// absent from the model.
+//
+// A second residual used to be exhibited here — MultiDimSentinelResidual, a
+// small-difference pair on two dimensions slipping past the never-denying
+// sentinel. It is gone because the sentinel is gone: the bound now sums over
+// every differing dimension, so RareCategoryIsolationBlocked covers the
+// multi-dimension case that run demonstrated. A red-team pass turned that
+// documented residual into a two-query bypass, which is the argument for
+// closing a gap rather than exhibiting it.
 
 module disclosure_policy
 
@@ -68,21 +74,21 @@ fun differing [a, b: Cohort] : set Dim {
   { dm: Dim | a.sel[dm] != b.sel[dm] }
 }
 
-// the simulatable bound on a single differing dimension: the sum of the
-// published marginals of the values selected by exactly one of the cohorts
-fun simBound [a, b: Cohort, dm: Dim] : Int {
+// the simulatable bound: the published marginals of the values selected by
+// exactly one of the cohorts, summed over every differing dimension
+fun dimBound [a, b: Cohort, dm: Dim] : Int {
   sum v: (a.sel[dm] - b.sel[dm]) + (b.sel[dm] - a.sel[dm]) | marginal[v]
+}
+fun simBound [a, b: Cohort] : Int {
+  sum dm: differing[a, b] | dimBound[a, b, dm]
 }
 
 // --- the auditor rule as implemented ----------------------------------------
 
-// deny iff the cohorts differ on exactly one dimension and the simulatable
-// bound is nonzero and below threshold; >1 differing dimension returns the
-// ALLOW sentinel (never denies)
+// deny iff the simulatable bound is nonzero and below threshold, whatever the
+// number of differing dimensions
 pred simulatableAuditorAllows [a, b: Cohort] {
-  one differing[a, b] implies
-    not (simBound[a, b, differing[a, b]] > 0 and
-         simBound[a, b, differing[a, b]] < 3)
+  not (simBound[a, b] > 0 and simBound[a, b] < 3)
 }
 
 // a Release is a query the auditor let through this session
@@ -93,23 +99,25 @@ fact SessionReleasesPassAuditor {
 
 // --- checked properties -------------------------------------------------------
 
-// A donor in exactly one of two cohorts that agree on every other dimension
-// must hold a differing value on the one differing dimension, so it is
-// counted by that value's whole-population marginal: the simulatable bound
-// dominates the true symmetric difference (denials are sound).
+// A donor in exactly one of two cohorts satisfies one and violates the other,
+// so on at least one dimension they hold a value selected by exactly one of
+// them, and that value's whole-population marginal counts them. Summing over
+// the differing dimensions therefore dominates the true symmetric difference
+// (denials are sound); donors failing on several dimensions are counted
+// several times, which only makes the bound larger.
 assert MarginalBoundSound {
-  all a, b: Cohort | one differing[a, b] implies
-    symdiff[a, b] <= simBound[a, b, differing[a, b]]
+  all a, b: Cohort | symdiff[a, b] <= simBound[a, b]
 }
 check MarginalBoundSound for 3 Dim, 6 Val, 6 Donor, 2 Cohort, 0 Release, 6 Int
 
-// The canonical attack — isolate a globally-rare category by adding or
-// removing one predicate — cannot survive: any auditor-passing pair on one
-// differing dimension has identical member sets or a bound of at least T.
+// The canonical attack — isolate globally-rare categories by adding or
+// removing predicates — cannot survive: any auditor-passing pair has identical
+// member sets or a bound of at least T, on however many dimensions it differs.
+// The `one differing` guard is deliberately absent: with it, this held while
+// two rare exclusions in one step walked through.
 assert RareCategoryIsolationBlocked {
   all disj r1, r2: Release | let a = r1.cohort, b = r2.cohort |
-    one differing[a, b] implies
-      (symdiff[a, b] = 0 or simBound[a, b, differing[a, b]] >= 3)
+    symdiff[a, b] = 0 or simBound[a, b] >= 3
 }
 check RareCategoryIsolationBlocked for 3 Dim, 6 Val, 6 Donor, 4 Cohort, 4 Release, 6 Int
 
@@ -126,19 +134,8 @@ run someSession for 3 Dim, 6 Val, 6 Donor, 2 Cohort, 2 Release, 6 Int
 // (e.g. the over-50s within one small region) — allowed, yet symdiff < T
 pred InteractionResidualExists {
   some disj r1, r2: Release | let a = r1.cohort, b = r2.cohort {
-    one differing[a, b]
-    simBound[a, b, differing[a, b]] >= 3
+    simBound[a, b] >= 3
     symdiff[a, b] > 0 and symdiff[a, b] < 3
   }
 }
 run InteractionResidualExists for 2 Dim, 4 Val, 6 Donor, 2 Cohort, 2 Release, 6 Int
-
-// the sentinel residual: cohorts differing on two dimensions are never
-// denied by this rule, whatever their true symmetric difference
-pred MultiDimSentinelResidual {
-  some disj r1, r2: Release | let a = r1.cohort, b = r2.cohort {
-    #differing[a, b] = 2
-    symdiff[a, b] = 1
-  }
-}
-run MultiDimSentinelResidual for 2 Dim, 4 Val, 6 Donor, 2 Cohort, 2 Release, 6 Int
