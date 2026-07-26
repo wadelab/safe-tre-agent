@@ -23,15 +23,16 @@ import sys
 import pytest
 import yaml
 
+sys.path.insert(0, os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"))
+
+from gen_decision_log import REQUIRED, STATUSES   # noqa: E402 - one vocabulary
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RECORDS = os.path.join(ROOT, "docs", "decisions")
 PAGE = os.path.join(ROOT, "docs", "decision-log.md")
 GENERATOR = os.path.join(ROOT, "scripts", "gen_decision_log.py")
 SPEC = os.path.join(ROOT, "docs", "specification.md")
-
-REQUIRED = ("id", "title", "date", "status", "question", "clauses",
-            "revisit_when")
-STATUSES = ("accepted", "open", "parked", "superseded")
 
 
 def _records():

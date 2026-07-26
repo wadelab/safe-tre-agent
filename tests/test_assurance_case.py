@@ -25,7 +25,8 @@ sys.path.insert(0, os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"))
 
 from gen_assurance_case import (                                  # noqa: E402
-    SAFES, WHY, assumptions, clauses_in_spec, open_decisions, traceability,
+    SAFES, WHY, assumptions, clauses_in_spec, traceability,
+    unanswered_decisions,
 )
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -91,11 +92,12 @@ def test_every_partial_clause_appears_as_a_gap():
                 f"{row['clause']} is Partial but is not listed as a gap")
 
 
-def test_every_open_decision_appears_as_a_gap():
+def test_every_unanswered_decision_appears_as_a_gap():
     page = open(PAGE).read()
     _, _, gaps = page.partition("## Where the argument is unfinished")
-    for meta in open_decisions():
-        assert meta["id"] in gaps, f"{meta['id']} is open but is not listed"
+    for meta in unanswered_decisions():
+        assert meta["id"] in gaps, (
+            f"{meta['id']} is {meta['status']} but is not listed")
 
 
 def test_a_discharged_clause_is_not_marked_undeveloped():

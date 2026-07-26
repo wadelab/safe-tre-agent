@@ -41,7 +41,7 @@ PAGE = os.path.join(ROOT, "docs", "assurance-case.md")
 # Which of the Five Safes each clause serves. This is the only hand-declared
 # mapping in the file, and a clause missing from it fails the build: a control
 # whose purpose nobody can name is a control nobody can weigh.
-SAFES: dict[str, str] = {
+SAFES: dict[str, list[str]] = {
     "Safe projects": ["P1", "P2", "P10", "R1", "R12"],
     "Safe people": ["P13", "P14", "R10"],
     "Safe settings": ["P8", "P9", "P12", "P15", "P16", "R3", "R8", "R13"],
@@ -154,7 +154,7 @@ def traceability() -> list[dict]:
     return rows
 
 
-def open_decisions() -> list[dict]:
+def unanswered_decisions() -> list[dict]:
     out = []
     for name in sorted(os.listdir(DECISIONS)):
         if not name.endswith(".md"):
@@ -215,7 +215,7 @@ def render() -> str:
     out.append("**Unanswered decisions** — *open* means the work has not been "
                "done; *parked* means it was scoped and deliberately left "
                "undone, with the reasoning recorded:\n")
-    for meta in open_decisions():
+    for meta in unanswered_decisions():
         question = " ".join(str(meta.get("question", "")).split())
         out.append(f"- **[{meta['id']}](decisions/{meta['file']})** "
                    f"({meta['status']}) {meta['title']} — {question}")
