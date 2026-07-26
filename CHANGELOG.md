@@ -6,6 +6,45 @@ and fixes are in [docs/hardening-log.md](docs/hardening-log.md).
 
 ## Unreleased
 
+### Security
+
+- **Red-team round 7 ([hardening log](docs/hardening-log.md)): five fixes, two
+  open.** An adversarial pass over the whole surface on the assumption the code
+  is public. The release path held; the leaks ran through the paths nobody had
+  treated as outputs.
+  - **The published marginals named the ages held by a single donor** (#29).
+    The disclosure-safe projection dropped values outside a *declared* domain
+    and exempted columns without one — which is `age_years`, the variable the
+    catalogue calls internal and never-returnable. Sub-threshold values of a
+    domain-less column are now omitted rather than count-nulled, which costs
+    the auditor nothing because an absent key and a sub-threshold key give the
+    same verdict.
+  - **A refusal was a numeric profile of what it had withheld** (#30). Denied
+    queries returned the engine's cell count and how many cells each rule had
+    caught, and a cohort matching nobody came back *released* with an empty
+    table while a cohort matching one person came back *redacted* — so the
+    status word alone answered "does anyone match?". Chained with #29, eight
+    refusals recovered a unique donor's quasi-identifiers with no cell ever
+    released. Refusals decided from the data now give one canonical answer and
+    the counts go to the audit log; refusals decided from the request are still
+    explained in full, because the analyst holds the request.
+  - **Two rare exclusions escaped the differencing rule that one breaks**
+    (#31). The bound gave up whenever more than one dimension differed. It now
+    sums over the differing dimensions, which was always sound — and closes a
+    residual the Alloy model had been exhibiting as a satisfiable run.
+  - **One missing value switched off complementary suppression** (#32). Cell
+    keys were identified by dtype, so a single unrated app made an integer
+    dimension `float64` and stopped it being a key — silently reinstating
+    hardening #27 and #28. The query's group-by is now threaded through
+    instead of inferred.
+  - **The external checker's per-call table lived on the shared vetter** (#33),
+    so concurrent users could be answered about each other's tables with a
+    matching request id. Reproduced at 2 in 240 under forced preemption.
+  - Still open: the response-time ceiling is a post-hoc check rather than a
+    deadline, so an overrunning query still advertises its duration (#34); and
+    `max_output_rows` cannot fire on the QuerySpec path, making it a live dial
+    for a control that never runs (#35).
+
 ### Added
 
 - **An external checker is now used by default when one is configured

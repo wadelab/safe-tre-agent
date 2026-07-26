@@ -3,6 +3,84 @@
 A dated record of self-red-team findings and the fixes applied. New findings get
 appended; the table is the quick index, the notes below give detail.
 
+## 2026-07-26 — round 7 (self red-team, adversarial pass over the whole surface)
+
+| # | Finding | Sev | Status | Fix | Where |
+|---|---|---|---|---|---|
+| 29 | **The published marginals named the ages held by a single donor.** `published_marginal_donor_counts` drops values outside a column's *declared* domain, on the reasoning that an undeclared value is disclosive by its name — and then exempted columns with **no** declared domain, count-nulling them instead. The only such column is `age_years`, which the catalogue calls an internal analysis variable that may never be grouped, selected or returned. `/api/marginals` published 56 exact ages, 26 of them sub-threshold, **5 held by exactly one donor**, for one GET at no cost in query budget | High | **Fixed** | a domain-less column's key set comes from the data, so a sub-threshold value is now *omitted* rather than nulled. Simulatability is unaffected: the decision turns on `count < threshold`, and an absent key means either "sub-threshold" or "not in the data", both of which give the same verdict | `safetre/engine.py`, `tests/test_hardening.py` |
+| 30 | **A refusal was a numeric profile of what it had just withheld.** The trace and the findings are shown for denied queries too, and both carried counts: a denied cross-tab reported 116 occupied cells, 88 below threshold on `n`, 102 on `n_donors`, 62 dominated. Worse, a cohort matching *nobody* came back `released` with an empty table while a cohort matching *one person* came back `redacted`, so the status word alone answered "does anyone match this predicate?". Chained with #29: **8 queries, every one refused and no cell released, recovered a unique donor's region, sex, income band and device** | High | **Fixed** | a refusal decided from the DATA gives one canonical answer; a refusal decided from the REQUEST may still be explained. `Finding.audit_detail` carries the counts to the audit log only; an empty released frame is no longer a release; the trace drops the engine's row count | `safetre/disclosure.py`, `service.py`, `external_checker.py`, `tests/test_refusal_equality.py` |
+| 31 | **Two rare exclusions escaped the rule one rare exclusion breaks.** `simulatable_cohort_bound` returned a never-denying sentinel as soon as two cohorts differed on more than one dimension. Excluding sex `Other` (3 donors) is denied; excluding age 50 (1 donor) is denied; excluding both is allowed, with a true symmetric difference of 4. On the event-level dataset the total-delta layer misses it too, because dropping three donors moves the row total well past the ten-row threshold — so **two queries and a subtraction recovered their exact spend** | High | **Fixed** | the bound sums the marginals over every differing dimension, which is still sound: a donor in A but not B holds, on some dimension, a value selected by exactly one of the two, and that value's marginal counts them | `safetre/disclosure.py`, `formal/disclosure_policy.als`, `tests/test_secure.py` |
+| 32 | **A missing value in an integer cell key switched off complementary suppression.** `_group_columns` identified cell keys as "not float dtype". `age_rating` and `wave` are integer dimensions, and one unrated app is enough to make the column `float64` on the way out of DuckDB — after which the key is not a key, `_secondary_suppress` returns at its `not group_cols` guard, and `_finalize` loses the tie-break that keeps a released row order from ranking cells more finely than the released counts do. Both hardening #27 and #28 are reinstated by one NULL, silently | Med | **Fixed** | the query's own group-by is threaded through `apply` → `_finalize`/`_secondary_suppress`/`_sacrifice` from `CellContext`, and the fallback heuristic keeps integral-valued floats as keys | `safetre/disclosure.py`, `tests/test_disclosure.py` |
+| 33 | **The external checker's per-call table lived on the shared vetter.** `vet()` assigned the contributions, keys and aggfunc to `self`, and `_ask` read them back to build the payload *outside* the lock. One vetter serves every user and cross-user requests deliberately run in parallel, so a second thread could overwrite all three in between. The request id cannot catch it — the id is minted after the swap, so the checker answers the question it was actually asked, about another table, and the verdicts come back matching. With cell keys in common (two researchers both grouping by region) they apply, and the release records `standin+external` for checks that ran on other data. Reproduced at **2 in 240** calls under fine-grained preemption; 0 in 240 at default scheduling | Med | **Fixed** | the table is passed as arguments, so there is no per-call state on the instance for another thread to overwrite. The lock also moves from the class to the instance, where the pipe it guards lives | `safetre/external_checker.py`, `tests/test_acro_boundary.py` |
+| 34 | **The response-time ceiling was a post-hoc check, not a deadline.** The handler ran to completion and only then was the body replaced, so a query taking 1.2s against a 0.2s ceiling was answered at 1.256s — advertising its size exactly as it would have with no ceiling at all, which is the thing the ceiling is documented to prevent | Med | **Open** | needs the response raced against a deadline so every overrun answers at the same boundary. Note what that would *not* do: `call_next` runs the sync handler in a threadpool, so a cancelled await does not unwind the work — the clock stops talking, the resource cost stays | `safetre_web/app.py` |
+| 35 | **`max_output_rows` cannot fire on the QuerySpec path.** The `too_granular` rule requires `not _count_cols(df)`, and `compile_query` appends `COUNT(*) AS n` unconditionally, so a 500-row released frame yields no finding. It is a live dial in `config.yaml` describing a control that never runs — the class of defect the config loader was rewritten to prevent | Low | **Open** | decide whether the rule should bite on released cell count (a 3-dimension cross-tab exceeds 100 cells routinely, so the default needs measuring first) or whether the dial belongs only to the analyst path | `safetre/disclosure.py`, `config.yaml` |
+| 36 | **The test suite wrote into the developer's real audit log.** `safetre_web.app` builds its `AuditLog` at import from `SAFETRE_AUDIT_DB`, and only `tests/test_web.py` set that variable — at its own import, so any module importing the app first got the default. The local `audit.db` had accumulated 1236 rows of test corpus over three weeks, and an audit-verification test was order-dependent as a result | Low | **Fixed** | the pin moves to `conftest.py`, which runs before any module is imported | `tests/conftest.py` |
+
+### Notes
+
+**Method.** An adversarial pass over the whole surface rather than a property
+test, on the assumption the code is public: no control may rest on an attacker
+not reading it. Each finding was carried to a working exploit against the demo
+data before being written down, and one hypothesis died that way — recovering
+exact counts from a `sum`/`mean` pair to defeat base-5 rounding gets within
+±2, no better than the rounding it would bypass, because `postprocess` rounds
+released values to two decimals.
+
+**#29 and #30 are one attack in two halves.** Neither is worth much alone. The
+marginals endpoint says *which* age is unique without saying who holds it; the
+refusal oracle answers yes/no questions about a cohort without saying which
+cohort is interesting. Together the first picks the target for free and the
+second interrogates them one bit at a time, inside the 20-query budget, with
+every single query refused. That is the shape worth remembering: the controls
+were each doing their job on the release path, and the leak ran entirely
+through the *explanation* path — the trace, the finding text, the status word —
+which had never been treated as an output at all.
+
+**#30's fix draws a line worth stating.** A refusal decided from the request
+may be explained in full: the analyst holds the request and could reach the
+same verdict themselves, which is the simulatability argument applied to
+refusals. A refusal decided from the data may not, because everything
+distinguishing one such refusal from another is a fact about records the
+gateway just withheld. The session auditor's findings were written to this
+standard from the beginning — "the exact total delta is itself the quantity a
+differencing attack is trying to recover" — and the gateway's were not. Six
+existing tests asserted the analyst is told which rule fired; they now assert
+the opposite and read the rule from the audit log instead, which is where it
+still belongs.
+
+**#31 closed a residual the formal model was exhibiting.**
+`formal/disclosure_policy.als` had a satisfiable run named
+`MultiDimSentinelResidual` — a small-difference pair on two dimensions slipping
+past the sentinel, machine-demonstrated rather than asserted. Exhibiting a
+residual is the right move when it cannot be closed cheaply; this one closed in
+eight lines, and `RareCategoryIsolationBlocked` now runs without its `one
+differing` guard, which is precisely the property the sentinel violated.
+
+**#32 is the third appearance of one idea.** Hardening #27, #28 and now #32 are
+all cases of a released artefact being computed from something finer than what
+was released. The difference here is that nothing was wrong with the logic —
+the logic was correct and simply stopped being reached, because a dtype test
+stood in for knowledge the caller already had. The fix is to stop inferring the
+cell keys and pass them.
+
+**#33 is why the id check is not enough.** The module documents the
+desynchronisation failure carefully and defends it with a request id the
+response must echo. That defence is sound for its case and useless for this
+one: corrupting the *question* before the id is minted produces an exchange
+that is internally consistent and about the wrong table. The general lesson is
+that a correlation id proves a response matches a request, not that the request
+described what the caller meant to ask.
+
+**The audit log this round produced.** The local `audit.db` was polluted during
+testing (#36) and then broken by two probe rows written under a different key.
+It is archived rather than repaired: the only way to make it verify is to
+re-MAC those rows, which is the operation the whole design exists to prevent.
+Worth keeping as a worked example — the two rows were correctly *linked* and
+failed only on authentication, which is exactly the distinction between a hash
+chain and a keyed one. It also showed the head anchor is the missing control
+locally: `verify()` caught appended rows, but truncation without an anchor
+still passes.
+
 ## 2026-07-25 — round 6 (found by the release-equality test, roadmap item 2)
 
 | # | Finding | Sev | Status | Fix | Where |
