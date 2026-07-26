@@ -1,0 +1,27 @@
+{
+  "seed": 7,
+  "donors": 800,
+  "cells": {
+    "standin": 1617,
+    "standin+acro": 1640,
+    "cells": 4684,
+    "only_acro_suppresses": 23,
+    "only_standin_suppresses": 0
+  },
+  "models": {
+    "standin": {
+      "points": 539,
+      "full_fit": 60,
+      "coefficients_only": 42,
+      "refused": 437
+    },
+    "standin+acro": {
+      "points": 539,
+      "full_fit": 55,
+      "coefficients_only": 42,
+      "refused": 442
+    }
+  },
+  "models_lost_to_the_checker": 5,
+  "full_fits_lost_to_the_checker": 5
+}

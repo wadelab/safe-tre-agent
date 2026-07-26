@@ -28,6 +28,7 @@ alongside the reasoning that replaced it.
 | D2 | [Rule sets compose as a union, and the checker runs out of process](decisions/D2-acro-composition.md) | accepted | R5 |
 | D3 | [Second-moment cells get their own bound, and their own failure mode](decisions/D3-second-moment-parameters.md) | accepted | R5, R15, P19 |
 | D4 | [Inference from a dispersion that cannot be released](decisions/D4-robust-dispersion.md) | **parked** | R15, P21 |
+| D5 | [What to do about the response-time channel](decisions/D5-timing-channel.md) | **open** | R3, R5, R6 |
 
 ## D1 — Models fit from vetted cells, not from rows
 
@@ -68,6 +69,16 @@ A coefficient without a standard error is rarely publishable. Can inference — 
 **What would change our mind.** A researcher is actually blocked by it — the availability gap is currently 36 gaussian points out of 539 on synthetic data, and a real cohort where the concentrated case is the common one rather than the rare one would change the arithmetic. Or a robust dispersion arrives from outside with its bias already characterised, so the correction does not have to be defended here. Or the wider question is settled by the DP accountant (roadmap item 3), which would supply intervals by a route that does not need this one. The plan below survives intact, so unparking is cheap.
 
 [Read the record](decisions/D4-robust-dispersion.md)
+
+## D5 — What to do about the response-time channel
+
+*2026-07-26 · open*
+
+Query latency tracks cohort size closely enough to put sub-threshold cells in size order within a session's query budget. Should responses be padded to a constant time, quantised to a coarse bucket, or documented and left?
+
+**What would change our mind.** Open. The measurement exists and the options are costed below; what is missing is a judgement about how much usability to spend on a channel that needs an authenticated, audited analyst spending their query budget to exploit. Two things would settle it in one direction or the other: an end-to-end measurement over the real restricted channel, which would say how much of the signal survives network jitter, and the DP accountant, which closes this channel along with the rest of the release-decision oracle.
+
+[Read the record](decisions/D5-timing-channel.md)
 
 
 ## Adding a record

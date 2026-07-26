@@ -124,6 +124,7 @@ the argument is honest about being incomplete rather than quiet about it.
 **Unanswered decisions** — *open* means the work has not been done; *parked* means it was scoped and deliberately left undone, with the reasoning recorded:
 
 - **[D4](decisions/D4-robust-dispersion.md)** (parked) Inference from a dispersion that cannot be released — A coefficient without a standard error is rarely publishable. Can inference — an interval, or even a significance class — be restored when the second-moment cell is too concentrated to release?
+- **[D5](decisions/D5-timing-channel.md)** (open) What to do about the response-time channel — Query latency tracks cohort size closely enough to put sub-threshold cells in size order within a session's query budget. Should responses be padded to a constant time, quantised to a coarse bucket, or documented and left?
 
 ## How to read a gap
 

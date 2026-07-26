@@ -8,6 +8,32 @@ and fixes are in [docs/hardening-log.md](docs/hardening-log.md).
 
 ### Added
 
+- **Measured: what composing an external checker actually costs.**
+  `scripts/measure_composite_cost.py` → `artifacts/composite_cost.json`. The
+  worry was that composing would apply ACRO's dominance rules to second-moment
+  cells at ACRO's own parameters — `AcroVetter` ignores `VettingParameters`,
+  so the per-class dial governs the stand-in's rules and not the checker's.
+  It did not materialise: over 4684 cells the union suppresses **23 more**
+  than the stand-in alone, and of 102 available gaussian models **5** stop
+  being available. Coefficients-only is unchanged at 42, which says ACRO added
+  no new second-moment refusals at all — the five losses are mean cells.
+  Flipping the default is therefore a 5% cost in model availability on this
+  data, not the cliff it might have been.
+- **Measured: the response-time channel, and the security model was wrong
+  about it.** `scripts/measure_timing_channel.py` →
+  `artifacts/timing_channel_*.json`. The security model called data-dependent
+  latency "sub-millisecond and swamped by jitter"; that was an assertion, and
+  at the service boundary it is false. Latency tracks cohort size at Spearman
+  +0.86, which for published cells reveals nothing — but **9 of 15
+  sub-threshold pairs can be put in size order within the 20-query session
+  budget, some in 2 queries, at gaps of 2 donors**. Ordering suppressed cells
+  by size is what suppression exists to prevent. Two qualifications: the
+  measurement has no network in the path, and an external checker does *not*
+  make it worse (7 of 15), so the leak is the engine's own work. The security
+  model now says so, and [D5](docs/decisions/D5-timing-channel.md) records the
+  options — constant time, coarse quantisation, or documented acceptance —
+  with the criterion that any defence must take the orderable-pairs count to
+  zero rather than merely raising the sample count.
 - **The external checker is started once, not once per table (protocol 2).**
   Spawning a process per vetted table cost a second or two of interpreter and
   import time each — which a model pays per design-cell table and a TRE would

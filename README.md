@@ -232,6 +232,7 @@ scripts/      make_data.py, demo_query.py, make_figures.py,
               make_demo_screenshots.py, measure_rounding_distortion.py,
               measure_dispersion_sensitivity.py, gen_policy_catalogue.py,
               gen_decision_log.py, gen_assurance_case.py,
+              measure_composite_cost.py, measure_timing_channel.py,
               restart_web.sh, run_web.sh
 redteam/      attacks.yaml, run_redteam.py
 evals/        planner-quality corpus + runner

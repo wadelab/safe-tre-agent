@@ -132,16 +132,37 @@ closed:
   typo) is disclosive by its very *name*, so count-nulling it is not enough — it
   is removed entirely, leaving only codebook categories.
 
-- **Timing.** Denial *stage* is distinguishable by latency (intent-vetting vs
-  validation vs a gateway suppression that runs the full engine first), but the
-  analyst already learns the stage from the explicit status, so no extra signal.
-  Data-dependent DuckDB latency is a theoretical channel (a larger group
-  aggregates marginally slower) but is sub-millisecond on the synthetic scale and
-  swamped by network/scheduling jitter over the tailnet; the same DP noise is the
-  principled defence, and the engine already runs the same plan regardless of
-  outcome (suppression is post-computation). MAC verification uses
-  `hmac.compare_digest`; the identity/allowlist comparisons are against
-  non-secret values, so their non-constant time leaks nothing.
+- **Timing (measured 2026-07-26; the previous claim here was wrong).** Denial
+  *stage* is distinguishable by latency, but the analyst already learns the
+  stage from the explicit status, so that part carries no extra signal. This
+  section used to go on to call data-dependent latency "sub-millisecond and
+  swamped by jitter". That was an assertion, and measuring it
+  (`scripts/measure_timing_channel.py` →
+  `artifacts/timing_channel_standin.json`) shows it is false at the service
+  boundary.
+
+  Latency tracks cohort size closely (Spearman +0.86), which for cells at or
+  above the threshold reveals nothing — donor marginals publish those counts
+  already. The problem is below the threshold, where counts are published as
+  `null` precisely so they stay hidden: **of the 15 pairs of sub-threshold
+  cohorts, 9 can be put in size order within the 20-query session budget, some
+  in as few as 2 queries, at true gaps of 2 donors.** Ordering suppressed
+  cells by size is the thing suppression exists to prevent, so this is a real
+  residual rather than a theoretical one.
+
+  Two honest qualifications. The measurement is taken *at the service
+  boundary*, in process, with no network in the path; a deployment adds jitter
+  that raises the noise floor by an unmeasured amount, though an attacker on
+  the same tailnet sees little of it. And an external output checker does not
+  make it worse — it roughly doubles latency and raises the noise
+  proportionally (7 of 15 pairs, against 9 without it), so the channel is in
+  the engine's own work, not the checker's.
+
+  What to do about it is [D5](decisions/D5-timing-channel.md), which is open:
+  a constant response time closes it but must pay the worst case on every
+  query and refuse anything exceeding it, and coarse quantisation is cheaper
+  but only narrows the channel. The DP accountant is the principled end state
+  here as elsewhere.
 
 - **Audit-lock contention (accepted, low).** Every request serialises briefly on
   the audit log's write lock. That serialisation is a *correctness requirement*
