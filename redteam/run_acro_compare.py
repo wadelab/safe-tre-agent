@@ -41,7 +41,6 @@ import csv
 import os
 import sys
 
-import pandas as pd
 import yaml
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -52,13 +51,13 @@ from safetre import synth                                        # noqa: E402
 from safetre.disclosure import (                                 # noqa: E402
     DisclosurePolicy, VettingParameters,
 )
-from safetre.engine import QueryEngine, _ident, _where           # noqa: E402
-from safetre.procedures import get_procedure, model_registry     # noqa: E402
+from safetre.engine import QueryEngine                           # noqa: E402
+from safetre.procedures import model_registry                    # noqa: E402
 from safetre.query import QuerySpec                              # noqa: E402
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from acro_boundary import ExternalAcroVetter                    # noqa: E402
+from safetre.external_checker import ExternalCheckerVetter      # noqa: E402
 from acro_vetter import AGGFUNC, AcroVetter                      # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -67,6 +66,14 @@ OUT_CSV = os.path.join(HERE, "acro_results.csv")
 # must match scripts/make_data.py, so the numbers are the same with or without
 # a generated `data/` directory
 DEMO_SEED, DEMO_DONORS = 7, 800
+
+# how this repository starts the checker in ACRO's own environment. An operator
+# configures their own command (SAFETRE_CHECKER_CMD); nothing in safetre/ knows
+# this path, because a checker the operator did not choose is not one they can
+# vouch for.
+DEV_CHECKER = ["uv", "run", "--frozen", "--no-default-groups", "--group", "acro",
+               "python", os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                      "acro_checker.py")]
 
 # ACRO decides with its own configuration, so these are inert for the ACRO
 # side; they are the stand-in's, passed for interface conformance only.
@@ -120,40 +127,6 @@ FIXTURES = [
      {"dataset": "spend", "measure": {"fn": "sum", "column": "amount_gbp"}}),
 ]
 
-_CONTRIB = {
-    "sum": "SUM({c})",
-    "mean": "SUM({c})",          # the donor's contribution to the cell
-    "sum_sq": "SUM({c} * {c})",
-}
-
-
-def donor_frame(engine: QueryEngine, spec: QuerySpec) -> pd.DataFrame:
-    """One row per donor per cell from the dataset's unit view: the group-by
-    dimensions plus the donor's summed contribution (`v`) for value measures."""
-    dims = ", ".join(_ident(g) for g in spec.group_by)
-    dims_prefix = f"{dims}, " if spec.group_by else ""
-    fn = spec.measure.fn
-    if fn in _CONTRIB:
-        contrib = _CONTRIB[fn].format(c=_ident(spec.measure.column)) + " AS v, "
-    else:                                   # count: donor presence only
-        contrib = ""
-    # the procedure's own NOT-NULL guards, exactly as compile_query applies
-    # them (corr is the only procedure that declares any today)
-    _, extra = get_procedure(fn).select_exprs(spec.measure)
-    where, params = _where(spec, extra)
-    sql = (f"SELECT {dims_prefix}{contrib}donor_id "        # nosec - harness
-           f"FROM {_ident(f'_{spec.dataset}_u')}{where} "
-           f"GROUP BY {dims_prefix}donor_id")
-    frame = engine.con.execute(sql, params).df()
-    if fn in _CONTRIB:
-        # a NULL contribution has no value for ACRO's dominance arithmetic;
-        # dropping the donor row here means ACRO's threshold counts one donor
-        # fewer than the stand-in's n_donors on such cells (recorded as a
-        # method caveat in docs/acro-comparison.md)
-        frame = frame[frame["v"].notna()]
-    return frame
-
-
 def standin_decisions(engine: QueryEngine, policy: DisclosurePolicy,
                       spec: QuerySpec) -> dict[tuple, str]:
     """Per-cell decision of the stand-in gateway: release / suppress / deny."""
@@ -186,10 +159,11 @@ def verify_boundary(engine: QueryEngine) -> list[str]:
                      measure={"fn": "sum", "column": "total_spend_gbp"},
                      group_by=["region"])
     cells = engine.run(spec)
-    contributions = donor_frame(engine, spec)
+    contributions = engine.contributions(spec)
     aggfunc = AGGFUNC.get(spec.measure.fn)
     here = AcroVetter(contributions, spec.group_by, aggfunc).vet(cells, VETTING)
-    there_vetter = ExternalAcroVetter(contributions, spec.group_by, aggfunc)
+    there_vetter = ExternalCheckerVetter(DEV_CHECKER, spec.group_by, aggfunc,
+                                         contributions)
     there = there_vetter.vet(cells, VETTING)
 
     if there.deny:
@@ -273,7 +247,7 @@ def main() -> int:
                 # stand-in side stays at POLICY level because complementary
                 # suppression is part of the gateway being compared, not of
                 # its per-cell rules
-                acro = AcroVetter(donor_frame(engine, spec), spec.group_by,
+                acro = AcroVetter(engine.contributions(spec), spec.group_by,
                                   AGGFUNC.get(spec.measure.fn)).decisions()
             except Exception as exc:            # noqa: BLE001
                 errors.append(f"{sub_name}: {exc!r}")

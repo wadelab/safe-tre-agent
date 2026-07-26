@@ -8,6 +8,27 @@ and fixes are in [docs/hardening-log.md](docs/hardening-log.md).
 
 ### Added
 
+- **An external output checker can now be switched on (roadmap item 1,
+  rollout steps 3–4).** `PolicyConfig.vetter` selects `standin` (the default)
+  or `standin+external`, with `checker_cmd` saying how to start the checker;
+  asking for one without a command fails at startup, not at the first query.
+  The engine grew `contributions()` and `cell_context()` — procedures now
+  declare their own `contribution_expr` and `checker_aggfunc`, so `sum_sq`
+  contributes on the squared scale its dominance rule works on — and the
+  service builds that context only when a vetter actually reads it. End to
+  end on the demo dataset, `sum` by region releases nine regions under the
+  stand-in and eight with ACRO composed in; Wales, the NK-rule cell, is the
+  difference the comparison predicted. The default is unchanged: what is
+  *not* decided is §3 of the design, the second-moment parameters.
+- **Two integration defects the end-to-end run caught**, both invisible to
+  unit tests of the pieces. A vetter built from configuration has no query in
+  it, so an external checker handed only a cell frame vetted every table as a
+  single `total` cell and released everything — the cell keys and the
+  aggregation now travel with the contributions in a `CellContext`. And
+  suppressability was a hard-coded list of the stand-in's own rule names, so
+  a new vetter's findings — already resolved by suppressing their cells —
+  read as unresolved residuals and denied every query they touched; a
+  `Finding` now declares whether suppression resolves it.
 - **The external-checker boundary (roadmap item 1, rollout step 2, second
   half).** `redteam/acro_checker.py` is the checker process and
   `redteam/acro_boundary.py` the versioned JSON contract and client — which

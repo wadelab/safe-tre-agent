@@ -91,6 +91,32 @@ class AggregateProcedure:
         """Released payload columns, in order, after the group-by keys."""
         return ("value", "n")
 
+    def contribution_expr(self, m: Measure) -> str | None:
+        """SQL for one donor's contribution to a cell, or None if the
+        procedure has no donor-additive contribution.
+
+        An external output checker (roadmap item 1) decides on contributions,
+        not on finished cells: a frequency threshold counts donors and the
+        dominance rules need each donor's share, neither of which survives
+        aggregation. Declaring the expression here rather than in the caller
+        keeps it with the procedure that knows the scale its rule works on —
+        `sum_sq` contributes on the squared scale, and getting that wrong
+        would have the checker bound the wrong quantity.
+
+        None means "no donor-additive contribution": `count` needs only donor
+        presence, and `corr` has no ACRO analogue at all (best-practice D6).
+        """
+        return None
+
+    def checker_aggfunc(self, m: Measure) -> str | None:
+        """How an external checker must aggregate those contributions.
+
+        A `mean` cell and a `sum` cell over the same contributions are
+        different tables, and a checker told the wrong one checks the wrong
+        numbers. None where there is nothing to aggregate.
+        """
+        return None
+
     def postprocess(self, df: pd.DataFrame, spec: QuerySpec) -> pd.DataFrame:
         """Released-value shaping (rounding, derived statistics). No new data.
 
@@ -172,6 +198,12 @@ class _ColumnAggregate(AggregateProcedure):
         df["value"] = df["value"].round(2)
         return df
 
+    def contribution_expr(self, m: Measure) -> str | None:
+        return f"SUM({_ident(m.column)})"
+
+    def checker_aggfunc(self, m: Measure) -> str | None:
+        return "mean" if self.fn == "mean" else "sum"
+
     def witness_plans(self, spec: QuerySpec) -> list[WitnessPlan]:
         from .engine import compile_dominance_query
 
@@ -210,6 +242,12 @@ class SumSq(_ColumnAggregate):
     def select_exprs(self, m: Measure) -> tuple[list[str], tuple[str, ...]]:
         col = _ident(m.column)
         return [f"SUM({col} * {col}) AS value"], ()
+
+    def contribution_expr(self, m: Measure) -> str | None:
+        # the squared scale, as the dominance witness uses: a checker bounding
+        # the raw-scale share would bound the wrong quantity entirely
+        col = _ident(m.column)
+        return f"SUM({col} * {col})"
 
 
 class Corr(AggregateProcedure):

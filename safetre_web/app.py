@@ -25,7 +25,7 @@ from pydantic import BaseModel, Field
 from safetre import synth
 from safetre.audit import AuditLog
 from safetre.config import load_policy_config
-from safetre.disclosure import DisclosurePolicy
+from safetre.disclosure import DisclosurePolicy, build_vetter
 from safetre.manifest import manifest_for_response, public_schema
 from safetre.planner import LLMPlanner, MockPlanner
 from safetre.query import CATALOGUE
@@ -49,7 +49,8 @@ _tables = synth.load_csvs() if _data.is_dir() and any(_data.glob("*.csv")) else 
 _policy = DisclosurePolicy(
     threshold=_cfg.min_cell_size, max_rows=_cfg.max_output_rows,
     dom_threshold=_cfg.dom_threshold, influence_threshold=_cfg.influence_threshold,
-    round_base=_cfg.round_base)
+    round_base=_cfg.round_base,
+    vetter=build_vetter(_cfg.vetter, _cfg.checker_cmd))
 service = QueryService(_tables, _policy)
 audit_log = AuditLog(os.environ.get("SAFETRE_AUDIT_DB", "audit.db"))
 # Off-box anchor for the audit chain head (optional); when set, /api/audit/verify

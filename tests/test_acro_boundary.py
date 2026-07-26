@@ -1,6 +1,6 @@
 """The external-checker boundary fails closed, in every way it can fail.
 
-`redteam/acro_boundary.py` calls an output checker in another process (§4 of
+`safetre/external_checker.py` calls an output checker in another process (§4 of
 `docs/acro-integration.md`). The rules it carries are ACRO's and are measured
 elsewhere; what matters here is the part with no second opinion — what the
 gateway does when the checker exits non-zero, hangs, answers in the wrong
@@ -15,21 +15,16 @@ fake checkers, so they need neither ACRO nor its environment.
 from __future__ import annotations
 
 import json
-import os
 import sys
 import textwrap
 
 import pandas as pd
 import pytest
 
-sys.path.insert(0, os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "redteam"))
-
-from acro_boundary import (                                          # noqa: E402
-    PROTOCOL, ExternalAcroVetter, build_request, parse_response,
+from safetre.disclosure import DisclosurePolicy, VettingParameters
+from safetre.external_checker import (
+    PROTOCOL, ExternalCheckerVetter, build_request, parse_response,
 )
-
-from safetre.disclosure import DisclosurePolicy, VettingParameters   # noqa: E402
 
 PARAMS = VettingParameters(threshold=10, max_rows=100, dom_threshold=0.5,
                            influence_threshold=0.5)
@@ -45,9 +40,8 @@ def _fake_checker(tmp_path, body: str) -> list[str]:
     return [sys.executable, str(script)]
 
 
-def _vetter(command, **kw) -> ExternalAcroVetter:
-    return ExternalAcroVetter(CONTRIBUTIONS, ["region"], "sum",
-                              command=command, **kw)
+def _vetter(command, **kw) -> ExternalCheckerVetter:
+    return ExternalCheckerVetter(command, ["region"], "sum", CONTRIBUTIONS, **kw)
 
 
 ANSWERS = f"""

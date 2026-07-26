@@ -31,6 +31,12 @@ class Finding:
     severity: str   # "high" | "medium" | "low"
     rule: str
     detail: str
+    # True when suppressing the offending cells resolves this finding. The
+    # human-in-the-loop step escalates on what is left, so a vetter whose
+    # findings do not say so has every query it touches denied — which is what
+    # happened the first time an external checker ran end to end, because
+    # suppressability was a fixed list of the stand-in's own rule names.
+    suppressable: bool = False
 
 
 def _count_cols(df: pd.DataFrame) -> list[str]:
@@ -92,7 +98,7 @@ def leak_detector(df: pd.DataFrame | None, threshold: int | None = None,
     for c in _count_cols(df):
         small = df[df[c].isna() | (df[c] < threshold)]
         if len(small) > 0:
-            findings.append(Finding("high", "small_cell",
+            findings.append(Finding("high", "small_cell", suppressable=True, detail=
                                     f"{len(small)} cell(s) in '{c}' below threshold "
                                     f"{threshold}"))
 
@@ -103,7 +109,7 @@ def leak_detector(df: pd.DataFrame | None, threshold: int | None = None,
         dom = pd.to_numeric(df["dominance"], errors="coerce")
         dominated = df[dom.isna() | (dom > dom_threshold)]
         if len(dominated) > 0:
-            findings.append(Finding("high", "dominance",
+            findings.append(Finding("high", "dominance", suppressable=True, detail=
                                     f"{len(dominated)} cell(s) where one contributor "
                                     f"exceeds {dom_threshold:.0%} of the total (or was unresolved)"))
 
@@ -113,7 +119,7 @@ def leak_detector(df: pd.DataFrame | None, threshold: int | None = None,
         inf = pd.to_numeric(df["influence"], errors="coerce")
         influential = df[inf.isna() | (inf > influence_threshold)]
         if len(influential) > 0:
-            findings.append(Finding("high", "influence",
+            findings.append(Finding("high", "influence", suppressable=True, detail=
                                     f"{len(influential)} correlation cell(s) where removing "
                                     f"one donor shifts r by more than {influence_threshold} "
                                     "(or was unresolved)"))
@@ -125,8 +131,16 @@ def leak_detector(df: pd.DataFrame | None, threshold: int | None = None,
     return findings
 
 
-# findings that are resolved by suppressing the offending rows rather than denying
+# the stand-in's own suppression-resolved rules, kept as a name set because the
+# red-team corpus and the Alloy models refer to them by name
 SUPPRESSABLE = {"small_cell", "dominance", "influence"}
+
+
+def is_suppressable(finding: Finding) -> bool:
+    """Whether suppressing cells resolves this finding, so it need not
+    escalate. A vetter says so on the finding; the stand-in's own rules are
+    also recognised by name."""
+    return finding.suppressable or finding.rule in SUPPRESSABLE
 
 
 @dataclass(frozen=True)
@@ -142,6 +156,25 @@ class VettingParameters:
     max_rows: int
     dom_threshold: float
     influence_threshold: float
+
+
+@dataclass(frozen=True)
+class CellContext:
+    """What a vetter needs about the query behind a cell table.
+
+    A cell table alone is not enough for an external checker. Its threshold
+    counts donors and its dominance rules need each donor's share, neither of
+    which survives aggregation; and it must know which columns are the cell
+    keys and how the contributions aggregate, because a `mean` cell and a
+    `sum` cell over the same contributions are different tables. Discovered
+    the hard way: a vetter built from configuration has no query in it, so a
+    long-lived vetter given only the frame silently vetted every table as a
+    single total cell and released everything.
+    """
+
+    contributions: pd.DataFrame
+    keys: tuple[str, ...] = ()
+    aggfunc: str | None = None
 
 
 @dataclass(frozen=True)
@@ -173,8 +206,13 @@ class CellVetter:
     """
 
     name: str
+    # whether this vetter decides on donor-level contributions as well as on
+    # the cell table. The caller only pays for the extra engine query when
+    # something actually reads it.
+    needs_contributions: bool = False
 
-    def vet(self, df: pd.DataFrame, params: VettingParameters) -> Verdicts:
+    def vet(self, df: pd.DataFrame, params: VettingParameters,
+            context: CellContext | None = None) -> Verdicts:
         raise NotImplementedError
 
 
@@ -188,7 +226,8 @@ class StandinVetter(CellVetter):
 
     name = "standin"
 
-    def vet(self, df: pd.DataFrame, params: VettingParameters) -> Verdicts:
+    def vet(self, df: pd.DataFrame, params: VettingParameters,
+            context: CellContext | None = None) -> Verdicts:
         findings = leak_detector(df, params.threshold, params.max_rows,
                                  params.dom_threshold, params.influence_threshold)
         deny = any(f.severity == "high" and f.rule not in SUPPRESSABLE
@@ -222,16 +261,38 @@ class CompositeVetter(CellVetter):
         self.vetters = tuple(vetters)
         self.name = name or "+".join(v.name for v in self.vetters)
 
-    def vet(self, df: pd.DataFrame, params: VettingParameters) -> Verdicts:
+    @property
+    def needs_contributions(self) -> bool:
+        return any(v.needs_contributions for v in self.vetters)
+
+    def vet(self, df: pd.DataFrame, params: VettingParameters,
+            context: CellContext | None = None) -> Verdicts:
         suppress = pd.Series(False, index=df.index)
         findings: list[Finding] = []
         deny = False
         for vetter in self.vetters:
-            verdicts = vetter.vet(df, params)
+            verdicts = vetter.vet(df, params, context)
             suppress |= verdicts.suppress
             findings.extend(verdicts.findings)
             deny = deny or verdicts.deny
         return Verdicts(suppress=suppress, findings=findings, deny=deny)
+
+
+def build_vetter(name: str, checker_cmd: str = "") -> CellVetter:
+    """The vetter a configuration asks for (`config.PolicyConfig.vetter`).
+
+    An external checker is never the only vetter: it carries no egress rules
+    and no complementary suppression, so it is always composed WITH the
+    stand-in, and the composite suppresses a cell if either does.
+    """
+    if name == "standin":
+        return StandinVetter()
+    if name == "standin+external":
+        from .external_checker import ExternalCheckerVetter
+
+        return CompositeVetter(StandinVetter(),
+                               ExternalCheckerVetter(command=checker_cmd.split()))
+    raise ValueError(f"no vetter named {name!r}")
 
 
 @dataclass
@@ -343,15 +404,22 @@ class DisclosurePolicy:
         return pd.DataFrame({"count": rounded, "key": keys}).sort_values(
             ["count", "key"], kind="stable").index[0]
 
-    def apply(self, df: pd.DataFrame | None):
+    def needs_contributions(self) -> bool:
+        """Whether `apply` should be handed the donor-level contributions."""
+        return bool(self.vetter.needs_contributions)
+
+    def apply(self, df: pd.DataFrame | None, context: CellContext | None = None):
         """Return (released_df_or_None, action, findings).
 
-        action in {"release", "redacted", "deny"}.
+        action in {"release", "redacted", "deny"}. `contributions` is the
+        donor-level frame an external checker decides on (see
+        `QueryEngine.contributions`); vetters that do not need it ignore it,
+        and the caller need not compute it for them.
         """
         if df is None:
             return None, "deny", leak_detector(None)
 
-        verdicts = self.vetter.vet(df, self.parameters())
+        verdicts = self.vetter.vet(df, self.parameters(), context)
         findings = list(verdicts.findings)
         # findings no suppression can fix (identifier/free-text/raw) -> deny outright
         if verdicts.deny:

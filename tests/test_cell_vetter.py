@@ -109,7 +109,7 @@ class _Fixed(CellVetter):
         self.suppress_regions = set(suppress_regions)
         self.deny = deny
 
-    def vet(self, df, params):
+    def vet(self, df, params, context=None):
         mask = df["region"].isin(self.suppress_regions) if len(df) else \
             pd.Series(False, index=df.index)
         findings = [Finding("high", f"{self.name}_rule", "fixed opinion")] \

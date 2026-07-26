@@ -29,18 +29,12 @@ from __future__ import annotations
 import pandas as pd
 
 from safetre.disclosure import (
-    CellVetter, Finding, Verdicts, VettingParameters, _group_columns,
+    CellContext, CellVetter, Finding, Verdicts, VettingParameters, _group_columns,
 )
+from safetre.external_checker import RELEASE, cell_key   # noqa: F401 - shared convention
 
 # ACRO's aggregation name per measure function; a `count` cell needs none
 AGGFUNC = {"sum": "sum", "mean": "mean", "sum_sq": "sum"}
-RELEASE = "ok"
-
-
-def cell_key(row, keys: list[str]) -> tuple:
-    """The cell's identity: its group-by values as strings, or the single
-    `total` cell when a query has no group-by."""
-    return tuple(str(row[k]) for k in keys) if keys else ("total",)
 
 
 class AcroVetter(CellVetter):
@@ -55,6 +49,7 @@ class AcroVetter(CellVetter):
     """
 
     name = "acro"
+    needs_contributions = True
 
     def __init__(self, contributions: pd.DataFrame, keys: list[str],
                  aggfunc: str | None):
@@ -105,7 +100,12 @@ class AcroVetter(CellVetter):
                         verdicts.setdefault(key, "")
         return {k: (v.strip() if v else RELEASE) for k, v in verdicts.items()}
 
-    def vet(self, df: pd.DataFrame, params: VettingParameters) -> Verdicts:
+    def vet(self, df: pd.DataFrame, params: VettingParameters,
+            context: CellContext | None = None) -> Verdicts:
+        if context is not None:
+            self.contributions = context.contributions
+            self.keys = list(context.keys)
+            self.aggfunc = context.aggfunc
         verdicts = self.decisions()
         keys = self.keys or _group_columns(df)
         suppress, fired, unknown = [], {}, 0
@@ -124,8 +124,8 @@ class AcroVetter(CellVetter):
             for name in (r.strip() for r in rule.split(";") if r.strip()):
                 fired[name] = fired.get(name, 0) + 1
 
-        findings = [Finding("high", f"acro_{name}",
-                            f"{count} cell(s) failed ACRO's {name}")
+        findings = [Finding("high", f"acro_{name}", suppressable=True,
+                            detail=f"{count} cell(s) failed ACRO's {name}")
                     for name, count in sorted(fired.items())]
         if unknown:
             findings.append(Finding("high", "acro_unchecked",

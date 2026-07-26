@@ -310,6 +310,36 @@ def compile_donor_count_query(spec: QuerySpec) -> SQLPlan:
     )
 
 
+def compile_contribution_query(spec: QuerySpec) -> SQLPlan:
+    """Compile the internal per-donor contribution query.
+
+    One row per donor per cell: the group-by keys, the donor, and what that
+    donor contributed, on the scale the procedure declares
+    (`contribution_expr` — squared for `sum_sq`). This is what an external
+    output checker decides on: a frequency threshold counts donors and the
+    dominance rules need each donor's share, and neither survives aggregation
+    into a cell table.
+
+    Internal throughout: it names `donor_id`, so it is never a released frame
+    and never leaves the safepod. The public query's own NOT-NULL guards are
+    applied, so the checker sees exactly the rows the released cell counted.
+    """
+    proc = get_procedure(spec.measure.fn)
+    contribution = proc.contribution_expr(spec.measure)
+    where, params = _where(spec, _measure_guards(spec))
+    unit = _ident(f"_{spec.dataset}_u")
+    gsel = ", ".join(_ident(g) for g in spec.group_by)
+    gpre = (gsel + ", ") if spec.group_by else ""
+    value = f"{contribution} AS v, " if contribution else ""
+    sql = (
+        f"SELECT {gpre}{value}donor_id "                    # nosec
+        f"FROM {unit}{where} GROUP BY {gpre}donor_id"
+    )
+    columns = tuple(spec.group_by) + (("v",) if contribution else ()) + ("donor_id",)
+    return SQLPlan(sql=sql, params=params, output_columns=columns,
+                   source_view=f"_{spec.dataset}_u")
+
+
 class QueryEngine:
     def __init__(self, tables: dict[str, pd.DataFrame]):
         self.con = duckdb.connect(database=":memory:")
@@ -343,6 +373,29 @@ class QueryEngine:
         # enforces the frequency threshold on individuals, not rows.
         result = self._attach_donor_count(spec, compile_donor_count_query(spec), result)
         return result
+
+    def contributions(self, spec: QuerySpec) -> pd.DataFrame:
+        """One row per donor per cell, for an external checker to decide on.
+
+        Internal only: it carries `donor_id` and un-aggregated contributions,
+        so it goes to a checker inside the safepod and never towards a
+        release. A donor whose contribution is NULL is dropped — there is no
+        share for a dominance rule to weigh — which means a checker counting
+        rows here sees one donor fewer on such cells than the gateway's own
+        `n_donors` does.
+        """
+        plan = compile_contribution_query(spec)
+        frame = self.con.execute(plan.sql, plan.params).df()
+        return frame[frame["v"].notna()] if "v" in frame.columns else frame
+
+    def cell_context(self, spec: QuerySpec):
+        """Everything a vetter needs about the query behind a cell table."""
+        from .disclosure import CellContext
+
+        proc = get_procedure(spec.measure.fn)
+        return CellContext(contributions=self.contributions(spec),
+                           keys=tuple(spec.group_by),
+                           aggfunc=proc.checker_aggfunc(spec.measure))
 
     def _attach_witness(self, spec: QuerySpec, plan: SQLPlan, column: str,
                         result: pd.DataFrame) -> pd.DataFrame:

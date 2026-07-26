@@ -210,13 +210,42 @@ accredited software will want anyway.
    from a cell table, which is why both vetters take it by construction), the
    client needs a home in `safetre/` once something there calls it, and the
    choice needs a configuration switch. Those are steps 3–5.
-3. Run both in shadow: the comparison harness already does exactly this, so
-   promote it from a research script to the CI regression, reporting per-rule
-   contribution counts rather than a pass/fail.
-4. Decide §3 with the availability numbers in hand, write it into the
-   specification, and flip the default.
-5. Rewrite the preprint's gateway section, which currently describes a
-   stand-in (roadmap item 1's last deliverable).
+3. ~~Run both in shadow.~~ **Delivered.** The comparison harness runs in CI on
+   every push (`acro-compare`), and now also verifies the real
+   out-of-process checker against the in-process rules on each run.
+4. **Switchable, not switched.** `PolicyConfig.vetter` selects `standin` (the
+   default) or `standin+external`, and `checker_cmd` says how to start the
+   checker; asking for an external checker without a command fails at startup
+   rather than at the first query. End to end on the demo dataset, `sum` by
+   region releases nine regions under the stand-in alone and eight with ACRO
+   composed in — Wales, the NK-rule cell, is the difference, exactly as the
+   comparison predicted. **What is not decided is §3**: the second-moment
+   parameters. That needs an operator's judgement against the availability
+   cost, and turning ACRO on for models before deciding it would refuse far
+   more than anyone has agreed to.
+5. Rewrite the preprint's gateway section once the default flips. It now
+   describes the stand-in, the measured comparison and the seam, which is
+   what is true today.
+
+### What wiring it up cost, and what it caught
+
+Two defects surfaced only when the whole thing ran end to end, and both would
+have been invisible to unit tests of the pieces:
+
+- **A configured vetter has no query in it.** A vetter built at startup and
+  reused knows nothing about the table in front of it, so an external checker
+  given only a cell frame vetted every table as a single `total` cell and
+  released everything. Cell keys and the aggregation now travel with the
+  contributions in a `CellContext` — a `mean` cell and a `sum` cell over the
+  same contributions are different tables, and a checker told the wrong one
+  checks the wrong numbers.
+- **Suppressability was a list of the stand-in's own rule names.** The
+  human-in-the-loop step escalates whatever the gateway did not resolve by
+  suppression, and it recognised that set by name — so ACRO's findings, which
+  *had* been resolved by suppressing their cells, read as unresolved
+  residuals and denied every query they touched. A finding now declares
+  whether suppression resolves it, which is a property of the finding rather
+  than of a hard-coded vocabulary the next vetter would also have missed.
 
 ## 7. Open questions
 

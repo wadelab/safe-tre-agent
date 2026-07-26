@@ -161,8 +161,8 @@ def test_smuggled_column_in_finalized_frame_is_denied_by_contract(service, monke
     # released frames, violates the declared contract, and denies.
     real_apply = DisclosurePolicy.apply
 
-    def poisoned_apply(self, df):
-        released, action, findings = real_apply(self, df)
+    def poisoned_apply(self, df, contributions=None):
+        released, action, findings = real_apply(self, df, contributions)
         if released is not None:
             released = released.assign(sentinel=1.0)
         return released, action, findings

@@ -34,6 +34,16 @@ class PolicyConfig:
     dom_threshold: float = 0.5
     influence_threshold: float = 0.5
     round_base: int = 5
+    # which rules vet a cell: "standin" (the prototype's own) or
+    # "standin+external" (those AND an external output checker, a cell
+    # suppressed if either says so). An external checker is never the only
+    # vetter: it has no egress rules and no complementary suppression.
+    vetter: str = "standin"
+    # the command that starts that checker, e.g.
+    # "uv run --no-default-groups --group acro python redteam/acro_checker.py".
+    # There is no default: a checker the operator did not choose is not one
+    # they can vouch for, and vetting must never silently not happen.
+    checker_cmd: str = ""
 
 
 # env var -> (config field, caster). Env always wins so an operator can override
@@ -46,7 +56,11 @@ _ENV_OVERRIDES: dict[str, tuple[str, type]] = {
     "SAFETRE_DOM_THRESHOLD": ("dom_threshold", float),
     "SAFETRE_INFLUENCE_THRESHOLD": ("influence_threshold", float),
     "SAFETRE_ROUND_BASE": ("round_base", int),
+    "SAFETRE_VETTER": ("vetter", str),
+    "SAFETRE_CHECKER_CMD": ("checker_cmd", str),
 }
+
+VETTERS = ("standin", "standin+external")
 
 
 def _yaml_values(path: str) -> dict:
@@ -105,3 +119,11 @@ def _validate(cfg: PolicyConfig) -> None:
         raise ValueError("dom_threshold must be in (0, 1]")
     if cfg.influence_threshold <= 0.0:
         raise ValueError("influence_threshold must be > 0")
+    if cfg.vetter not in VETTERS:
+        raise ValueError(f"vetter must be one of {VETTERS}, not {cfg.vetter!r}")
+    # asking for an external checker without saying how to start it must fail
+    # at startup, not at the first query: a gateway that cannot reach the
+    # checker it was told to use denies everything, which is safe but useless,
+    # and the operator should learn about it before an analyst does
+    if cfg.vetter.endswith("external") and not cfg.checker_cmd.strip():
+        raise ValueError("vetter 'standin+external' needs checker_cmd")

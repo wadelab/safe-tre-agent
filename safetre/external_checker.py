@@ -32,25 +32,24 @@ security one.
 from __future__ import annotations
 
 import json
-import os
 # spawns a fixed local checker with a literal argv, never a shell
 import subprocess  # nosec B404
 
 import pandas as pd
 
-from safetre.disclosure import CellVetter, Finding, Verdicts, VettingParameters
+from .disclosure import (
+    CellContext, CellVetter, Finding, Verdicts, VettingParameters,
+)
 
 PROTOCOL = 1
-CHECKER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "acro_checker.py")
 DEFAULT_TIMEOUT = 120.0
+RELEASE = "ok"          # the verdict string meaning "this cell may go out"
 
 
-def checker_command() -> list[str]:
-    """The command that starts the checker in its own environment — the `acro`
-    dependency group, resolved separately from the runtime's
-    (`[tool.uv] conflicts` in `pyproject.toml`)."""
-    return ["uv", "run", "--frozen", "--no-default-groups", "--group", "acro",
-            "python", CHECKER]
+def cell_key(row, keys: list[str]) -> tuple:
+    """A cell's identity: its group-by values as strings, or the single
+    `total` cell of a query with no group-by."""
+    return tuple(str(row[k]) for k in keys) if keys else ("total",)
 
 
 def build_request(contributions: pd.DataFrame, keys: list[str],
@@ -91,7 +90,7 @@ def parse_response(payload: str) -> tuple[dict[tuple, str], str]:
     return verdicts, version
 
 
-class ExternalAcroVetter(CellVetter):
+class ExternalCheckerVetter(CellVetter):
     """Vets a cell table by asking a checker running in another process.
 
     Holds no ACRO code and imports nothing from it, so it is safe to construct
@@ -101,15 +100,22 @@ class ExternalAcroVetter(CellVetter):
     an answer a year later.
     """
 
-    name = "acro-external"
+    name = "external"
+    needs_contributions = True
 
-    def __init__(self, contributions: pd.DataFrame, keys: list[str],
-                 aggfunc: str | None, command: list[str] | None = None,
+    def __init__(self, command: list[str], keys: list[str] | None = None,
+                 aggfunc: str | None = None,
+                 contributions: pd.DataFrame | None = None,
                  timeout: float = DEFAULT_TIMEOUT):
+        if not command:
+            raise ValueError(
+                "an external checker needs a command to start it; there is no "
+                "default, because a checker the operator did not choose is not "
+                "a checker they can vouch for")
+        self.command = list(command)
         self.contributions = contributions
-        self.keys = list(keys)
+        self.keys = list(keys or [])
         self.aggfunc = aggfunc
-        self.command = list(command) if command else checker_command()
         self.timeout = timeout
         self.version: str | None = None
 
@@ -132,11 +138,19 @@ class ExternalAcroVetter(CellVetter):
                 + (f": {detail[-1]}" if detail else ""))
         return parse_response(done.stdout)
 
-    def vet(self, df: pd.DataFrame, params: VettingParameters) -> Verdicts:
-        # late import: the in-process vetter is only needed to reuse the cell
-        # key convention, and importing it must not drag ACRO in
-        from acro_vetter import RELEASE, cell_key
-
+    def vet(self, df: pd.DataFrame, params: VettingParameters,
+            context: CellContext | None = None) -> Verdicts:
+        if context is not None:
+            # the query's shape, not the vetter's: a long-lived vetter built
+            # from configuration knows nothing about the table in front of it
+            self.contributions = context.contributions
+            self.keys = list(context.keys)
+            self.aggfunc = context.aggfunc
+        if self.contributions is None:
+            return Verdicts(suppress=pd.Series(True, index=df.index, dtype=bool),
+                            findings=[Finding("high", "checker_uninformed",
+                                              "no contributions to check")],
+                            deny=True)
         try:
             verdicts, version = self._ask()
         except ValueError as exc:
@@ -160,8 +174,8 @@ class ExternalAcroVetter(CellVetter):
             for name in (r.strip() for r in rule.split(";") if r.strip()):
                 fired[name] = fired.get(name, 0) + 1
 
-        findings = [Finding("high", f"acro_{name}",
-                            f"{count} cell(s) failed ACRO's {name}")
+        findings = [Finding("high", f"acro_{name}", suppressable=True,
+                            detail=f"{count} cell(s) failed ACRO's {name}")
                     for name, count in sorted(fired.items())]
         if unknown:
             # a table the checker only partly answered for is a table it did

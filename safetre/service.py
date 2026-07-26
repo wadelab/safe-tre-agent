@@ -55,6 +55,14 @@ class QueryService:
         self.engine = QueryEngine(tables)
         self.policy = policy or D.DisclosurePolicy()
 
+    def _context(self, spec: QuerySpec):
+        """What an external checker needs about this query, built only when a
+        vetter actually reads it — it costs a second engine query, and the
+        stand-in rules have no use for it."""
+        if not self.policy.needs_contributions():
+            return None
+        return self.engine.cell_context(spec)
+
     def handle(self, request: str, planner, auditor: D.SessionAuditor | None = None,
                audit_log=None, user: str = "anon") -> Result:
         auditor = auditor or D.SessionAuditor()
@@ -158,7 +166,7 @@ class QueryService:
             lambda a, b: simulatable_cohort_bound(marginals, spec.dataset, a, b))
         trace.append(f"auditor: {[f.rule for f in audit_findings]}")
 
-        released, action, findings = self.policy.apply(df)
+        released, action, findings = self.policy.apply(df, self._context(spec))
         findings = findings + audit_findings
         trace.append(f"gateway: {action} ({[f.rule for f in findings]})")
 
@@ -173,7 +181,7 @@ class QueryService:
         # residual medium/high finding escalates (and a residual high denies).
         # This keeps the documented HITL step present in the secure path — today
         # nothing medium can reach here, so it is future-proofing + fail-closed.
-        residual = [f for f in findings if f.rule not in D.SUPPRESSABLE]
+        residual = [f for f in findings if not D.is_suppressable(f)]
         decision = D.hitl_decision(residual)
         trace.append(f"hitl: {decision}")
         if decision == "deny":
@@ -273,7 +281,8 @@ class QueryService:
                 trace.append(f"auditor[{role}]: {[f.rule for f in audit_findings]}")
                 return deny(audit_findings, "blocked by safe-outputs gateway")
 
-            released, action, findings = self.policy.apply(df)
+            released, action, findings = self.policy.apply(
+                df, self._context(agg))
             trace.append(f"gateway[{role}]: {action} ({[f.rule for f in findings]})")
             # P19: the model fits on a complete vetted table or not at all. A
             # redaction means some design cell is unsafe to release, so the

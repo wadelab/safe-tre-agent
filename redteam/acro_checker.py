@@ -21,9 +21,10 @@ from importlib.metadata import PackageNotFoundError, version
 
 import pandas as pd
 
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from acro_boundary import PROTOCOL          # noqa: E402
+from safetre.external_checker import PROTOCOL   # noqa: E402
 from acro_vetter import AcroVetter          # noqa: E402
 
 
