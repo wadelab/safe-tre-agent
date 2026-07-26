@@ -125,9 +125,9 @@ the argument is honest about being incomplete rather than quiet about it.
 
 - R1, R2, R3, R4, R6, R7, R8, R9, R10, R11, R12, R13
 
-**Open decisions** — questions with acceptance criteria and no answer yet:
+**Unanswered decisions** — *open* means the work has not been done; *parked* means it was scoped and deliberately left undone, with the reasoning recorded:
 
-- **[D4](decisions/D4-robust-dispersion.md)** Inference from a dispersion that cannot be released — A coefficient without a standard error is rarely publishable. Can inference — an interval, or even a significance class — be restored when the second-moment cell is too concentrated to release?
+- **[D4](decisions/D4-robust-dispersion.md)** (parked) Inference from a dispersion that cannot be released — A coefficient without a standard error is rarely publishable. Can inference — an interval, or even a significance class — be restored when the second-moment cell is too concentrated to release?
 
 ## How to read a gap
 

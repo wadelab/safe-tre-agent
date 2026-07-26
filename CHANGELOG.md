@@ -27,7 +27,19 @@ and fixes are in [docs/hardening-log.md](docs/hardening-log.md).
   the record saying where, and an argument may not cite evidence it cannot
   point at. They now appear as **unevidenced** rather than being dropped,
   which would have made the case look complete.
-- **A plan for D4**, the open question about inference from a dispersion that
+- **D4 is parked, not open** — and the decision log gained a status to say so.
+  A question nobody has got to and a question that was scoped and deliberately
+  declined are different states, and only one of them is waiting for someone.
+  The robust-dispersion route would add a second dispersion estimator to the
+  trusted computing base, a second thing an output checker must understand, a
+  bias correction to defend, and another parameter — against inference on 36
+  of 539 gaussian points on synthetic data. That is a poor trade in the
+  currency that now binds this project: not engineering effort, but how much
+  an operator must hold in their head to reason about a release.
+  Coefficients-only stands. The plan survives in the record so unparking is a
+  decision rather than a rediscovery, and a parked record must say why it was
+  parked.
+- **A plan for D4**, the question about inference from a dispersion that
   cannot be released. It reduces architecturally to a new registered
   procedure (a winsorised second moment, whose cell is vetted like any other,
   so P21 needs no new argument) and statistically to an experiment, with

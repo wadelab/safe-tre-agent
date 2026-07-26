@@ -30,7 +30,7 @@ PAGE = os.path.join(ROOT, "docs", "decision-log.md")
 
 REQUIRED = ("id", "title", "date", "status", "question", "clauses",
             "revisit_when")
-STATUSES = ("accepted", "open", "superseded")
+STATUSES = ("accepted", "open", "parked", "superseded")
 
 HEADER = """# Decision log
 
@@ -42,8 +42,14 @@ Each record states the question, the evidence it rested on, what was rejected,
 and **what would change our mind**. That last field is the one that makes a
 record worth keeping: a decision whose conditions for revision are not written
 down cannot be revisited honestly later, only defended or abandoned. Where a
-question is still open, it is recorded as open rather than left out, so the
-gaps in the argument are visible in the same place as the answers.
+question is still unanswered it is recorded as such rather than left out, so
+the gaps in the argument are visible in the same place as the answers.
+
+Two kinds of unanswered. **Open** means nobody has done the work yet.
+**Parked** means the work was scoped and the answer was *not to do it* — the
+plan survives in the record, so unparking is cheap, but the reasoning for
+leaving it alone is written down where the reasoning for doing it would have
+been. A parked question is a decision, not an omission.
 
 Records are immutable once accepted. A decision that changes gets a new record
 superseding the old one, so the reasoning that applied at the time survives
@@ -95,7 +101,7 @@ def render() -> str:
     out = [HEADER, "| | Decision | Status | Clauses |", "|---|---|---|---|"]
     for meta in records():
         status = meta.get("status", "?")
-        shown = f"**{status}**" if status == "open" else status
+        shown = f"**{status}**" if status in ("open", "parked") else status
         clauses = ", ".join(meta.get("clauses", [])) or "—"
         link = f"decisions/{meta['file']}"
         out.append(f"| {meta.get('id')} | [{meta.get('title')}]({link}) "

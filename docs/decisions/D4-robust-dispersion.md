@@ -2,7 +2,7 @@
 id: D4
 title: Inference from a dispersion that cannot be released
 date: 2026-07-26
-status: open
+status: parked
 question: >
   A coefficient without a standard error is rarely publishable. Can inference
   — an interval, or even a significance class — be restored when the
@@ -11,15 +11,32 @@ clauses: [R15, P21]
 evidence:
   - artifacts/dispersion_sensitivity.json
 revisit_when: >
-  Open, so what it needs is an answer rather than a trigger — and the
-  acceptance criteria are stated below BEFORE the experiment, so the result
-  decides the question rather than the question being fitted to the result.
-  Close this record either way: a robust dispersion that fails its coverage
-  criterion is a finding worth keeping, not a dead end to forget.
+  A researcher is actually blocked by it — the availability gap is currently
+  36 gaussian points out of 539 on synthetic data, and a real cohort where
+  the concentrated case is the common one rather than the rare one would
+  change the arithmetic. Or a robust dispersion arrives from outside with its
+  bias already characterised, so the correction does not have to be defended
+  here. Or the wider question is settled by the DP accountant (roadmap item
+  3), which would supply intervals by a route that does not need this one.
+  The plan below survives intact, so unparking is cheap.
 ---
 
-**Status: open.** Recorded so the gap is visible as a gap rather than an
-absence.
+**Status: parked, 2026-07-26.** The technical route below is sound and the
+plan stands; the judgement is that it is not worth taking now.
+
+The reason is not difficulty. A robust dispersion would add a second
+dispersion estimator to the trusted computing base, a second thing an output
+checker must understand and accept, a bias correction that has to be defended
+rather than merely chosen, and another parameter to the catalogue. Against
+that: inference on 36 of 539 gaussian skeleton points on synthetic data. That
+is a poor trade in the currency that now binds this project, which is not
+engineering effort but how much an operator has to hold in their head to
+reason about a release.
+
+Coefficients-only therefore stands as the answer for a concentrated cohort,
+and the honest thing to tell a researcher is that inference needs a less
+concentrated one. The plan is kept rather than deleted so that unparking is a
+decision rather than a rediscovery.
 
 The naive form — release the coefficients plus significance stars — does not
 work, and the reason is worth stating because it will come up again. A star is

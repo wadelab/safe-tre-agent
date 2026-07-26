@@ -161,7 +161,7 @@ def open_decisions() -> list[dict]:
             continue
         _, header, _ = open(os.path.join(DECISIONS, name)).read().split("---\n", 2)
         meta = yaml.safe_load(header) or {}
-        if meta.get("status") == "open":
+        if meta.get("status") in ("open", "parked"):
             meta["file"] = name
             out.append(meta)
     return out
@@ -212,12 +212,13 @@ def render() -> str:
                "tested somewhere; what is missing is the record saying "
                "where, which is what an assurance argument needs:\n")
     out.append("- " + ", ".join(sorted(unevidenced, key=_order)) + "\n")
-    out.append("**Open decisions** — questions with acceptance criteria and "
-               "no answer yet:\n")
+    out.append("**Unanswered decisions** — *open* means the work has not been "
+               "done; *parked* means it was scoped and deliberately left "
+               "undone, with the reasoning recorded:\n")
     for meta in open_decisions():
         question = " ".join(str(meta.get("question", "")).split())
         out.append(f"- **[{meta['id']}](decisions/{meta['file']})** "
-                   f"{meta['title']} — {question}")
+                   f"({meta['status']}) {meta['title']} — {question}")
     out.append(FOOTER)
     return "\n".join(out).rstrip() + "\n"
 

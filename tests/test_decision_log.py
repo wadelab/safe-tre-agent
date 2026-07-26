@@ -31,7 +31,7 @@ SPEC = os.path.join(ROOT, "docs", "specification.md")
 
 REQUIRED = ("id", "title", "date", "status", "question", "clauses",
             "revisit_when")
-STATUSES = ("accepted", "open", "superseded")
+STATUSES = ("accepted", "open", "parked", "superseded")
 
 
 def _records():
@@ -108,11 +108,24 @@ def test_ids_are_unique():
     assert len(ids) == len(set(ids)), f"duplicate ids in {ids}"
 
 
-def test_an_open_question_is_recorded_as_open():
-    # the register is only honest if it holds the unanswered ones too
-    assert any(meta["status"] == "open" for _, meta, _ in RECORD_LIST), (
-        "no open decisions — either the argument is complete, which is "
-        "unlikely, or open questions are being left out of the record")
+def test_an_unanswered_question_is_recorded_as_one():
+    # the register is only honest if it holds the unanswered ones too —
+    # whether nobody has done the work (open) or the work was scoped and
+    # deliberately declined (parked)
+    assert any(meta["status"] in ("open", "parked") for _, meta, _ in RECORD_LIST), (
+        "no unanswered decisions — either the argument is complete, which is "
+        "unlikely, or the questions are being left out of the record")
+
+
+@pytest.mark.parametrize("record", RECORD_LIST, ids=IDS)
+def test_a_parked_record_says_why_it_was_parked(record):
+    # parking is a decision and carries the same burden as any other: the
+    # reasoning must be in the record, not in whoever's head made the call
+    name, meta, body = record
+    if meta["status"] != "parked":
+        return
+    assert re.search(r"[Pp]arked", body), (
+        f"{name} is parked but the record does not say why")
 
 
 def test_the_index_matches_the_records():

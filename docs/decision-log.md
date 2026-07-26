@@ -8,8 +8,14 @@ Each record states the question, the evidence it rested on, what was rejected,
 and **what would change our mind**. That last field is the one that makes a
 record worth keeping: a decision whose conditions for revision are not written
 down cannot be revisited honestly later, only defended or abandoned. Where a
-question is still open, it is recorded as open rather than left out, so the
-gaps in the argument are visible in the same place as the answers.
+question is still unanswered it is recorded as such rather than left out, so
+the gaps in the argument are visible in the same place as the answers.
+
+Two kinds of unanswered. **Open** means nobody has done the work yet.
+**Parked** means the work was scoped and the answer was *not to do it* — the
+plan survives in the record, so unparking is cheap, but the reasoning for
+leaving it alone is written down where the reasoning for doing it would have
+been. A parked question is a decision, not an omission.
 
 Records are immutable once accepted. A decision that changes gets a new record
 superseding the old one, so the reasoning that applied at the time survives
@@ -21,7 +27,7 @@ alongside the reasoning that replaced it.
 | D1 | [Models fit from vetted cells, not from rows](decisions/D1-cells-first-models.md) | accepted | R14, R15, P19, P21 |
 | D2 | [Rule sets compose as a union, and the checker runs out of process](decisions/D2-acro-composition.md) | accepted | R5 |
 | D3 | [Second-moment cells get their own bound, and their own failure mode](decisions/D3-second-moment-parameters.md) | accepted | R5, R15, P19 |
-| D4 | [Inference from a dispersion that cannot be released](decisions/D4-robust-dispersion.md) | **open** | R15, P21 |
+| D4 | [Inference from a dispersion that cannot be released](decisions/D4-robust-dispersion.md) | **parked** | R15, P21 |
 
 ## D1 — Models fit from vetted cells, not from rows
 
@@ -55,11 +61,11 @@ A dominance bound calibrated for sums is a far tighter rule on sums of squares, 
 
 ## D4 — Inference from a dispersion that cannot be released
 
-*2026-07-26 · open*
+*2026-07-26 · parked*
 
 A coefficient without a standard error is rarely publishable. Can inference — an interval, or even a significance class — be restored when the second-moment cell is too concentrated to release?
 
-**What would change our mind.** Open, so what it needs is an answer rather than a trigger — and the acceptance criteria are stated below BEFORE the experiment, so the result decides the question rather than the question being fitted to the result. Close this record either way: a robust dispersion that fails its coverage criterion is a finding worth keeping, not a dead end to forget.
+**What would change our mind.** A researcher is actually blocked by it — the availability gap is currently 36 gaussian points out of 539 on synthetic data, and a real cohort where the concentrated case is the common one rather than the rare one would change the arithmetic. Or a robust dispersion arrives from outside with its bias already characterised, so the correction does not have to be defended here. Or the wider question is settled by the DP accountant (roadmap item 3), which would supply intervals by a route that does not need this one. The plan below survives intact, so unparking is cheap.
 
 [Read the record](decisions/D4-robust-dispersion.md)
 
