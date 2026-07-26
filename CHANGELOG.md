@@ -71,7 +71,8 @@ and fixes are in [docs/hardening-log.md](docs/hardening-log.md).
   `Finding` now declares whether suppression resolves it.
 - **The external-checker boundary (roadmap item 1, rollout step 2, second
   half).** `redteam/acro_checker.py` is the checker process and
-  `redteam/acro_boundary.py` the versioned JSON contract and client — which
+  the versioned JSON contract and client (now `safetre/external_checker.py`,
+  moved there when the service gained a switch for it) — which
   imports nothing from ACRO, so it is constructible in the service
   environment where ACRO cannot be installed at all (C3). **Every failure
   denies:** non-zero exit, crash, timeout, unstartable command, malformed or

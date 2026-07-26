@@ -149,7 +149,7 @@ def verify_boundary(engine: QueryEngine) -> list[str]:
     """Check the out-of-process checker agrees with the in-process vetter.
 
     The comparison runs ACRO in this process; production cannot (C3), so it
-    calls the same rules across the boundary of `acro_boundary.py`. If the two
+    calls the same rules across the boundary of `safetre/external_checker.py`. If the two
     ever disagree, the numbers this harness publishes describe rules the
     gateway does not actually apply — so this runs on every comparison, with
     the real `uv run --group acro` entry rather than a shortcut, and any

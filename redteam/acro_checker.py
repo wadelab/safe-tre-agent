@@ -2,7 +2,7 @@
 
 Runs in the `acro` dependency group — the only environment ACRO 0.4.x can be
 installed in (C3) — reads one request on stdin and writes one response on
-stdout, per the contract in `acro_boundary.py`. It is deliberately dumb: it
+stdout, per the contract in `safetre/external_checker.py`. It is deliberately dumb: it
 translates, calls ACRO's own check implementations, and reports. Every
 decision about what a failure means belongs to the caller, which denies.
 
