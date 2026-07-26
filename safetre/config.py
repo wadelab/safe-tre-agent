@@ -160,7 +160,7 @@ class PolicyConfig:
         pinned_by="tests/test_timing_channel.py",
         evidence="artifacts/timing_channel_standin.json")
     response_ceiling_ms: int = _dial(
-        1000,
+        5000,
         controls="the longest a response may take before the request is "
                  "refused",
         means="work that would exceed this is refused and the refusal is "
@@ -169,7 +169,18 @@ class PolicyConfig:
               "long. It is a compute cap in the same family as the row and "
               "memory limits, and like them it bounds cost as well as "
               "disclosure. Must be a multiple of the quantum to avoid a "
-              "half-bucket at the top.",
+              "half-bucket at the top. "
+              "Set it generously. Raising it costs nothing — padding goes to "
+              "the next QUANTUM, not to the ceiling, so no query gets slower "
+              "— and it does not weaken the hiding, because the work that "
+              "must be indistinguishable is the sub-threshold work and that "
+              "all lands in the first bucket whatever the ceiling is. The "
+              "asymmetry runs the other way: too low refuses legitimate "
+              "analysis, which is loud and damaging. The default is about "
+              "170x the worst query measured on the demo data (28 ms "
+              "steady-state); a deployment should measure its own worst case "
+              "— a leave-one-out correlation over a large cohort is the shape "
+              "to time — and leave an order of magnitude.",
         clause="R18", yaml_key="disclosure.response_ceiling_ms",
         pinned_by="tests/test_timing_channel.py")
     vetter: str = _dial(

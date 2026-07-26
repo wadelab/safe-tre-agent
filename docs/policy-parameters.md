@@ -169,11 +169,11 @@ The interval every response is rounded up to at the deployment boundary.
 
 The longest a response may take before the request is refused.
 
-**What the value means.** work that would exceed this is refused and the refusal is still padded, because an overflow is itself a signal: without a ceiling the slowest queries advertise their size by running long. It is a compute cap in the same family as the row and memory limits, and like them it bounds cost as well as disclosure. Must be a multiple of the quantum to avoid a half-bucket at the top.
+**What the value means.** work that would exceed this is refused and the refusal is still padded, because an overflow is itself a signal: without a ceiling the slowest queries advertise their size by running long. It is a compute cap in the same family as the row and memory limits, and like them it bounds cost as well as disclosure. Must be a multiple of the quantum to avoid a half-bucket at the top. Set it generously. Raising it costs nothing — padding goes to the next QUANTUM, not to the ceiling, so no query gets slower — and it does not weaken the hiding, because the work that must be indistinguishable is the sub-threshold work and that all lands in the first bucket whatever the ceiling is. The asymmetry runs the other way: too low refuses legitimate analysis, which is loud and damaging. The default is about 170x the worst query measured on the demo data (28 ms steady-state); a deployment should measure its own worst case — a leave-one-out correlation over a large cohort is the shape to time — and leave an order of magnitude.
 
 | | |
 |---|---|
-| Default | `1000` |
+| Default | `5000` |
 | Environment | `SAFETRE_RESPONSE_CEILING_MS` |
 | `config.yaml` | `disclosure.response_ceiling_ms` |
 | Clause | [R18](specification.md) |

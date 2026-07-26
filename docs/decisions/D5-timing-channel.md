@@ -22,7 +22,9 @@ revisit_when: >
   and ceiling need re-fitting to a larger dataset; or if anyone wants the
   channel closed rather than narrowed, which needs constant time — available
   today by setting the quantum equal to the ceiling, at the cost of every
-  query paying it.
+  query paying it. If the system is ever pointed at real data, revisit the
+  whole approach in favour of asynchronous delivery, which removes the channel
+  instead of narrowing it (see the end of this record).
 ---
 
 **Status: accepted 2026-07-26 — quantise with a ceiling.** Implemented as
@@ -130,3 +132,30 @@ and every response takes exactly one bucket. It was not made the default
 because every query would then pay the ceiling, and the measured exposure did
 not justify that. An operator who disagrees can have it with one setting,
 which is the point of putting the policy in a dial rather than in the code.
+
+## On the ceiling, and the structural alternative
+
+**The ceiling should be generous, and this is not a trade-off.** Padding runs
+to the next *quantum*, never to the ceiling, so raising it makes no query
+slower; and it does not weaken the hiding, because the work that must be
+indistinguishable is the sub-threshold work and that lands in the first bucket
+whatever the ceiling is. The asymmetry runs one way only: set too low it
+refuses legitimate analysis, which is loud and damaging; set too high it
+widens the tail across cohort sizes that are published anyway. Measured on the
+demo data the worst query shape — a leave-one-out correlation over three
+dimensions — takes about 28 ms steady-state, so the 5-second default leaves
+two orders of magnitude. A deployment should time its own worst case rather
+than inherit that number.
+
+**Asynchronous delivery is the better answer, and is not this one.** If a
+result is collected on a schedule rather than returned on the call, delivery
+time has nothing to do with compute time and the channel does not need
+narrowing because it does not exist. It also fits how output checking really
+works — a queue and a human, not a request and a response — and it would
+equally blunt the broader release-decision oracle, of which timing is only one
+face. It is not built here because it is an architectural change to a shell
+this project has frozen, and because the interactive demo is the thing
+reviewers actually use. Recorded as the end state, alongside the DP accountant:
+if this system ever goes near real data, submit-and-collect is what it should
+do, and quantisation is what makes the interactive version defensible in the
+meantime.

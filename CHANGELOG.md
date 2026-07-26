@@ -42,6 +42,15 @@ and fixes are in [docs/hardening-log.md](docs/hardening-log.md).
   probability, so a cross-session attacker can still order pairs at 26–70
   samples. Constant time is one setting away (quantum = ceiling) and was not
   made the default because every query would then pay the ceiling.
+  The ceiling defaults to **5 s**, which is deliberately generous: raising it
+  costs nothing, since padding runs to the next quantum and never to the
+  ceiling, and it does not weaken the hiding, since the sub-threshold work
+  that must be indistinguishable lands in the first bucket regardless. Too low
+  refuses legitimate analysis; too high widens a tail across cohort sizes that
+  are published anyway. The worst query shape measured on the demo data — a
+  leave-one-out correlation over three dimensions — is 28 ms steady-state, so
+  the default leaves two orders of magnitude, and a deployment should time its
+  own rather than inherit that.
   The demo's "Completed in Nms" is measured client-side around the fetch, so
   it reports the padded round-trip and cannot hand an analyst the unpadded
   time — checked, because a UI that printed the real duration would have
