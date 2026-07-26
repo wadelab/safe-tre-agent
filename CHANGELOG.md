@@ -8,6 +8,29 @@ and fixes are in [docs/hardening-log.md](docs/hardening-log.md).
 
 ### Added
 
+- **A parameter catalogue, generated from the parameters themselves
+  ([policy-parameters.md](docs/policy-parameters.md)).** Every dial that
+  changes what the gateway releases, on one page: what it controls, what the
+  *number* means in terms of donors and cells, how to set it, the clause that
+  governs it, the measured cost of changing it where one exists, and the test
+  that proves a change to it changes a real decision. The page is rendered
+  from metadata declared on each `PolicyConfig` field, so it cannot drift, and
+  `tests/test_policy_catalogue.py` makes the declaration mandatory: a
+  parameter added without saying what it means, citing a clause that does not
+  exist, or pointing at missing evidence fails the build. **Both documented
+  ways of setting it are exercised too** — the environment variable and the
+  `config.yaml` key must each demonstrably change the loaded policy, which is
+  the bug the loader was written to fix and which nothing had been preventing
+  from recurring. The `config.yaml` reader is now generic, driven by the
+  declared keys rather than a hand-maintained list.
+- **Removed two settings that were not settings.** The new check found
+  `hitl.default` and `model.backend` in `config.yaml`, neither of which
+  anything read — while the file's header told operators that editing it
+  changes behaviour. The HITL rule is fixed in code deliberately (a high
+  finding denies, a medium one escalates) and the backend comes from
+  `SAFETRE_LLM`; both are now said in the file, and a key no parameter reads
+  fails the build.
+
 - **The Alloy model follows the code on optional tables.** Making the gaussian
   dispersion optional falsified `P19_noFitOnSuppressedCells`, which asserted
   that no fit coexists with *any* suppressed cell of its spec — a

@@ -2,6 +2,8 @@
 # size). These values are LOADED at startup (safetre/config.py) and drive the
 # gateway and session auditor — editing them changes behaviour. Environment
 # variables (SAFETRE_MIN_CELL, SAFETRE_QUERY_BUDGET, ...) override this file.
+# Every key here is one of the parameters in docs/policy-parameters.md, which
+# says what each value MEANS; a key no parameter reads fails the build.
 disclosure:
   min_cell_size: 10        # suppress aggregate cells with fewer underlying individuals
   max_output_rows: 100     # outputs larger than this look like a row dump
@@ -11,8 +13,9 @@ disclosure:
 session:
   query_budget: 20         # max released aggregates per session before review
   differencing_delta: 10   # flag same-measure totals / cohorts differing by < this
-hitl:
-  default: human           # borderline (medium) findings escalate to a human
-model:
-  backend: mock            # mock | real
-  # real backend is configured via .env (OpenAI-compatible)
+# There is deliberately nothing here for the human-in-the-loop policy or the
+# model backend. The HITL rule is fixed in code (a high finding denies, a
+# medium one escalates) because it is not a dial an operator should turn
+# quietly, and the backend is chosen by SAFETRE_LLM in .env. This file used to
+# carry keys for both; nothing read them, which made it look configurable
+# where it was not (tests/test_policy_catalogue.py now forbids that).

@@ -38,6 +38,7 @@ nav:
       - Security model: security.md
       - Architecture: architecture.md
       - Specification: specification.md
+      - Policy parameters: policy-parameters.md
       - Safepod model: safepod.md
       - Model runtime: model-runtime.md
       - Tool manifest: tool-manifest.md
