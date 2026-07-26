@@ -290,3 +290,83 @@ def test_a_checker_that_keeps_dying_stops_being_restarted(tmp_path):
                    for f in vetter.vet(CELLS, PARAMS).findings)
     finally:
         vetter.close()
+
+
+# --- one vetter, many users (red-team, 2026-07-26) -----------------------------
+
+ECHOES_WHAT_IT_SAW = f"""
+    import json, sys
+    for line in sys.stdin:
+        request = json.loads(line)
+        keys, seen = request["keys"], []
+        for row in request["contributions"]:
+            cell = [str(row[k]) for k in keys]
+            if cell not in seen:
+                seen.append(cell)
+        print(json.dumps({{"protocol": {PROTOCOL}, "id": request["id"],
+                           "version": "1.0",
+                           "verdicts": [{{"cell": c, "rule": "ok"}} for c in seen]}}),
+              flush=True)
+"""
+
+
+def test_vetting_leaves_no_table_on_the_shared_vetter(tmp_path):
+    """The web app builds ONE vetter and serves users in parallel. If `vet`
+    writes the table it was handed onto `self`, another thread can overwrite it
+    before the payload is built, and the checker is asked about the wrong
+    table — with a matching request id, because the id is minted after the
+    swap. Nothing per-call may live on the instance."""
+    from safetre.disclosure import CellContext
+
+    vetter = ExternalCheckerVetter(_fake_checker(tmp_path, ECHOES_WHAT_IT_SAW))
+    before = (vetter.contributions, list(vetter.keys), vetter.aggfunc)
+    context = CellContext(contributions=CONTRIBUTIONS, keys=("region",),
+                          aggfunc="sum", value_class="magnitude")
+    vetter.vet(CELLS, PARAMS, context)
+    vetter.close()
+    assert (vetter.contributions, list(vetter.keys), vetter.aggfunc) == before
+
+
+def test_concurrent_users_are_never_answered_about_each_others_tables(tmp_path):
+    """The same property under load. Each thread vets a table with unique cell
+    keys and the checker answers for every cell it is actually sent, so a
+    thread reporting `checker_incomplete` was handed verdicts computed for a
+    different table. Fine-grained preemption exposes the window; this failed at
+    2 in 240 before the per-call state moved off the instance."""
+    import sys as _sys
+    import threading
+
+    from safetre.disclosure import CellContext
+
+    vetter = ExternalCheckerVetter(_fake_checker(tmp_path, ECHOES_WHAT_IT_SAW))
+    bad: list[str] = []
+    lock = threading.Lock()
+
+    def one(tag: str) -> None:
+        cells = [f"{tag}-{i}" for i in range(4)]
+        frame = pd.DataFrame({"region": cells, "n": [50] * 4})
+        context = CellContext(
+            contributions=pd.DataFrame(
+                {"region": [c for c in cells for _ in range(12)],
+                 "v": [1.0] * 48, "donor_id": list(range(48))}),
+            keys=("region",), aggfunc="sum", value_class="magnitude")
+        verdicts = vetter.vet(frame, PARAMS, context)
+        rules = [f.rule for f in verdicts.findings]
+        if any(r in ("checker_incomplete", "checker_unavailable") for r in rules):
+            with lock:
+                bad.append(f"{tag}: {rules}")
+
+    original = _sys.getswitchinterval()
+    _sys.setswitchinterval(1e-6)
+    try:
+        for round_ in range(20):
+            threads = [threading.Thread(target=one, args=(f"r{round_}u{u}",))
+                       for u in range(6)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
+    finally:
+        _sys.setswitchinterval(original)
+        vetter.close()
+    assert not bad, f"verdicts computed for another table: {bad}"

@@ -143,10 +143,14 @@ class ExternalCheckerVetter(CellVetter):
         self._process: subprocess.Popen | None = None
         self._ids = itertools.count(1)
         self._starts = 0
+        # One exchange at a time: the web app serves requests concurrently and
+        # a shared pipe has no way to tell two conversations apart. Per
+        # INSTANCE, because the pipe it guards is per instance — as a class
+        # attribute it also serialised checkers that share nothing, so one
+        # hung checker stalled every other one for its whole timeout.
+        self._lock = threading.Lock()
 
-    # one exchange at a time: the web app serves requests concurrently and a
-    # shared pipe has no way to tell two conversations apart
-    _lock = threading.Lock()
+
 
     def close(self) -> None:
         """Stop the checker. Safe to call on a process already gone."""
@@ -199,10 +203,29 @@ class ExternalCheckerVetter(CellVetter):
     def describe(self) -> str:
         return f"{self.name}({self.version})" if self.version else self.name
 
-    def _ask(self) -> tuple[dict[tuple, str], str]:
+    def _ask(self, contributions: pd.DataFrame, keys: list[str],
+             aggfunc: str | None) -> tuple[dict[tuple, str], str]:
+        """One exchange, about the table passed IN.
+
+        The table used to arrive through `self`: `vet()` assigned the
+        contributions, the keys and the aggfunc, and this method read them back
+        to build the payload — outside the lock. One vetter is shared by every
+        user of the web app, and cross-user requests deliberately run in
+        parallel, so a second thread could overwrite all three between the
+        assignment and the read. The request id cannot catch that, because the
+        id is minted after the swap: the checker answers the question it was
+        actually asked, about someone else's table, and the verdicts come back
+        matching. With cell keys in common — two researchers both grouping by
+        region — they apply, and a release records `standin+external` for
+        checks that ran on other data. Reproduced at 2 in 240 calls under
+        fine-grained preemption (red-team, 2026-07-26).
+
+        Passing the table as arguments removes the shared state rather than
+        widening the lock around it: there is now nothing on `self` for another
+        thread to overwrite.
+        """
         request_id = next(self._ids)
-        payload = json.dumps(build_request(self.contributions, self.keys,
-                                           self.aggfunc, request_id))
+        payload = json.dumps(build_request(contributions, keys, aggfunc, request_id))
         with self._lock:
             try:
                 process = self._start()
@@ -226,19 +249,24 @@ class ExternalCheckerVetter(CellVetter):
 
     def vet(self, df: pd.DataFrame, params: VettingParameters,
             context: CellContext | None = None) -> Verdicts:
+        # the query's shape, not the vetter's: a long-lived vetter built from
+        # configuration knows nothing about the table in front of it. Kept in
+        # locals for the length of this call — never on `self`, which is shared
+        # with every other request in flight.
         if context is not None:
-            # the query's shape, not the vetter's: a long-lived vetter built
-            # from configuration knows nothing about the table in front of it
-            self.contributions = context.contributions
-            self.keys = list(context.keys)
-            self.aggfunc = context.aggfunc
-        if self.contributions is None:
+            contributions = context.contributions
+            keys = list(context.keys)
+            aggfunc = context.aggfunc
+        else:
+            contributions, keys, aggfunc = (
+                self.contributions, list(self.keys), self.aggfunc)
+        if contributions is None:
             return Verdicts(suppress=pd.Series(True, index=df.index, dtype=bool),
                             findings=[Finding("high", "checker_uninformed",
                                               "no contributions to check")],
                             deny=True)
         try:
-            verdicts, version = self._ask()
+            verdicts, version = self._ask(contributions, keys, aggfunc)
         except ValueError as exc:
             # nothing checked this table, so nothing about it may be released
             return Verdicts(suppress=pd.Series(True, index=df.index, dtype=bool),
@@ -248,7 +276,7 @@ class ExternalCheckerVetter(CellVetter):
 
         suppress, fired, unknown = [], {}, 0
         for _, row in df.iterrows():
-            rule = verdicts.get(cell_key(row, self.keys))
+            rule = verdicts.get(cell_key(row, keys))
             if rule is None:
                 unknown += 1
                 suppress.append(True)
