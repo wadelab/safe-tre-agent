@@ -4,6 +4,11 @@ __pycache__/
 .env.*
 !.env.example
 data/*.csv
+# the whole of data/ is generated or scratch, and one file in it is not mine:
+# bugtest.py is Wade's ACRO repro and was swept into a commit by a broad
+# `git add` because only the CSVs were ignored. Ignore the directory and keep
+# the generator's output, rather than relying on remembering.
+data/
 redteam/results.csv
 redteam/acro_results.csv
 redteam/realmodel_results.txt
