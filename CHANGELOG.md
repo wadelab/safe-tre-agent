@@ -4,6 +4,31 @@ All notable changes to safe-tre-agent. The normative record of safety
 behaviour is [docs/specification.md](docs/specification.md); security findings
 and fixes are in [docs/hardening-log.md](docs/hardening-log.md).
 
+## Unreleased
+
+### Added
+
+- **Every clause now has a traceability row, and a test keeps it that way.**
+  The [assurance case](docs/assurance-case.md) had surfaced twelve
+  requirements asserted by the specification with no recorded evidence,
+  because the table had been scoped to the prohibitions. Writing the rows
+  meant finding the evidence rather than assuming it, which turned up three
+  clauses that were not in fact checked and one that was not met:
+  - **R7** — the human-in-the-loop routing. `hitl_decision` *is* the clause
+    and nothing tested it directly, though it is the gate every finding
+    passes through and the one this round's `suppressable` work re-routed.
+  - **R3** — the memory and thread caps were never asserted; only the row cap
+    was, incidentally, by the SafeSQL shape tests.
+  - **R11** — requires the validated spec, the compiled SQL plan, the
+    findings and the trace to be inspectable. Three of the four were
+    available; **the plan was exposed nowhere**, so the clause was not met.
+    `Result.plans` now carries it — one entry, or one per design-cell table
+    for a model — and it is safe to show because the SafeSQL shape binds
+    every value, so the string names allowlisted columns and nothing else.
+  `tests/test_requirements.py` covers all three, and
+  `test_every_clause_has_a_traceability_row` closes the hole permanently: a
+  clause may be *Partial*, but it may not be unaccounted for.
+
 ## 0.5.0 — 2026-07-26
 
 The checker, and the case for it. An external output checker can now be

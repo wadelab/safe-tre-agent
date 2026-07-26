@@ -67,6 +67,16 @@ def test_every_clause_the_specification_states_is_argued():
         "scripts/gen_assurance_case.py")
 
 
+def test_every_clause_has_a_traceability_row():
+    # the hole this closes: the table was scoped to prohibitions, so twelve
+    # requirements were asserted with no recorded evidence and nothing said
+    # so. A clause may be Partial, but it may not be unaccounted for.
+    missing = clauses_in_spec() - CLAUSES
+    assert not missing, (
+        f"clauses with no traceability row: {sorted(missing)} — add one, or "
+        "record honestly why the clause cannot be evidenced")
+
+
 def test_a_clause_without_evidence_is_shown_as_such():
     # the failure mode this whole page exists to avoid: looking complete by
     # omitting what cannot be cited

@@ -204,14 +204,21 @@ def render() -> str:
         out.append("")
 
     out.append("## Where the argument is unfinished\n")
-    out.append("**Partial clauses** — discharged, but not completely:\n")
-    out.extend(f"- {item}" for item in undeveloped)
-    out.append("\n**Clauses with no recorded evidence** — the traceability "
-               "table is scoped to the prohibitions, so these requirements "
-               "are claimed but not cited. Each is enforced somewhere and "
-               "tested somewhere; what is missing is the record saying "
-               "where, which is what an assurance argument needs:\n")
-    out.append("- " + ", ".join(sorted(unevidenced, key=_order)) + "\n")
+    if undeveloped:
+        out.append("**Partial clauses** — discharged, but not completely:\n")
+        out.extend(f"- {item}" for item in undeveloped)
+        out.append("")
+    if unevidenced:
+        # only when there are any: an empty section under a confident heading
+        # reads as a claim of completeness, which is the failure this page is
+        # supposed to prevent rather than commit
+        out.append("**Clauses with no recorded evidence** — asserted by the "
+                   "specification but carried by nothing the traceability "
+                   "table names. Each is enforced somewhere and probably "
+                   "tested somewhere; what is missing is the record saying "
+                   "where, and an argument may not cite evidence it cannot "
+                   "point at:\n")
+        out.append("- " + ", ".join(sorted(unevidenced, key=_order)) + "\n")
     out.append("**Unanswered decisions** — *open* means the work has not been "
                "done; *parked* means it was scoped and deliberately left "
                "undone, with the reasoning recorded:\n")

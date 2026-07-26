@@ -15,7 +15,7 @@ from pydantic import ValidationError
 from . import disclosure as D
 from .analyst import check_grouping_coherence, check_term_coherence, vet_request
 from .disclosure import simulatable_cohort_bound
-from .engine import QueryEngine
+from .engine import QueryEngine, compile_query
 from .procedures import get_procedure, model_registry
 from .query import QuerySpec
 
@@ -48,6 +48,12 @@ class Result:
     # released companion frames (e.g. a model's vetted cell table and summary
     # block, R15). Always None unless status is released.
     artifacts: dict[str, pd.DataFrame] | None = None
+    # the compiled SQL the request would run — one entry, or one per design
+    # cell table for a model. R11 requires a decision to be inspectable, and
+    # the plan is the part of it the caller could not otherwise reconstruct.
+    # Safe to show: the SafeSQL shape carries no values, only bound-parameter
+    # placeholders, and every identifier in it is already public catalogue.
+    plans: list[str] = field(default_factory=list)
 
 
 class QueryService:
@@ -149,6 +155,7 @@ class QueryService:
                 return Result("denied", message=gwhy, spec=spec.model_dump(),
                               findings=f, trace=trace)
 
+        plans = [compile_query(spec).sql]
         df = self.engine.run(spec)
         trace.append(f"engine: {len(df)} aggregate row(s) computed")
 
@@ -175,7 +182,8 @@ class QueryService:
         if audit_findings or action not in ("release", "redacted"):
             record("denied", spec.model_dump(), findings, None)
             return Result("denied", message="blocked by safe-outputs gateway",
-                          spec=spec.model_dump(), findings=findings, trace=trace)
+                          spec=spec.model_dump(), findings=findings, trace=trace,
+                          plans=plans)
 
         # Human-in-the-loop: suppression-resolved findings are settled, but any
         # residual medium/high finding escalates (and a residual high denies).
@@ -187,11 +195,13 @@ class QueryService:
         if decision == "deny":
             record("denied", spec.model_dump(), findings, None)
             return Result("denied", message="blocked at human-in-the-loop",
-                          spec=spec.model_dump(), findings=findings, trace=trace)
+                          spec=spec.model_dump(), findings=findings, trace=trace,
+                          plans=plans)
         if decision == "human":
             record("review", spec.model_dump(), findings, None)
             return Result("review", message="escalated to human output checker",
-                          spec=spec.model_dump(), findings=findings, trace=trace)
+                          spec=spec.model_dump(), findings=findings, trace=trace,
+                          plans=plans)
 
         auditor.record_cohort(spec.dataset, cohort)
         # Released-value shaping runs on the FINALIZED frame: corr's p_value is
@@ -201,7 +211,7 @@ class QueryService:
         status = "redacted" if action == "redacted" else "released"
         record(status, spec.model_dump(), findings, released)
         return Result(status, output=released, spec=spec.model_dump(),
-                      findings=findings, trace=trace)
+                      findings=findings, trace=trace, plans=plans)
 
     def _handle_model(self, request: str, raw: dict, auditor: D.SessionAuditor,
                       trace: list[str], record, literal: bool = False) -> Result:
@@ -236,10 +246,14 @@ class QueryService:
                           spec=raw, findings=f, trace=trace)
         trace.append(f"validation: ok ({proc.model_key(spec)})")
 
+        # bound before `deny` can be called: a fidelity refusal happens before
+        # any aggregate is planned, and the closure must not read an unset name
+        plans: list[str] = []
+
         def deny(findings: list[D.Finding], message: str) -> Result:
             record("denied", spec.model_dump(), findings, None)
             return Result("denied", message=message, spec=spec.model_dump(),
-                          findings=findings, trace=trace)
+                          findings=findings, trace=trace, plans=list(plans))
 
         # Fidelity gate: does the model answer the question that was asked?
         # A literal spec IS the question, so there is no fidelity to check (R17).
@@ -254,6 +268,7 @@ class QueryService:
 
         aggregates = proc.plan_aggregates(spec)
         roles = proc.table_roles(spec)
+        plans.extend(compile_query(a).sql for a in aggregates)
 
         # Budget precheck: each underlying aggregate is individually a
         # differencable release, so each individually counts — and an
@@ -342,5 +357,5 @@ class QueryService:
         spec_dict = spec.model_dump() | {
             "aggregates": [a.measure_key() for a in aggregates]}
         record("released", spec_dict, notes, output)
-        return Result("released", output=output, spec=spec_dict,
+        return Result("released", output=output, spec=spec_dict, plans=plans,
                       findings=notes, trace=trace, artifacts=artifacts)

@@ -285,9 +285,17 @@ exclusions.
 
 ## Traceability
 
-Each safety prohibition maps to the module that enforces it and the test that
-checks it. *Implemented* means the clause holds today; *Partial* means it holds
-with a documented limitation.
+Every clause — requirement and prohibition alike — maps to the module that
+enforces it and the test that checks it. *Implemented* means the clause holds
+today; *Partial* means it holds with a documented limitation.
+
+The requirements were added on 2026-07-26, when the
+[assurance case](assurance-case.md) made their absence visible: the table had
+been scoped to the prohibitions, so twelve clauses the specification asserts
+were carried by evidence nobody had written down. Recording them found three
+that were not in fact checked — R7's human-in-the-loop routing, R3's memory
+and thread caps — and one that was not met at all: R11 requires the compiled
+SQL plan to be inspectable, and it was exposed nowhere until `Result.plans`.
 
 | Clause | Enforced in | Checked by | Status |
 |---|---|---|---|
@@ -313,6 +321,18 @@ with a documented limitation.
 | P20 no per-observation model output | `glm.py` (output contract), `analyst.py` (intent) | `test_glm.py`, `test_procedure_conformance.py` | Implemented |
 | P21 fitter noninterference | `stats.py`, `glm.py` (pure fit) | reproducibility meta-test (`test_glm_properties.py`), `test_glm_noninterference.py`, Alloy `P21` | Implemented |
 | P22 refusals from released-equivalent data | `glm.py` (`preconditions`), `service.py` | `test_glm.py` (non-numeric, term-naming refusals) | Implemented |
+| R1 natural-language request to untrusted spec | `service.py` (`handle`), `planner.py` | `test_pipeline.py`, `test_secure.py` | Implemented |
+| R2 validate before execution | `query.py` (`QuerySpec`), `service.py` | `test_secure.py`, `test_query_properties.py`, `test_formal_enumeration.py` | Implemented |
+| R3 read-only SQL under resource caps | `engine.py` (`compile_query`, `MEMORY_LIMIT`, `THREADS`, `ROW_CAP`) | `test_formal_enumeration.py`, `test_procedure_conformance.py`, `test_requirements.py` | Implemented |
+| R4 exactly the registered measures | `procedures.py` (`REGISTRY`), `query.py` (`Measure`) | `test_procedure_conformance.py`, `test_secure.py` | Implemented |
+| R6 session lineage and budget | `disclosure.py` (`SessionAuditor`), `service.py` | `test_hardening.py`, `test_pipeline.py`, Alloy `temporal_session` | Implemented |
+| R7 human-in-the-loop routing | `disclosure.py` (`hitl_decision`, `is_suppressable`), `service.py` | `test_requirements.py`, `test_formal_temporal_sync.py` | Implemented |
+| R8 HMAC-chained audit and verification | `audit.py`, `safetre_web/app.py` | `test_secure.py`, `test_web.py` | Implemented |
+| R9 published metadata contracts | `manifest.py`, `schema.py`, `engine.py` (`marginal_donor_counts`) | `test_manifest.py`, `test_schema.py` | Implemented |
+| R10 channel and allowlist on every path | `safetre_web/channel.py`, `identity.py`, `app.py` | `test_web.py`, `test_hardening.py` | Implemented |
+| R11 decisions are inspectable | `service.py` (`Result`: spec, plans, findings, trace) | `test_requirements.py` | Implemented |
+| R12 red-team harness | `redteam/run_redteam.py`, `redteam/attacks.yaml` | CI job `test` (fails the build on any regression) | Implemented |
+| R13 no silent fallback to the mock planner | `llm.py` (`resolve_planner_mode`) | `test_llm.py` | Implemented |
 | R5 complementary suppression | `disclosure.py` (`_secondary_suppress`, `_finalize`) | `test_disclosure.py`, `test_release_equality.py` | Partial (single-dim exact, multi-dim conservative) |
 | R14 procedure registry | `procedures.py` | `test_procedure_conformance.py` | Implemented |
 | R15 GLM from vetted cells | `glm.py`, `stats.py`, `service.py` | `test_glm.py`, `test_formal_glm_enumeration.py`, `test_glm_oracle.py`, `test_second_moment.py` | Implemented |

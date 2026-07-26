@@ -49,8 +49,8 @@ the argument is honest about being incomplete rather than quiet about it.
 | P1 no code/SQL execution | `query.py`, `service.py` | `test_secure.py` | ✓ |
 | P2 no row-level output | `engine.py` (aggregate-only views) | `test_secure.py`, `test_invariants.py` | ✓ |
 | P10 non-numeric refusals | `disclosure.py` (`SessionAuditor`) | `test_hardening.py` | ✓ |
-| R1 | — | — | **unevidenced** |
-| R12 | — | — | **unevidenced** |
+| R1 natural-language request to untrusted spec | `service.py` (`handle`), `planner.py` | `test_pipeline.py`, `test_secure.py` | ✓ |
+| R12 red-team harness | `redteam/run_redteam.py`, `redteam/attacks.yaml` | CI job `test` (fails the build on any regression) | ✓ |
 
 ### Safe people
 
@@ -60,7 +60,7 @@ the argument is honest about being incomplete rather than quiet about it.
 |---|---|---|---|
 | P13 identity/channel coupling | `identity.py`, `channel.py` | `test_hardening.py`, `test_web.py` | ✓ |
 | P14 channel + allowlist gate | `channel.py`, `identity.py`, `app.py` | `test_web.py`, `test_schema.py` | ✓ |
-| R10 | — | — | **unevidenced** |
+| R10 channel and allowlist on every path | `safetre_web/channel.py`, `identity.py`, `app.py` | `test_web.py`, `test_hardening.py` | ✓ |
 
 ### Safe settings
 
@@ -73,9 +73,9 @@ the argument is honest about being incomplete rather than quiet about it.
 | P12 safe marginals & schema | `engine.py`, `manifest.py`, `schema.py` | `test_schema.py`, `test_hardening.py` | ✓ |
 | P15 tamper-evident audit | `audit.py` (HMAC chain) | `test_secure.py` | ✓ |
 | P16 concurrency serialisation | `session.py`, `app.py` | `test_hardening.py`, Alloy `temporal_session` | ✓ |
-| R3 | — | — | **unevidenced** |
-| R8 | — | — | **unevidenced** |
-| R13 | — | — | **unevidenced** |
+| R3 read-only SQL under resource caps | `engine.py` (`compile_query`, `MEMORY_LIMIT`, `THREADS`, `ROW_CAP`) | `test_formal_enumeration.py`, `test_procedure_conformance.py`, `test_requirements.py` | ✓ |
+| R8 HMAC-chained audit and verification | `audit.py`, `safetre_web/app.py` | `test_secure.py`, `test_web.py` | ✓ |
+| R13 no silent fallback to the mock planner | `llm.py` (`resolve_planner_mode`) | `test_llm.py` | ✓ |
 
 ### Safe data
 
@@ -87,8 +87,8 @@ the argument is honest about being incomplete rather than quiet about it.
 | P4 internal variables never leave | `query.py`, `engine.py` | `test_secure.py`, Lean `P4` | ✓ |
 | P5 minimum donor count | `disclosure.py`, `engine.py` (`n_donors`) | `test_secure.py`, `test_disclosure.py` | ✓ |
 | P6 dominance / influence | `disclosure.py`, `engine.py` | `test_secure.py`, `test_disclosure.py` | ✓ |
-| R2 | — | — | **unevidenced** |
-| R9 | — | — | **unevidenced** |
+| R2 validate before execution | `query.py` (`QuerySpec`), `service.py` | `test_secure.py`, `test_query_properties.py`, `test_formal_enumeration.py` | ✓ |
+| R9 published metadata contracts | `manifest.py`, `schema.py`, `engine.py` (`marginal_donor_counts`) | `test_manifest.py`, `test_schema.py` | ✓ |
 | R14 procedure registry | `procedures.py` | `test_procedure_conformance.py` | ✓ |
 
 ### Safe outputs
@@ -105,11 +105,11 @@ the argument is honest about being incomplete rather than quiet about it.
 | P20 no per-observation model output | `glm.py` (output contract), `analyst.py` (intent) | `test_glm.py`, `test_procedure_conformance.py` | ✓ |
 | P21 fitter noninterference | `stats.py`, `glm.py` (pure fit) | reproducibility meta-test (`test_glm_properties.py`), `test_glm_noninterference.py`, Alloy `P21` | ✓ |
 | P22 refusals from released-equivalent data | `glm.py` (`preconditions`), `service.py` | `test_glm.py` (non-numeric, term-naming refusals) | ✓ |
-| R4 | — | — | **unevidenced** |
+| R4 exactly the registered measures | `procedures.py` (`REGISTRY`), `query.py` (`Measure`) | `test_procedure_conformance.py`, `test_secure.py` | ✓ |
 | R5 complementary suppression | `disclosure.py` (`_secondary_suppress`, `_finalize`) | `test_disclosure.py`, `test_release_equality.py` | **undeveloped** |
-| R6 | — | — | **unevidenced** |
-| R7 | — | — | **unevidenced** |
-| R11 | — | — | **unevidenced** |
+| R6 session lineage and budget | `disclosure.py` (`SessionAuditor`), `service.py` | `test_hardening.py`, `test_pipeline.py`, Alloy `temporal_session` | ✓ |
+| R7 human-in-the-loop routing | `disclosure.py` (`hitl_decision`, `is_suppressable`), `service.py` | `test_requirements.py`, `test_formal_temporal_sync.py` | ✓ |
+| R11 decisions are inspectable | `service.py` (`Result`: spec, plans, findings, trace) | `test_requirements.py` | ✓ |
 | R15 GLM from vetted cells | `glm.py`, `stats.py`, `service.py` | `test_glm.py`, `test_formal_glm_enumeration.py`, `test_glm_oracle.py`, `test_second_moment.py` | ✓ |
 | R16 skeleton export + model check | `procedures.py`, `formal/` | `test_skeleton_sync.py`, `test_formal_alloy_sync.py`, `test_formal_lean_sync.py`, CI `formal` job | ✓ |
 | R17 literal spec entry | `service.py` (`_literal_spec`) | `test_literal_spec.py` | ✓ |
@@ -120,10 +120,6 @@ the argument is honest about being incomplete rather than quiet about it.
 
 - P11 — simulatable differencing (Partial (one-bit residual, N1))
 - R5 — complementary suppression (Partial (single-dim exact, multi-dim conservative))
-
-**Clauses with no recorded evidence** — the traceability table is scoped to the prohibitions, so these requirements are claimed but not cited. Each is enforced somewhere and tested somewhere; what is missing is the record saying where, which is what an assurance argument needs:
-
-- R1, R2, R3, R4, R6, R7, R8, R9, R10, R11, R12, R13
 
 **Unanswered decisions** — *open* means the work has not been done; *parked* means it was scoped and deliberately left undone, with the reasoning recorded:
 
