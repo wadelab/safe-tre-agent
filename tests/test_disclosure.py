@@ -211,3 +211,47 @@ def test_secondary_suppression_two_dims_margin():
         for lvl in df[dim].unique():
             n_missing = (df[dim] == lvl).sum() - (released[dim] == lvl).sum()
             assert n_missing != 1
+
+
+# --- a missing value in an integer cell key (red-team, 2026-07-26) -------------
+
+def test_a_missing_value_in_an_int_key_does_not_disable_suppression():
+    """`age_rating` and `wave` are integer dimensions. One unrated app makes
+    the column float64 on the way out of DuckDB, and the old "float means
+    measure" test then dropped it from the cell keys — which silently returned
+    `_secondary_suppress` at its `not group_cols` guard and turned complementary
+    suppression off for the whole query."""
+    from safetre.disclosure import DisclosurePolicy, _group_columns
+
+    policy = DisclosurePolicy(threshold=10, round_base=5)
+    frame = pd.DataFrame({"age_rating": [3, 7, None, 12],
+                          "value": [1.0, 2.0, 3.0, 4.0], "n": [40, 30, 20, 3]})
+    assert frame["age_rating"].dtype == "float64"
+    assert _group_columns(frame) == ["age_rating"]
+    assert _group_columns(frame, ("age_rating",)) == ["age_rating"]
+
+    for keys in (None, ("age_rating",)):
+        _, extra = policy._secondary_suppress(frame, frame[frame.n >= 10], keys)
+        assert extra == 1, "one cell suppressed leaves a recoverable margin"
+
+
+def test_a_missing_value_in_an_int_key_keeps_the_order_tie_break():
+    """Hardening #28: of two cells that both release as n=10, the row order
+    must not say which had more rows. The tie-break is the cell key, so losing
+    the key loses the protection."""
+    from safetre.disclosure import DisclosurePolicy
+
+    policy = DisclosurePolicy(threshold=10, round_base=5)
+    columns = {"value": [5.0, 6.0], "n_donors": [12, 9], "dominance": [0.1, 0.1]}
+    ordered = pd.DataFrame({"wave": [1.0, 2.0], "n": [12, 9], **columns})
+    reversed_ = pd.DataFrame({"wave": [2.0, 1.0], "n": [12, 9], **columns})
+    for keys in (None, ("wave",)):
+        assert (list(policy._finalize(ordered, keys)["wave"])
+                == list(policy._finalize(reversed_, keys)["wave"]))
+
+
+def test_a_genuine_float_measure_is_not_mistaken_for_a_cell_key():
+    from safetre.disclosure import _group_columns
+
+    frame = pd.DataFrame({"region": ["a", "b"], "value": [1.25, 3.5], "n": [40, 30]})
+    assert _group_columns(frame) == ["region"]

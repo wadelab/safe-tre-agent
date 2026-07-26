@@ -58,15 +58,55 @@ def _count_cols(df: pd.DataFrame) -> list[str]:
 
 
 # payload and internal-helper columns: everything else in an aggregate frame is
-# a cell key. Group keys are categorical/int; float columns are measures.
+# a cell key.
 _NON_KEY_COLUMNS = COUNT_COLUMNS | {"value", "p_value", "dominance", "influence"}
 
 
-def _group_columns(df: pd.DataFrame) -> list[str]:
-    """The cell-key columns of an aggregate frame, in frame order."""
+def _looks_like_a_measure(series: pd.Series) -> bool:
+    """A float column carrying genuinely fractional values is a measure.
+
+    The fallback for callers with no query context. It used to be "float dtype
+    means measure", which is wrong for a reason ordinary data supply every day:
+    an integer group key with a single missing value comes back from the engine
+    as float64. `age_rating` and `wave` are both int dimensions, and one unrated
+    app was enough to make the key stop being recognised as a key — silently
+    disabling complementary suppression and removing the tie-break that keeps a
+    released row order from ranking cells more finely than the released counts
+    do (hardening #28). Integral-valued floats are therefore still keys.
+    """
+    if not pd.api.types.is_float_dtype(series):
+        return False
+    values = series.dropna()
+    return not bool(len(values)) or not bool((values == values.round()).all())
+
+
+def _key_text(series: pd.Series) -> pd.Series:
+    """A cell key as text, for ordering and tie-breaking.
+
+    Element-wise rather than `astype(str)`: a missing value in a key column
+    survives `astype` as a float NaN under the newer string dtypes, which then
+    fails to join. A cell whose key is missing still has to sort somewhere
+    deterministic, so it renders like any other value.
+    """
+    return series.map(lambda v: "" if v is None or v != v else str(v))
+
+
+def _group_columns(df: pd.DataFrame, keys: tuple[str, ...] | None = None) -> list[str]:
+    """The cell-key columns of an aggregate frame, in frame order.
+
+    `keys` is authoritative when the caller knows them — the query's group-by,
+    carried on `CellContext` — and everything on the service path does. The
+    heuristic below is for callers that do not (the CLI, the red-team oracle,
+    a frame handed straight to a policy), and it is deliberately conservative:
+    treating a key as a payload column loses protection, whereas the reverse
+    only sorts on one more column.
+    """
+    if keys is not None:
+        present = [c for c in df.columns if c in set(keys)]
+        return present
     return [c for c in df.columns
             if str(c).lower() not in _NON_KEY_COLUMNS
-            and not pd.api.types.is_float_dtype(df[c])]
+            and not _looks_like_a_measure(df[c])]
 
 
 def leak_detector(df: pd.DataFrame | None, threshold: int | None = None,
@@ -378,7 +418,8 @@ class DisclosurePolicy:
                                  influence_threshold=self.influence_threshold,
                                  moment2_dom_threshold=self.moment2_dom_threshold)
 
-    def _finalize(self, df: pd.DataFrame) -> pd.DataFrame:
+    def _finalize(self, df: pd.DataFrame,
+                  keys: tuple[str, ...] | None = None) -> pd.DataFrame:
         """Drop internal helper columns, round released counts, and order the
         rows by released quantities alone.
 
@@ -401,15 +442,16 @@ class DisclosurePolicy:
         ordering = pd.DataFrame(index=out.index)
         if counts:
             ordering["_count"] = -out[counts[0]]           # released count, descending
-        for key in _group_columns(out):
-            ordering[f"_key_{key}"] = out[key].astype(str)
+        for key in _group_columns(out, keys):
+            ordering[f"_key_{key}"] = _key_text(out[key])
         if len(ordering.columns):
             out = out.loc[ordering.sort_values(list(ordering.columns),
                                                kind="stable").index]
         return out.reset_index(drop=True)
 
-    def _secondary_suppress(self, original: pd.DataFrame,
-                            released: pd.DataFrame) -> tuple[pd.DataFrame, int]:
+    def _secondary_suppress(self, original: pd.DataFrame, released: pd.DataFrame,
+                            keys: tuple[str, ...] | None = None
+                            ) -> tuple[pd.DataFrame, int]:
         """Complementary suppression: a margin with exactly one suppressed cell
         leaks it (margin total minus the released cells recovers the value), so
         also suppress the smallest remaining cell in that margin.
@@ -423,7 +465,7 @@ class DisclosurePolicy:
         auditor's job, not this one's.
         """
         count_cols = _count_cols(original)
-        group_cols = _group_columns(original)
+        group_cols = _group_columns(original, keys)
         if not count_cols or not group_cols or len(released) == len(original):
             return released, 0
         size = count_cols[0]
@@ -445,12 +487,14 @@ class DisclosurePolicy:
                     orig_slice = orig_slice[orig_slice[dim] == lvl]
                     rel_slice = rel_slice[rel_slice[dim] == lvl]
                 if len(orig_slice) - len(rel_slice) == 1 and len(rel_slice) > 0:
-                    released = released.drop(index=self._sacrifice(rel_slice, size))
+                    released = released.drop(
+                        index=self._sacrifice(rel_slice, size, keys))
                     extra += 1
                     changed = True
         return released, extra
 
-    def _sacrifice(self, candidates: pd.DataFrame, size: str):
+    def _sacrifice(self, candidates: pd.DataFrame, size: str,
+                   keys: tuple[str, ...] | None = None):
         """Which cell complementary suppression gives up.
 
         Still the smallest cell — but ranked on the count as it will be
@@ -462,9 +506,13 @@ class DisclosurePolicy:
         #27, the same class as #26).
         """
         rounded = (candidates[size] / self.round_base).round().astype(int)
-        keys = candidates[_group_columns(candidates)].astype(str).apply(
-            lambda row: "|".join(row), axis=1)
-        return pd.DataFrame({"count": rounded, "key": keys}).sort_values(
+        columns = _group_columns(candidates, keys)
+        cell_keys = pd.Series(
+            ["|".join(parts) for parts in zip(
+                *(_key_text(candidates[c]) for c in columns), strict=True)]
+            if columns else [""] * len(candidates),
+            index=candidates.index)
+        return pd.DataFrame({"count": rounded, "key": cell_keys}).sort_values(
             ["count", "key"], kind="stable").index[0]
 
     def needs_contributions(self) -> bool:
@@ -482,6 +530,9 @@ class DisclosurePolicy:
         if df is None:
             return None, "deny", leak_detector(None)
 
+        # the query's own group-by, when the caller knows it: a cell key must
+        # not be identified by guessing at dtypes when the spec says what it is
+        keys = context.keys if context is not None and context.keys else None
         verdicts = self.vetter.vet(df, self.parameters(), context)
         findings = list(verdicts.findings)
         # findings no suppression can fix (identifier/free-text/raw) -> deny outright
@@ -490,16 +541,16 @@ class DisclosurePolicy:
 
         if bool(verdicts.suppress.any()):
             redacted = df[~verdicts.suppress].copy()
-            redacted, extra = self._secondary_suppress(df, redacted)
+            redacted, extra = self._secondary_suppress(df, redacted, keys)
             if extra:
                 findings.append(Finding(
                     "low", "secondary_suppression",
                     "complementary cells were suppressed to protect margins",
                     audit_detail=f"{extra} complementary cell(s) suppressed to "
                                  f"protect margins"))
-            return self._finalize(redacted), "redacted", findings
+            return self._finalize(redacted, keys), "redacted", findings
 
-        return self._finalize(df), "release", findings
+        return self._finalize(df, keys), "release", findings
 
 
 def _dim_value_set(universe: set, predicates: list) -> set:
