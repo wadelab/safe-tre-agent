@@ -60,6 +60,7 @@ nav:
       - Maintenance guidelines: maintenance.md
   - Engineering record:
       - Hardening log: hardening-log.md
+      - Decision log: decision-log.md
       - Best-practice review: best-practice-review.md
       - ACRO comparison: acro-comparison.md
       - ACRO integration design: acro-integration.md

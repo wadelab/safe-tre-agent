@@ -8,6 +8,20 @@ and fixes are in [docs/hardening-log.md](docs/hardening-log.md).
 
 ### Added
 
+- **A decision log, with the field that usually goes missing
+  ([decision-log.md](docs/decision-log.md)).** The hardening log records what
+  went wrong; this records what was *chosen* where more than one answer was
+  defensible — the question, the evidence, what was rejected, and **what would
+  change our mind**. Four records to start: models fitting from vetted cells
+  rather than rows (D1), rule sets composing as a union with the checker out
+  of process (D2), second moments getting their own bound and their own
+  failure mode (D3), and inference from an unreleasable dispersion (D4), which
+  is recorded as **open** so the gap in the argument sits beside the answers
+  rather than being absent. `tests/test_decision_log.py` fails the build on a
+  missing field, a clause not in the specification, evidence that does not
+  exist, a `revisit_when` too short to be a condition, a broken cross-record
+  link, or a stale index — and on there being no open questions at all, which
+  would mean they were being left out rather than answered.
 - **A parameter catalogue, generated from the parameters themselves
   ([policy-parameters.md](docs/policy-parameters.md)).** Every dial that
   changes what the gateway releases, on one page: what it controls, what the
