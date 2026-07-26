@@ -270,13 +270,18 @@ Three consequences worth carrying forward:
   families that need second moments (anything with a variance, a standard
   error, or an *F*) inherits this ceiling; families built on counts
   (binomial) or first moments (poisson with a log-exposure offset) do not.
-- **It sharpens the ACRO question (roadmap item 1).** ACRO's NK-rule is
-  stricter than the single-contributor bound on concentrated cells (see the
-  [ACRO comparison](acro-comparison.md)), so applying ACRO's dominance rules
-  to a `sum_sq` cell would refuse strictly more than the current bound does.
-  Integration must decide deliberately whether the second-moment cell is
-  checked on the same parameters as the first — the answer is not obviously
-  yes.
+- **It sharpened the ACRO question (roadmap item 1), and the answer is now
+  in the code.** ACRO's NK-rule is stricter than the single-contributor bound
+  on concentrated cells (see the [ACRO comparison](acro-comparison.md)), so
+  applying ACRO's dominance rules to a `sum_sq` cell would refuse strictly
+  more than the current bound does. *Decided 2026-07-26
+  ([integration design §3](acro-integration.md)):* the bound is selected by
+  the released value's disclosure class, and `sum_sq` carries its own class
+  (`moment2`) so a second moment can be checked at its own stated parameter
+  rather than inheriting one calibrated for sums. The default is unchanged.
+  Separately, a gaussian model whose dispersion cannot be released now
+  returns its coefficients without inference rather than nothing at all,
+  which recovers the 36 models this ceiling was refusing.
 - **It is a reason to keep the engine-side route open.** A model fitted from
   rows with a leverage witness answers a different question about one donor's
   influence than a dominance bound on a squared aggregate does, and it may be

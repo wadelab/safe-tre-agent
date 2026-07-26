@@ -8,6 +8,20 @@ and fixes are in [docs/hardening-log.md](docs/hardening-log.md).
 
 ### Added
 
+- **The Alloy model follows the code on optional tables.** Making the gaussian
+  dispersion optional falsified `P19_noFitOnSuppressedCells`, which asserted
+  that no fit coexists with *any* suppressed cell of its spec — a
+  machine-checked model that no longer described the system. `Cell` now
+  carries a `Required`/`Optional` role, the service rule mirrors
+  all-or-nothing consumption, and P19 splits into
+  `P19_noFitOnSuppressedRequiredCells` and
+  `P19_optionalTablesAreAllOrNothing`. A new satisfiable run
+  (`CoefficientsWithoutDispersion`) exhibits a fit alongside a suppressed
+  optional cell, so the weakened rule is shown to still permit the case it
+  was weakened for rather than being taken on trust. Checking it locally
+  found a real counterexample first: the rewritten service rule allowed a fit
+  with no inputs at all, since a spec of nothing but optional tables was
+  expressible in the model though no procedure can express one.
 - **A second moment is no longer checked as though it were a sum
   ([acro-integration §3](docs/acro-integration.md)).** Squaring is not
   share-preserving: a donor holding a fraction `p` of a cell holds

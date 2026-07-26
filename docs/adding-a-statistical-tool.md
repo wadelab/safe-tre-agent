@@ -49,6 +49,8 @@ A new model procedure implements the `ModelProcedure` interface
 | **O2 compile safety** | `plan_aggregates` | Emits ordinary `QuerySpec`s (`group_by=[factor]`); the proven SafeSQL shape stays in the engine — the tool cannot deviate from it. |
 | **O3 influence bound** | *(inherited)* | The planned `mean`/`sum_sq` aggregates carry the standard dominance witness; the tool adds none of its own. |
 | **O4 lineage identity** | *(inherited)* | Cohorts flow through the standard `QuerySpec.filters`. |
+| **Contribution** | `contribution_expr`, `checker_aggfunc` | How one donor contributes to a cell, and how those contributions aggregate — what an external output checker decides on, since a threshold counts donors and a dominance rule needs shares, neither of which survives aggregation. Declared with the procedure because it knows the *scale* its rule works on: `sum_sq` contributes squared. `None` where there is no donor-additive contribution. |
+| **Optional tables** *(model procedures)* | `optional_roles` | Planned tables the model can be fitted without, costing part of the output rather than the fit. Today only the gaussian dispersion. Everything else is required, and a suppressed required cell denies the model (P19). |
 | **Output contract** | `output_contract` | Every released column of every frame (`output`, `cells`, `model`) is classified — the gateway's treatment is declared, not inferred. |
 | **P19 fail-closed** | *(inherited from `service._handle_model`)* | Any suppressed group cell denies the whole model, loudly. |
 | **P21 noninterference** | `fit` signature `(finalized, spec)` | The fitter consumes finalized tables and nothing else; `safetre/anova.py` never imports the engine, database, or service. |

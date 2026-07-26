@@ -46,6 +46,16 @@ release — so neither is a superset and the integration keeps both*;
 compatibility notes for TRE operators (started, same page); an updated
 gateway section in the preprint.
 
+**Rollout, as it stands (2026-07-26).** The seam, the rules and the boundary
+are built and the switch exists; the default is unchanged. `CellVetter` is
+where rules enter, so ACRO decides *only* which cells release and never how a
+release is rounded, ordered or shaped. ACRO's own implementations run through
+it, and out of process behind a versioned contract where every failure denies,
+because it cannot be imported into the service environment at all (C3).
+`SAFETRE_VETTER=standin+external` turns it on. What is left is the operator's
+judgement rather than engineering: whether to make it the default, and the
+preprint's gateway section, which is rewritten when that happens.
+
 ## 2. Formal executable specification (fellowship WP2)
 
 The `QuerySpec` space is finite and small, which is what makes it provable.

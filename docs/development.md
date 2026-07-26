@@ -98,8 +98,20 @@ tool schemas plus deterministic validators. Listing a tool in
 
 Controls live in `safetre/disclosure.py`:
 
-- output checks (per-result) → extend `leak_detector` / `DisclosurePolicy`;
+- per-cell rules (is this cell releasable?) → a `CellVetter`. `StandinVetter`
+  holds the prototype's own; `CompositeVetter` runs several and suppresses if
+  any of them does. A vetter only ever *decides* — suppression, finalization
+  and released-value shaping stay the policy's, which is what keeps the
+  release-equality property true whatever rules run
+  ([the seam](acro-integration.md));
+- what a released table may contain at all (identifiers, free text) →
+  `leak_detector`, which is also the red-team's ground-truth oracle;
 - session checks (cross-query) → extend `SessionAuditor`.
+
+A new vetter's findings must say whether suppressing the offending cells
+resolves them (`Finding.suppressable`). One that does not has every query it
+touches escalated and denied — which is exactly what happened the first time
+an external checker ran end to end.
 
 Add a finding `rule`, wire it into `QueryService` if it needs a new decision, and
 cover it in `tests/test_disclosure.py` and the red-team (`redteam/attacks.yaml`).

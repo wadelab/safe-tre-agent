@@ -32,12 +32,13 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 MODELS: dict[str, dict[str, set[str]]] = {
     "glm_gateway.als": {
         "checks": {
-            "P19_noFitOnSuppressedCells",
+            "P19_noFitOnSuppressedRequiredCells",
+            "P19_optionalTablesAreAllOrNothing",
             "P21_fitterSeesOnlyReleasedCells",
             "P4_internalNeverEntersAModel",
             "AdmissibleSpaceMatchesCatalogue",
         },
-        "runs": {"someAdmissibleSpec"},
+        "runs": {"someAdmissibleSpec", "CoefficientsWithoutDispersion"},
     },
     "disclosure_policy.als": {
         "checks": {

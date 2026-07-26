@@ -9,8 +9,11 @@
 // cell of its spec is released, and consumes exactly those cells.
 //
 // What is checked:
-//   P19_noFitOnSuppressedCells  — no fit coexists with a suppressed cell of
-//                                 its spec (deny on incomplete cell table);
+//   P19_noFitOnSuppressedRequiredCells — no fit coexists with a suppressed
+//                                 REQUIRED cell of its spec (deny on an
+//                                 incomplete cell table);
+//   P19_optionalTablesAreAllOrNothing — an optional table (the gaussian
+//                                 dispersion) is consumed whole or not at all;
 //   P21_fitterSeesOnlyReleasedCells — a fit's inputs are all-and-only the
 //                                 gateway-released cells of its spec;
 //   P4_internalNeverEntersAModel — over the REAL catalogue atoms, at exact
@@ -80,8 +83,17 @@ fact OnlyAdmissibleSpecsExist { all s: GLMSpec | admissible[s] }
 abstract sig Status {}
 one sig Released, Suppressed extends Status {}
 
+// A design cell belongs to one of the model's planned tables. A REQUIRED table
+// is one the fit cannot proceed without; an OPTIONAL one buys part of the
+// output rather than the fit itself — today only the gaussian dispersion,
+// whose sums of squares give standard errors and R2 but no coefficient
+// (procedures.ModelProcedure.optional_roles, spec P19 as amended 2026-07-26).
+abstract sig Role {}
+one sig Required, Optional extends Role {}
+
 sig Cell {
   cellSpec: one GLMSpec,
+  role: one Role,           // free: both kinds of table are explored
   status: one Status,       // free: the checker explores every vetting outcome
 }
 
@@ -90,23 +102,61 @@ sig Fit {
   inputs: set Cell,
 }
 
+// Every model plans at least one REQUIRED table: `optional_roles` is a strict
+// subset of `table_roles` (procedures.py), so there is always something the
+// fit rests on. Without this the checker finds a fit with no inputs at all —
+// a spec of nothing but optional tables, which no procedure can express.
+fact PlannedTablesIncludeARequiredOne {
+  all s: GLMSpec |
+    (some c: Cell | c.cellSpec = s) implies
+    (some c: Cell | c.cellSpec = s and c.role = Required)
+}
+
 fact ServiceRule {
-  all f: Fit | {
-    // the fit consumes exactly its spec's design cells ...
-    f.inputs = { c: Cell | c.cellSpec = f.fitSpec }
-    some f.inputs
-    // ... and exists only when the gateway released every one of them
-    all c: f.inputs | c.status = Released
-  }
+  all f: Fit |
+    let mine = { c: Cell | c.cellSpec = f.fitSpec },
+        req  = { c: Cell | c.cellSpec = f.fitSpec and c.role = Required },
+        opt  = { c: Cell | c.cellSpec = f.fitSpec and c.role = Optional } | {
+      some mine
+      // a fit exists only when every REQUIRED table released completely ...
+      all c: req | c.status = Released
+      // ... and it consumes an optional table exactly when that table released
+      // completely too: all of it, or none of it. Half a table would silently
+      // change the quantity it supplies.
+      (all c: opt | c.status = Released) implies f.inputs = mine
+                                            else f.inputs = req
+    }
 }
 
 // --- the checked properties --------------------------------------------------
 
-assert P19_noFitOnSuppressedCells {
+// P19 as amended: a suppressed REQUIRED cell denies the model outright. A
+// suppressed optional cell costs the analyst what that table supplied, which
+// the release states; it never lets a fit proceed on a partial table.
+assert P19_noFitOnSuppressedRequiredCells {
   no f: Fit, c: Cell |
-    c.cellSpec = f.fitSpec and c.status = Suppressed
+    c.cellSpec = f.fitSpec and c.role = Required and c.status = Suppressed
 }
-check P19_noFitOnSuppressedCells for 6 GLMSpec, 18 Cell, 6 Fit
+check P19_noFitOnSuppressedRequiredCells for 6 GLMSpec, 18 Cell, 6 Fit
+
+// the optional table is all or nothing: no fit ever consumes some of an
+// optional table while another of its cells was suppressed
+assert P19_optionalTablesAreAllOrNothing {
+  no f: Fit, taken, dropped: Cell |
+    taken in f.inputs and taken.role = Optional and
+    dropped.cellSpec = f.fitSpec and dropped.role = Optional and
+    dropped.status = Suppressed
+}
+check P19_optionalTablesAreAllOrNothing for 6 GLMSpec, 18 Cell, 6 Fit
+
+// The amended P19 is not vacuous: a fit CAN coexist with a suppressed optional
+// table. That IS option 4 — coefficients released without their dispersion —
+// so the checker is made to exhibit it rather than the reader taking it on
+// trust that the weakened rule still permits the case it was weakened for.
+run CoefficientsWithoutDispersion {
+  some f: Fit, c: Cell |
+    c.cellSpec = f.fitSpec and c.role = Optional and c.status = Suppressed
+} for 6 GLMSpec, 18 Cell, 6 Fit
 
 assert P21_fitterSeesOnlyReleasedCells {
   all f: Fit | f.inputs.status = Released and f.inputs.cellSpec = f.fitSpec
