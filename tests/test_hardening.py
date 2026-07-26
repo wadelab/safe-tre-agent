@@ -160,6 +160,40 @@ def test_published_marginals_suppress_subthreshold(tables):
                 assert all(k in {str(x) for x in dom} for k in counts)
 
 
+def test_published_marginals_do_not_name_subthreshold_values_of_internal_columns(tables):
+    """A column with no declared domain has a data-derived key set, so a key IS
+    a disclosure. `age_years` is the case that matters: it is an internal
+    filter that may never be grouped or returned, and count-nulling published
+    the exact ages present, including ages held by one donor.
+    """
+    from safetre.schema import declared_domain
+
+    eng = QueryEngine(tables)
+    raw = eng.marginal_donor_counts()
+    pub = eng.published_marginal_donor_counts(threshold=10, round_base=5)
+
+    unique = {ds: sorted(v for v, c in per_dim.get("age_years", {}).items() if c == 1)
+              for ds, per_dim in raw.items()}
+    assert any(unique.values()), "expected at least one singleton age in the fixture"
+
+    for dataset, per_dim in pub.items():
+        for dim, counts in per_dim.items():
+            if declared_domain(dim) is not None:
+                continue
+            assert all(c is not None for c in counts.values()), (
+                f"{dataset}.{dim} has no declared domain, so a null count still "
+                f"names a sub-threshold value")
+            for v, c in counts.items():
+                assert raw[dataset][dim][_as_observed(raw[dataset][dim], v)] >= 10
+        for v in unique.get(dataset, []):
+            assert str(v) not in per_dim.get("age_years", {})
+
+
+def _as_observed(counts: dict, key: str):
+    """The raw (typed) key matching a published string key."""
+    return next(k for k in counts if str(k) == key)
+
+
 def test_differencing_refusal_has_no_numeric_bound(tables):
     n_ni = int((tables["donors"]["region"] == "Northern Ireland").sum())
     svc = QueryService(tables)

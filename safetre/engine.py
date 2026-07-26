@@ -488,8 +488,24 @@ class QueryEngine:
         count-nulled: an undeclared value (a hostile string smuggled into a
         field, a data-entry typo) is disclosive by its mere *name*, and nulling
         the count still leaks the string as a key. Only declared categories — the
-        public codebook vocabulary — appear. Numeric columns with no declared
-        domain keep every observed value (count-nulled if sub-threshold).
+        public codebook vocabulary — appear.
+
+        A column with NO declared domain has no public vocabulary, so its key
+        set is derived from the data and publishing a key is itself a
+        disclosure. For those columns a sub-threshold value is therefore
+        **omitted**, not count-nulled. Count-nulling was enough for a declared
+        domain — a rare category being a valid option is public knowledge — but
+        on `age_years` it published the exact ages present in the study,
+        including ages held by a single donor, which is the sub-threshold
+        existence fact suppression exists to hide, on the one variable the
+        catalogue calls internal and never-returnable.
+
+        Omitting rather than nulling costs the auditor nothing, which is why
+        the two cases can differ. Simulatability needs the analyst to be able
+        to reproduce the deny/allow decision, and that decision turns only on
+        `count < threshold`. An absent key means either "sub-threshold" or "not
+        in the data at all", and *both* yield a bound below the threshold, so
+        the analyst reaches the same verdict without being told which.
         """
         raw = self.marginal_donor_counts()
         pub: dict = {}
@@ -497,10 +513,15 @@ class QueryEngine:
             pub_dims: dict = {}
             for dim, counts in per_dim.items():
                 domain = declared_domain(dim)
+                if domain is None:
+                    pub_dims[dim] = {
+                        str(v): int(round(c / round_base) * round_base)
+                        for v, c in counts.items() if c >= threshold
+                    }
+                    continue
                 pub_dims[dim] = {
                     str(v): (int(round(c / round_base) * round_base) if c >= threshold else None)
-                    for v, c in counts.items()
-                    if domain is None or v in domain
+                    for v, c in counts.items() if v in domain
                 }
             pub[dataset] = pub_dims
         return pub
