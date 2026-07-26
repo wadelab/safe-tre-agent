@@ -48,6 +48,9 @@ def check(request: dict) -> dict:
         raise ValueError("acro is not installed in the checker environment") from None
     return {
         "protocol": PROTOCOL,
+        # echoed so the caller can tell an answer to its question from an
+        # answer to the one before it
+        "id": request.get("id"),
         "checker": "acro",
         "version": acro_version,
         "verdicts": [{"cell": list(cell), "rule": rule}
@@ -56,14 +59,30 @@ def check(request: dict) -> dict:
 
 
 def main() -> int:
-    try:
-        request = json.loads(sys.stdin.read())
-        response = check(request)
-    except Exception as exc:                # noqa: BLE001 - reported, not raised
-        print(json.dumps({"protocol": PROTOCOL, "error": str(exc)}))
-        print(f"checker failed: {exc!r}", file=sys.stderr)
-        return 1
-    print(json.dumps(response))
+    """Answer requests until the caller goes away.
+
+    A malformed request is answered with an error and the loop continues: the
+    caller decides what a failure means, and it denies. Anything unparseable
+    at the transport level — a line that is not JSON — ends the conversation,
+    because at that point the two sides no longer agree on where a message
+    starts.
+    """
+    for line in sys.stdin:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            request = json.loads(line)
+        except json.JSONDecodeError as exc:
+            print(f"checker: unframed input, stopping: {exc}", file=sys.stderr)
+            return 1
+        try:
+            response = check(request)
+        except Exception as exc:            # noqa: BLE001 - reported, not raised
+            response = {"protocol": PROTOCOL, "id": request.get("id"),
+                        "error": str(exc)}
+            print(f"checker: {exc!r}", file=sys.stderr)
+        print(json.dumps(response), flush=True)
     return 0
 
 

@@ -2,9 +2,15 @@
 
 The second slice of [roadmap item 1](roadmap.md). The first slice measured
 where ACRO's decisions and the stand-in's differ ([ACRO
-comparison](acro-comparison.md)); this page fixes what to build from those
-numbers, before any of it is built. Nothing here is implemented yet — it is
-written first so the decisions can be argued with while they are still cheap.
+comparison](acro-comparison.md)); this page fixed what to build from those
+numbers, before any of it was built, so the decisions could be argued with
+while they were still cheap.
+
+*Most of it now exists.* The seam, the rules, the out-of-process boundary and
+the configuration switch have all landed — see the rollout in §6 for what each
+step delivered and what it cost. The default is still the stand-in's rules
+alone; turning an external checker on is an operator's decision, and §3's
+second-moment parameters are the part that remains theirs to set.
 
 Two measurements from the first slice drive almost every choice below, and
 both cut against the obvious implementation:
@@ -174,6 +180,19 @@ workaround:
 
 - ACRO lives in its own environment, pinned independently of the service
   (`[tool.uv] conflicts` already models this for the comparison harness).
+- **The checker is started once and stays up**, taking one request per line
+  and answering one per line. A process per vetted table cost a second or two
+  of interpreter and import time each — enough that an external checker could
+  not sensibly be anyone's default. Measured on the demo dataset: 0.82s for
+  the first query, 0.03s for each after it.
+- Every request carries an id the response must echo, because a reused pipe
+  can desynchronise: a late answer to an abandoned request would otherwise be
+  read as the answer to the next one, and a cell would be vetted against
+  verdicts computed for a different table. Any timeout or protocol error
+  discards the process rather than reusing it in a state nobody can
+  characterise, and a checker whose reported version changes mid-session
+  denies — a release must not claim checks from a version that did not run
+  them.
 - The service sends a cell table and the policy parameters; the checker
   returns per-cell verdicts and rule names. The payload is aggregate cells and
   a donor-level contribution frame — data that has not yet passed the gateway,

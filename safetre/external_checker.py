@@ -8,12 +8,23 @@ than a workaround: a TRE can then pin or upgrade its output checker
 independently of the agent, and the checker's version is a fact recorded per
 release instead of a property of whatever happened to be installed.
 
-The contract, one request and one response per cell table:
+The contract is a **stream**: the checker is started once and stays up, one
+request per line in, one response per line out. Starting a process per cell
+table cost a second or two of interpreter and import time each, which a model
+pays once per design-cell table and a TRE pays on every query — enough to make
+an external checker unusable as a default.
 
-    -> {"protocol": 1, "keys": [...], "aggfunc": "sum"|null,
+    -> {"protocol": 2, "id": 7, "keys": [...], "aggfunc": "sum"|null,
         "contributions": [{<key>: ..., "v": <float>, "donor_id": ...}, ...]}
-    <- {"protocol": 1, "checker": "acro", "version": "0.4.12",
+    <- {"protocol": 2, "id": 7, "checker": "acro", "version": "0.4.12",
         "verdicts": [{"cell": ["Wales"], "rule": "nk-rule;"}, ...]}
+
+**The id is not decoration.** A long-lived pipe can desynchronise: if a
+request times out and its answer arrives afterwards, the next request would
+read it as its own and a cell would be vetted by a verdict computed for a
+different table. Two defences, because this one must not happen — the response
+id must match the request, and any timeout or protocol error kills the process
+rather than reusing it in a state nobody can characterise.
 
 **Everything that can go wrong denies.** A non-zero exit, a timeout, a
 malformed response, a protocol mismatch or a verdict list that does not cover
@@ -31,9 +42,12 @@ security one.
 
 from __future__ import annotations
 
+import itertools
 import json
+import selectors
 # spawns a fixed local checker with a literal argv, never a shell
 import subprocess  # nosec B404
+import threading
 
 import pandas as pd
 
@@ -41,7 +55,7 @@ from .disclosure import (
     CellContext, CellVetter, Finding, Verdicts, VettingParameters,
 )
 
-PROTOCOL = 1
+PROTOCOL = 2
 DEFAULT_TIMEOUT = 120.0
 RELEASE = "ok"          # the verdict string meaning "this cell may go out"
 
@@ -53,21 +67,24 @@ def cell_key(row, keys: list[str]) -> tuple:
 
 
 def build_request(contributions: pd.DataFrame, keys: list[str],
-                  aggfunc: str | None) -> dict:
+                  aggfunc: str | None, request_id: int = 0) -> dict:
     """The checker's input: the cells' donor-level contributions and how to
     aggregate them. Records rather than a frame, so the contract does not
     depend on a pandas version — which is the whole reason for the boundary."""
     return {
         "protocol": PROTOCOL,
+        "id": request_id,
         "keys": list(keys),
         "aggfunc": aggfunc,
         "contributions": json.loads(contributions.to_json(orient="records")),
     }
 
 
-def parse_response(payload: str) -> tuple[dict[tuple, str], str]:
+def parse_response(payload: str, request_id: int | None = None
+                   ) -> tuple[dict[tuple, str], str]:
     """(verdicts by cell key, checker version). Raises ValueError on anything
-    the caller must fail closed on."""
+    the caller must fail closed on — including an answer to the wrong
+    question, which on a reused pipe is the dangerous failure."""
     try:
         response = json.loads(payload)
     except json.JSONDecodeError as exc:
@@ -80,6 +97,10 @@ def parse_response(payload: str) -> tuple[dict[tuple, str], str]:
         raise ValueError(
             f"checker speaks protocol {response.get('protocol')!r}, "
             f"this gateway speaks {PROTOCOL}")
+    if request_id is not None and response.get("id") != request_id:
+        raise ValueError(
+            f"checker answered request {response.get('id')!r} while "
+            f"{request_id!r} was asked: the stream has desynchronised")
     version = str(response.get("version", "unknown"))
     verdicts: dict[tuple, str] = {}
     for entry in response.get("verdicts", []):
@@ -106,7 +127,7 @@ class ExternalCheckerVetter(CellVetter):
     def __init__(self, command: list[str], keys: list[str] | None = None,
                  aggfunc: str | None = None,
                  contributions: pd.DataFrame | None = None,
-                 timeout: float = DEFAULT_TIMEOUT):
+                 timeout: float = DEFAULT_TIMEOUT, max_starts: int = 3):
         if not command:
             raise ValueError(
                 "an external checker needs a command to start it; there is no "
@@ -117,26 +138,88 @@ class ExternalCheckerVetter(CellVetter):
         self.keys = list(keys or [])
         self.aggfunc = aggfunc
         self.timeout = timeout
+        self.max_starts = max_starts
         self.version: str | None = None
+        self._process: subprocess.Popen | None = None
+        self._ids = itertools.count(1)
+        self._starts = 0
 
-    def _ask(self) -> tuple[dict[tuple, str], str]:
-        request = json.dumps(build_request(self.contributions, self.keys,
-                                           self.aggfunc))
+    # one exchange at a time: the web app serves requests concurrently and a
+    # shared pipe has no way to tell two conversations apart
+    _lock = threading.Lock()
+
+    def close(self) -> None:
+        """Stop the checker. Safe to call on a process already gone."""
+        process, self._process = self._process, None
+        if process is None:
+            return
+        try:
+            if process.stdin:
+                process.stdin.close()
+            process.wait(timeout=5)
+        except Exception:                      # noqa: BLE001 - shutting down
+            process.kill()
+
+    def _start(self) -> subprocess.Popen:
+        if self._process is not None and self._process.poll() is None:
+            return self._process
+        self._starts += 1
+        if self._starts > self.max_starts:
+            raise ValueError(
+                f"checker died {self._starts - 1} time(s); not restarting again")
         try:
             # argv is built here, never from the request; no shell is involved
-            done = subprocess.run(  # nosec B603
-                self.command, input=request, capture_output=True, text=True,
-                timeout=self.timeout, check=False)
-        except subprocess.TimeoutExpired:
-            raise ValueError(f"checker did not answer within {self.timeout}s") from None
+            self._process = subprocess.Popen(  # nosec B603
+                self.command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE, text=True, bufsize=1)
         except OSError as exc:
             raise ValueError(f"checker could not be started: {exc}") from None
-        if done.returncode != 0:
-            detail = (done.stderr or "").strip().splitlines()
+        return self._process
+
+    def _read_line(self, process: subprocess.Popen) -> str:
+        """One response line, or a timeout. Reading a pipe with a deadline
+        needs a selector; a bare readline would hang the request forever on a
+        checker that has stopped answering."""
+        selector = selectors.DefaultSelector()
+        selector.register(process.stdout, selectors.EVENT_READ)
+        try:
+            if not selector.select(self.timeout):
+                raise ValueError(f"checker did not answer within {self.timeout}s")
+            line = process.stdout.readline()
+        finally:
+            selector.close()
+        if not line:
+            detail = ""
+            if process.stderr and process.poll() is not None:
+                detail = (process.stderr.read() or "").strip().splitlines()[-1:]
+                detail = f": {detail[0]}" if detail else ""
+            raise ValueError(f"checker stopped answering{detail}")
+        return line
+
+    def _ask(self) -> tuple[dict[tuple, str], str]:
+        request_id = next(self._ids)
+        payload = json.dumps(build_request(self.contributions, self.keys,
+                                           self.aggfunc, request_id))
+        with self._lock:
+            try:
+                process = self._start()
+                process.stdin.write(payload + "\n")
+                process.stdin.flush()
+                line = self._read_line(process)
+                verdicts, version = parse_response(line, request_id)
+            except (ValueError, OSError, BrokenPipeError) as exc:
+                # whatever went wrong, this process is no longer a thing whose
+                # state can be reasoned about: a late answer to the request we
+                # abandoned would be read as the answer to the next one
+                self.close()
+                raise ValueError(str(exc)) from None
+        if self.version is not None and version != self.version:
+            # a restarted checker reporting a different version means the
+            # release would claim checks from a version that did not run them
+            self.close()
             raise ValueError(
-                f"checker exited {done.returncode}"
-                + (f": {detail[-1]}" if detail else ""))
-        return parse_response(done.stdout)
+                f"checker version changed mid-session: {self.version} -> {version}")
+        return verdicts, version
 
     def vet(self, df: pd.DataFrame, params: VettingParameters,
             context: CellContext | None = None) -> Verdicts:

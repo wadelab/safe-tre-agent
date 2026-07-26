@@ -46,11 +46,13 @@ def _vetter(command, **kw) -> ExternalCheckerVetter:
 
 ANSWERS = f"""
     import json, sys
-    json.loads(sys.stdin.read())
-    print(json.dumps({{"protocol": {PROTOCOL}, "checker": "acro",
-                       "version": "0.4.12",
-                       "verdicts": [{{"cell": ["A"], "rule": "nk-rule;"}},
-                                    {{"cell": ["B"], "rule": "ok"}}]}}))
+    for line in sys.stdin:
+        request = json.loads(line)
+        print(json.dumps({{"protocol": {PROTOCOL}, "id": request["id"],
+                           "checker": "acro", "version": "0.4.12",
+                           "verdicts": [{{"cell": ["A"], "rule": "nk-rule;"}},
+                                        {{"cell": ["B"], "rule": "ok"}}]}}),
+              flush=True)
 """
 
 
@@ -69,32 +71,44 @@ def test_the_checker_version_is_recorded_for_the_release(tmp_path):
 
 
 @pytest.mark.parametrize("label,body", [
-    ("non-zero exit", """
+    ("exits without answering", """
         import sys
+        sys.stdin.readline()
         print("something went wrong", file=sys.stderr)
         sys.exit(3)
     """),
     ("crash", """
+        import sys
+        sys.stdin.readline()
         raise SystemError("checker blew up")
     """),
     ("not JSON", """
-        print("this is not json")
+        import sys
+        sys.stdin.readline()
+        print("this is not json", flush=True)
     """),
     ("not an object", """
-        print("[1, 2, 3]")
+        import sys
+        sys.stdin.readline()
+        print("[1, 2, 3]", flush=True)
     """),
     ("wrong protocol", """
-        import json
-        print(json.dumps({"protocol": 99, "version": "0.4.12", "verdicts": []}))
+        import json, sys
+        request = json.loads(sys.stdin.readline())
+        print(json.dumps({"protocol": 99, "id": request["id"],
+                          "version": "0.4.12", "verdicts": []}), flush=True)
     """),
     ("reported error", """
-        import json
-        print(json.dumps({"protocol": %d, "error": "acro is not installed"}))
+        import json, sys
+        request = json.loads(sys.stdin.readline())
+        print(json.dumps({"protocol": %d, "id": request["id"],
+                          "error": "acro is not installed"}), flush=True)
     """ % PROTOCOL),
     ("malformed verdict", """
-        import json
-        print(json.dumps({"protocol": %d, "version": "x",
-                          "verdicts": [{"cell": ["A"]}]}))
+        import json, sys
+        request = json.loads(sys.stdin.readline())
+        print(json.dumps({"protocol": %d, "id": request["id"], "version": "x",
+                          "verdicts": [{"cell": ["A"]}]}), flush=True)
     """ % PROTOCOL),
 ])
 def test_every_way_the_checker_can_fail_denies(tmp_path, label, body):
@@ -106,7 +120,8 @@ def test_every_way_the_checker_can_fail_denies(tmp_path, label, body):
 
 def test_a_hanging_checker_denies_rather_than_waiting(tmp_path):
     slow = _fake_checker(tmp_path, """
-        import time
+        import sys, time
+        sys.stdin.readline()
         time.sleep(30)
     """)
     verdicts = _vetter(slow, timeout=0.5).vet(CELLS, PARAMS)
@@ -125,9 +140,11 @@ def test_a_partial_answer_denies_the_whole_table(tmp_path):
     # part would claim a check that never ran on the rest
     partial = _fake_checker(tmp_path, f"""
         import json, sys
-        json.loads(sys.stdin.read())
-        print(json.dumps({{"protocol": {PROTOCOL}, "version": "0.4.12",
-                           "verdicts": [{{"cell": ["A"], "rule": "ok"}}]}}))
+        request = json.loads(sys.stdin.readline())
+        print(json.dumps({{"protocol": {PROTOCOL}, "id": request["id"],
+                           "version": "0.4.12",
+                           "verdicts": [{{"cell": ["A"], "rule": "ok"}}]}}),
+              flush=True)
     """)
     verdicts = _vetter(partial).vet(CELLS, PARAMS)
     assert verdicts.deny is True
@@ -163,3 +180,113 @@ def test_parse_response_rejects_what_it_cannot_trust():
     for bad in ("{", "[]", json.dumps({"protocol": PROTOCOL + 1})):
         with pytest.raises(ValueError):
             parse_response(bad)
+
+# --- the process is reused, and never reused after doubt ------------------------
+
+COUNTING = f"""
+    import json, sys, pathlib
+    tally = pathlib.Path(__file__).with_name("starts")
+    tally.write_text(str(int(tally.read_text()) + 1) if tally.exists() else "1")
+    for line in sys.stdin:
+        request = json.loads(line)
+        print(json.dumps({{"protocol": {PROTOCOL}, "id": request["id"],
+                           "version": "0.4.12",
+                           "verdicts": [{{"cell": ["A"], "rule": "ok"}},
+                                        {{"cell": ["B"], "rule": "ok"}}]}}),
+              flush=True)
+"""
+
+
+def test_the_checker_is_started_once_and_reused(tmp_path):
+    # the whole point of the streamed protocol: a process per cell table cost
+    # a second or two of imports each, which is what made an external checker
+    # too slow to be anyone's default
+    vetter = _vetter(_fake_checker(tmp_path, COUNTING))
+    try:
+        for _ in range(3):
+            assert not vetter.vet(CELLS, PARAMS).deny
+    finally:
+        vetter.close()
+    assert (tmp_path / "starts").read_text() == "1", "the checker was restarted"
+
+
+def test_an_answer_to_the_wrong_question_denies(tmp_path):
+    # the failure a reused pipe makes possible, and the one that must never
+    # pass: a stale answer read as the answer to the current table would vet
+    # cells against verdicts computed for a different query
+    liar = _fake_checker(tmp_path, f"""
+        import json, sys
+        for line in sys.stdin:
+            json.loads(line)
+            print(json.dumps({{"protocol": {PROTOCOL}, "id": 999,
+                               "version": "0.4.12",
+                               "verdicts": [{{"cell": ["A"], "rule": "ok"}},
+                                            {{"cell": ["B"], "rule": "ok"}}]}}),
+                  flush=True)
+    """)
+    vetter = _vetter(liar)
+    try:
+        verdicts = vetter.vet(CELLS, PARAMS)
+    finally:
+        vetter.close()
+    assert verdicts.deny is True
+    assert any("desynchronised" in f.detail for f in verdicts.findings)
+
+
+def test_a_timed_out_checker_is_not_reused(tmp_path):
+    # a late answer to an abandoned request would be read as the answer to the
+    # next one, so the process is discarded rather than trusted again
+    slow = _fake_checker(tmp_path, f"""
+        import json, sys, time
+        for line in sys.stdin:
+            request = json.loads(line)
+            time.sleep(5)
+            print(json.dumps({{"protocol": {PROTOCOL}, "id": request["id"],
+                               "version": "0.4.12", "verdicts": []}}),
+                  flush=True)
+    """)
+    vetter = _vetter(slow, timeout=0.5)
+    try:
+        assert vetter.vet(CELLS, PARAMS).deny is True
+        assert vetter._process is None, "a timed-out checker was kept"
+    finally:
+        vetter.close()
+
+
+def test_a_checker_that_changes_version_mid_session_denies(tmp_path):
+    # a release records which checker approved it, so the version must hold
+    # still for as long as the session does — whether it drifts because the
+    # process was restarted or because the process itself changed its mind
+    drifting = _fake_checker(tmp_path, f"""
+        import json, sys
+        for n, line in enumerate(sys.stdin):
+            request = json.loads(line)
+            print(json.dumps({{"protocol": {PROTOCOL}, "id": request["id"],
+                               "version": "0.4." + str(n),
+                               "verdicts": [{{"cell": ["A"], "rule": "ok"}},
+                                            {{"cell": ["B"], "rule": "ok"}}]}}),
+                  flush=True)
+    """)
+    vetter = _vetter(drifting)
+    try:
+        assert not vetter.vet(CELLS, PARAMS).deny      # 0.4.0 recorded
+        second = vetter.vet(CELLS, PARAMS)             # 0.4.1 reported
+    finally:
+        vetter.close()
+    assert second.deny is True
+    assert any("version changed" in f.detail for f in second.findings)
+
+
+def test_a_checker_that_keeps_dying_stops_being_restarted(tmp_path):
+    dying = _fake_checker(tmp_path, """
+        import sys
+        sys.exit(1)
+    """)
+    vetter = _vetter(dying, max_starts=2)
+    try:
+        for _ in range(3):
+            assert vetter.vet(CELLS, PARAMS).deny is True
+        assert any("not restarting" in f.detail
+                   for f in vetter.vet(CELLS, PARAMS).findings)
+    finally:
+        vetter.close()

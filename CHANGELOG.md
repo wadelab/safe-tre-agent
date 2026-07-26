@@ -8,6 +8,23 @@ and fixes are in [docs/hardening-log.md](docs/hardening-log.md).
 
 ### Added
 
+- **The external checker is started once, not once per table (protocol 2).**
+  Spawning a process per vetted table cost a second or two of interpreter and
+  import time each — which a model pays per design-cell table and a TRE would
+  pay on every query, enough that an external checker could not sensibly be
+  anyone's default. The contract is now a stream: one request per line in, one
+  response per line out, over a process the client starts lazily and
+  supervises. Measured end to end on the demo dataset: **0.82s for the first
+  query, 0.03s for each after it**, with decisions unchanged.
+  A reused pipe brings a failure a fresh process cannot have, and it is the
+  dangerous one: if a request times out and its answer arrives late, the next
+  request would read it as its own and cells would be vetted against verdicts
+  computed for a different table. Two defences — every request carries an id
+  the response must echo, and any timeout or protocol error **discards the
+  process** rather than reusing it in a state nobody can characterise. A
+  checker whose reported version changes mid-session also denies, since a
+  release must not claim checks from a version that did not run them, and a
+  checker that keeps dying stops being restarted. Each is a test.
 - **Every clause now has a traceability row, and a test keeps it that way.**
   The [assurance case](docs/assurance-case.md) had surfaced twelve
   requirements asserted by the specification with no recorded evidence,

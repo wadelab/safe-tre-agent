@@ -158,10 +158,14 @@ class PolicyConfig:
     checker_cmd: str = _dial(
         "",
         controls="the command that starts that external checker",
-        means="a command line, run per vetted table, speaking the JSON "
-              "contract in `safetre/external_checker.py`. Every failure — "
-              "exit code, timeout, bad protocol, incomplete answer — denies "
-              "the release rather than falling back to the built-in rules.",
+        means="a command line, started ONCE and then fed one request per "
+              "line, speaking the JSON contract in "
+              "`safetre/external_checker.py`. Starting a process per vetted "
+              "table cost a second or two of imports each; reusing one costs "
+              "that once. Every failure — exit code, timeout, bad protocol, "
+              "an answer to the wrong request, an incomplete answer — denies "
+              "the release rather than falling back to the built-in rules, "
+              "and discards the process rather than trusting it again.",
         clause="R5", yaml_key="disclosure.checker_cmd",
         pinned_by="tests/test_acro_boundary.py",
         unset_means="no external checker; required when `vetter` names one")
