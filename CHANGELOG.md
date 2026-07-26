@@ -4,7 +4,21 @@ All notable changes to safe-tre-agent. The normative record of safety
 behaviour is [docs/specification.md](docs/specification.md); security findings
 and fixes are in [docs/hardening-log.md](docs/hardening-log.md).
 
-## Unreleased
+## 0.5.0 — 2026-07-26
+
+The checker, and the case for it. An external output checker can now be
+switched on end to end — its rules run through a seam that keeps them away
+from how a release is rounded, ordered or shaped, and it runs in its own
+process where every failure denies. Second moments stopped being checked as
+though they were sums, which is what had been quietly deciding whether models
+were available at all.
+
+And because the questions this project now poses have grown harder to hold in
+one head, three artefacts were added to reason about it with: a catalogue of
+every dial and what its number means, a log of what was decided and what would
+change our mind, and the safety argument drawn as a structure with its gaps
+marked. Each is generated from the code and enforced in CI, and each found a
+real defect on its first run.
 
 ### Added
 

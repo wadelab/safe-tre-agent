@@ -1993,7 +1993,7 @@ wheels = [
 
 [[package]]
 name = "safe-tre-agent"
-version = "0.4.0"
+version = "0.5.0"
 source = { editable = "." }
 dependencies = [
     { name = "duckdb" },
