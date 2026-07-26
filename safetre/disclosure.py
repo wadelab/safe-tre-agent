@@ -156,6 +156,22 @@ class VettingParameters:
     max_rows: int
     dom_threshold: float
     influence_threshold: float
+    # Dominance for second-moment cells. The same nominal bound is a far
+    # tighter rule on a sum of squares than on a sum — squaring is not
+    # share-preserving, so a donor holding p of a cell holds
+    # p^2/(p^2+(1-p)^2/(k-1)) of its squared total, which crosses one half at
+    # p = 1/(1+sqrt(k-1)): 0.19 in a twenty-donor cell, 0.09 in a hundred.
+    # Since a model dies if either moment cell is suppressed, that tighter
+    # rule is what governs model availability. None means "same as
+    # dom_threshold", which is the default and changes nothing.
+    moment2_dom_threshold: float | None = None
+
+    def dominance_for(self, value_class: str | None) -> float:
+        """The dominance bound for a cell whose released value has this
+        disclosure class (spec R14)."""
+        if value_class == "moment2" and self.moment2_dom_threshold is not None:
+            return self.moment2_dom_threshold
+        return self.dom_threshold
 
 
 @dataclass(frozen=True)
@@ -172,9 +188,12 @@ class CellContext:
     single total cell and released everything.
     """
 
-    contributions: pd.DataFrame
+    contributions: pd.DataFrame | None = None
     keys: tuple[str, ...] = ()
     aggfunc: str | None = None
+    # the disclosure class of the cell's released value (spec R14), which
+    # selects the dominance bound: a sum of squares is not a sum
+    value_class: str | None = None
 
 
 @dataclass(frozen=True)
@@ -228,8 +247,9 @@ class StandinVetter(CellVetter):
 
     def vet(self, df: pd.DataFrame, params: VettingParameters,
             context: CellContext | None = None) -> Verdicts:
+        dominance = params.dominance_for(context.value_class if context else None)
         findings = leak_detector(df, params.threshold, params.max_rows,
-                                 params.dom_threshold, params.influence_threshold)
+                                 dominance, params.influence_threshold)
         deny = any(f.severity == "high" and f.rule not in SUPPRESSABLE
                    for f in findings)
         # a cell survives only if it passes every applicable rule, so the
@@ -239,7 +259,7 @@ class StandinVetter(CellVetter):
         for column in _count_cols(df):
             suppress |= ~(df[column] >= params.threshold)
         if "dominance" in df.columns:
-            suppress |= ~(df["dominance"] <= params.dom_threshold)
+            suppress |= ~(df["dominance"] <= dominance)
         if "influence" in df.columns:
             suppress |= ~(df["influence"] <= params.influence_threshold)
         return Verdicts(suppress=suppress, findings=findings, deny=deny)
@@ -305,6 +325,9 @@ class DisclosurePolicy:
     dom_threshold: float = DOM_THRESHOLD
     influence_threshold: float = INFLUENCE_THRESHOLD
     round_base: int = ROUND_BASE
+    # dominance for second-moment cells; None means "the same bound as any
+    # other magnitude", which is the default and changes nothing
+    moment2_dom_threshold: float | None = None
     # which rules decide a cell. Swapping this swaps the *decision* only:
     # suppression, finalization and shaping below are the policy's own
     # (docs/acro-integration.md).
@@ -313,7 +336,8 @@ class DisclosurePolicy:
     def parameters(self) -> VettingParameters:
         return VettingParameters(threshold=self.threshold, max_rows=self.max_rows,
                                  dom_threshold=self.dom_threshold,
-                                 influence_threshold=self.influence_threshold)
+                                 influence_threshold=self.influence_threshold,
+                                 moment2_dom_threshold=self.moment2_dom_threshold)
 
     def _finalize(self, df: pd.DataFrame) -> pd.DataFrame:
         """Drop internal helper columns, round released counts, and order the

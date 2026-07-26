@@ -84,6 +84,9 @@ class _CapturingEngine:
     def marginal_donor_counts(self):
         return self._engine.marginal_donor_counts()
 
+    def cell_context(self, spec, with_contributions: bool = False):
+        return self._engine.cell_context(spec, with_contributions)
+
 
 def _skeleton(step: int | None):
     specs = list(_all_specs_no_filter())

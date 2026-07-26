@@ -45,9 +45,13 @@ if TYPE_CHECKING:  # types only — the engine imports this module at runtime
 #   cell_key  - a group-by key naming the cell
 #   count     - a frequency: threshold-checked on donors, rounded on release
 #   magnitude - a donor-additive quantity (sum/mean-like): dominance-checked
+#   moment2   - a donor-additive SECOND moment (sum of squares): dominance-
+#               checked on the squared scale, where the same nominal bound is
+#               a much tighter rule (see VettingParameters.dominance_for)
 #   statistic - a bounded derived statistic (e.g. r): influence-checked
 #   p_value   - a significance level derived from a released statistic
-DisclosureClass = Literal["cell_key", "count", "magnitude", "statistic", "p_value"]
+DisclosureClass = Literal["cell_key", "count", "magnitude", "moment2",
+                          "statistic", "p_value"]
 
 
 @dataclass(frozen=True)
@@ -249,6 +253,11 @@ class SumSq(_ColumnAggregate):
         col = _ident(m.column)
         return f"SUM({col} * {col})"
 
+    def output_contract(self, m: Measure) -> dict[str, DisclosureClass]:
+        # not a `magnitude`: the bound that applies to a sum of squares is a
+        # different rule in effect, and the contract is where that is said
+        return {"value": "moment2", "n": "count"}
+
 
 class Corr(AggregateProcedure):
     fn = "corr"
@@ -339,6 +348,18 @@ class ModelProcedure:
         """The design-cell QuerySpecs whose finalized outputs are the fit's
         only input. Every element MUST be a valid QuerySpec."""
         raise NotImplementedError
+
+    def optional_roles(self, spec) -> frozenset[str]:
+        """Planned tables the model can be fitted without.
+
+        Everything else is required: if the gateway cannot fully release it,
+        the model is refused (P19). An optional table is one whose absence
+        costs the analyst part of the *output* rather than making the fit
+        wrong — the gaussian dispersion, which buys standard errors and R²
+        but no coefficient. It is used only if it releases COMPLETELY: a
+        partly-suppressed table would silently change the number it feeds.
+        """
+        return frozenset()
 
     def preconditions(self, finalized: dict, spec) -> list[str]:
         """Estimability refusals, decidable from the finalized tables alone

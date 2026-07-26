@@ -140,11 +140,16 @@ def test_procedure_declares_a_complete_output_contract(fn):
     contract = proc.output_contract(spec.measure)
     for column in proc.payload_columns(spec.measure):
         assert column in contract, f"{fn}: payload column {column!r} unclassified"
-    assert all(v in {"cell_key", "count", "magnitude", "statistic", "p_value"}
+    assert all(v in {"cell_key", "count", "magnitude", "moment2", "statistic",
+                     "p_value"}
                for v in contract.values())
     # frequency payloads must be declared as counts so rounding covers them
     if fn == "count":
         assert contract["n"] == "count"
+    # a second moment is not a magnitude: the same nominal dominance bound is
+    # a far tighter rule on the squared scale, and the class is what selects it
+    if fn == "sum_sq":
+        assert contract["value"] == "moment2"
 
 
 @pytest.mark.parametrize("fn", sorted(PROCEDURES))

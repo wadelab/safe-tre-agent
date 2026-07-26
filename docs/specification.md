@@ -82,7 +82,14 @@ enumerated source of truth — see R14.)*
 **R5** — The gateway MUST apply, to every result: a minimum distinct-donor
 threshold, contributor dominance (the p%-rule) for `sum`/`mean`, single-donor
 influence for `corr`, count rounding, and primary plus complementary
-suppression. *(Amended 2026-07-25: everything the released table reveals —
+suppression. *(Amended 2026-07-26: the dominance bound MAY be stated
+separately for second-moment cells, whose released value carries the R14
+disclosure class `moment2`. Squaring is not share-preserving, so one bound is
+two rules: a donor holding p of a cell holds p²/(p² + (1−p)²/(k−1)) of its
+squared total, which crosses one half at p = 1/(1+√(k−1)) — 0.19 in a
+twenty-donor cell. The default is that both classes share one bound, so an
+operator who says nothing gets the stricter reading.)* *(Amended 2026-07-25:
+everything the released table reveals —
 which cell complementary suppression sacrifices, and the order the rows come
 in — MUST be determined by released quantities alone, never by the exact
 pre-rounding counts. See hardening #27 and #28.)*
@@ -132,7 +139,12 @@ fitted **exclusively from gateway-finalized design-cell aggregates**. A model
 release MUST carry the coefficient table (term, level, estimate, std_error,
 statistic, p_value), the model summary block (family, link, rounded n,
 df_resid, deviance), and the vetted cell table it was fitted from, so the
-analyst can reproduce the fit from released data alone.
+analyst can reproduce the fit from released data alone. *(Amended 2026-07-26:
+a gaussian model whose second-moment cells cannot be released MAY release the
+coefficient estimates alone — they are a function of the vetted mean cells and
+counts — omitting every quantity the dispersion buys: std_error, statistic,
+p_value and r_squared. Such a release MUST say so (`dispersion_released`) and
+MUST remain reproducible from its released cell table.)*
 
 **R16** — Every registered procedure MUST export its finite request skeleton as
 data, and CI MUST both check the committed formal model against that export
@@ -220,9 +232,14 @@ exhausted budget denies first.
 **P18** — MUST NOT render any data table on a denial.
 
 **P19** — MUST NOT fit or release a model over an incomplete vetted cell table.
-If any design cell of any underlying aggregate is suppressed by the gateway, or
-absent from the full grid of observed levels, the whole model MUST be denied —
-loudly, with no category merging and no cell dropping. *(A level with no data
+If any design cell of any *required* underlying aggregate is suppressed by the
+gateway, or absent from the full grid of observed levels, the whole model MUST
+be denied — loudly, with no category merging and no cell dropping. *(Amended
+2026-07-26: a procedure MAY declare an aggregate **optional** — today only the
+gaussian dispersion. An optional table is used only if it releases COMPLETELY;
+otherwise it is dropped entire, and nothing derived from it is released. A
+partly-suppressed table MUST NOT be used, since it would silently change the
+number it feeds.)* *(A level with no data
 anywhere is omitted from the design and is visibly absent from the released
 cell table; that is an omission the release itself shows, not a silent repair.)*
 
@@ -292,13 +309,13 @@ with a documented limitation.
 | P16 concurrency serialisation | `session.py`, `app.py` | `test_hardening.py`, Alloy `temporal_session` | Implemented |
 | P17 budget short-circuit | `service.py`, `disclosure.py` | `test_hardening.py`, Alloy `temporal_session` | Implemented |
 | P18 no table on denial | `_result.html`, `service.py` | `test_web.py` | Implemented |
-| P19 deny on incomplete cell table | `service.py` (`_handle_model`) | `test_glm.py`, `test_glm_properties.py`, red-team, Alloy `P19` | Implemented |
+| P19 deny on incomplete cell table | `service.py` (`_handle_model`), `procedures.py` (`optional_roles`) | `test_glm.py`, `test_glm_properties.py`, `test_second_moment.py`, red-team, Alloy `P19` | Implemented |
 | P20 no per-observation model output | `glm.py` (output contract), `analyst.py` (intent) | `test_glm.py`, `test_procedure_conformance.py` | Implemented |
 | P21 fitter noninterference | `stats.py`, `glm.py` (pure fit) | reproducibility meta-test (`test_glm_properties.py`), `test_glm_noninterference.py`, Alloy `P21` | Implemented |
 | P22 refusals from released-equivalent data | `glm.py` (`preconditions`), `service.py` | `test_glm.py` (non-numeric, term-naming refusals) | Implemented |
 | R5 complementary suppression | `disclosure.py` (`_secondary_suppress`, `_finalize`) | `test_disclosure.py`, `test_release_equality.py` | Partial (single-dim exact, multi-dim conservative) |
 | R14 procedure registry | `procedures.py` | `test_procedure_conformance.py` | Implemented |
-| R15 GLM from vetted cells | `glm.py`, `stats.py`, `service.py` | `test_glm.py`, `test_formal_glm_enumeration.py`, `test_glm_oracle.py` | Implemented |
+| R15 GLM from vetted cells | `glm.py`, `stats.py`, `service.py` | `test_glm.py`, `test_formal_glm_enumeration.py`, `test_glm_oracle.py`, `test_second_moment.py` | Implemented |
 | R16 skeleton export + model check | `procedures.py`, `formal/` | `test_skeleton_sync.py`, `test_formal_alloy_sync.py`, `test_formal_lean_sync.py`, CI `formal` job | Implemented |
 | R17 literal spec entry | `service.py` (`_literal_spec`) | `test_literal_spec.py` | Implemented |
 

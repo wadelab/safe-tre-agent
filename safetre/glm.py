@@ -84,6 +84,22 @@ class GLMProcedure(ModelProcedure):
     def table_roles(self, spec: GLMSpec) -> tuple[str, ...]:
         return _TABLE_ROLES[spec.family]
 
+    def optional_roles(self, spec: GLMSpec) -> frozenset[str]:
+        """The gaussian dispersion cells, and only those.
+
+        Coefficients come from the vetted mean cells and counts alone; the
+        sums of squares buy standard errors, t, p and R². Squaring is not
+        share-preserving, so that table faces a far tighter dominance bound in
+        effect than the means do (see `VettingParameters.dominance_for`) and
+        is what refuses most gaussian models. Releasing the point estimates
+        without inference releases strictly less than the model would have,
+        and nothing derived from the withheld table goes out.
+
+        Not the binomial or poisson tables, which the fit cannot proceed
+        without — and not ANOVA's, which IS a variance decomposition.
+        """
+        return frozenset({"sum_sq"}) if spec.family == "gaussian" else frozenset()
+
     # --- estimability, decided from finalized tables alone (P22) -----------------
     def preconditions(self, finalized: dict[str, pd.DataFrame], spec: GLMSpec) -> list[str]:
         problems: list[str] = []
@@ -115,7 +131,7 @@ class GLMProcedure(ModelProcedure):
 
         # paired tables must describe the same cells (binomial successes are
         # exempt: absence there means k = 0, which the release itself shows)
-        if spec.family == "gaussian":
+        if spec.family == "gaussian" and "sum_sq" in finalized:
             key_sets = {
                 role: set(map(tuple, finalized[role][list(spec.terms)].values))
                 for role in ("mean", "sum_sq")
@@ -155,6 +171,23 @@ class GLMProcedure(ModelProcedure):
         if spec.family == "gaussian":
             result = irls_cells(design, [float(v) for v in cells["mean"]],
                                 [float(v) for v in cells["n"]], "gaussian")
+            if "sum_sq" not in cells.columns:
+                # no dispersion, so no standard error, no t, no p and no R².
+                # The estimates are a function of the vetted mean cells alone,
+                # which is what makes them releasable without it.
+                coef = pd.DataFrame({
+                    "term": [t for t, _ in names],
+                    "level": [lv for _, lv in names],
+                    "estimate": [round(b, 4) for b in result.beta],
+                })
+                model = pd.DataFrame([{
+                    "family": spec.family, "link": _CANONICAL_LINK[spec.family],
+                    "response": spec.response, "n": int(n_total),
+                    "n_cells": n_cells, "params": p,
+                    "df_resid": round(n_total - p, 4),
+                    "dispersion_released": False,
+                }])
+                return coef, {"cells": cells, "model": model}
             # dispersion from the within-cell scatter the sum_sq cells carry,
             # plus the between-cell lack of fit. Tiny negatives are rounding
             # artefacts of the finalized (2 dp / base-5) inputs; the floor at 0
@@ -221,8 +254,9 @@ class GLMProcedure(ModelProcedure):
         keys = list(spec.terms)
         if spec.family == "gaussian":
             cells = finalized["mean"].rename(columns={"value": "mean"})
-            ss = finalized["sum_sq"].rename(columns={"value": "sum_sq"})
-            cells = cells.merge(ss[keys + ["sum_sq"]], on=keys, how="inner")
+            if "sum_sq" in finalized:
+                ss = finalized["sum_sq"].rename(columns={"value": "sum_sq"})
+                cells = cells.merge(ss[keys + ["sum_sq"]], on=keys, how="inner")
         elif spec.family == "binomial":
             cells = _merge_binomial(finalized)
         else:
@@ -234,7 +268,7 @@ class GLMProcedure(ModelProcedure):
         cell_cols: dict[str, DisclosureClass] = {t: "cell_key" for t in spec.terms}
         cell_cols["n"] = "count"
         if spec.family == "gaussian":
-            cell_cols |= {"mean": "magnitude", "sum_sq": "magnitude"}
+            cell_cols |= {"mean": "magnitude", "sum_sq": "moment2"}
         elif spec.family == "binomial":
             cell_cols |= {"k": "count"}
         else:
@@ -247,7 +281,8 @@ class GLMProcedure(ModelProcedure):
             "model": {"family": "cell_key", "link": "cell_key",
                       "response": "cell_key", "n": "count", "n_cells": "count",
                       "params": "count", "df_resid": "statistic",
-                      "deviance": "statistic", "r_squared": "statistic"},
+                      "deviance": "statistic", "r_squared": "statistic",
+                      "dispersion_released": "cell_key"},
         }
 
     def model_key(self, spec: GLMSpec) -> str:
@@ -328,8 +363,10 @@ def refit_from_artifact(cells: pd.DataFrame, spec: GLMSpec
     if spec.family == "gaussian":
         finalized = {
             "mean": cells[keys + ["mean", "n"]].rename(columns={"mean": "value"}),
-            "sum_sq": cells[keys + ["sum_sq", "n"]].rename(columns={"sum_sq": "value"}),
         }
+        if "sum_sq" in cells.columns:
+            finalized["sum_sq"] = (cells[keys + ["sum_sq", "n"]]
+                                   .rename(columns={"sum_sq": "value"}))
     elif spec.family == "binomial":
         finalized = {
             "trials": cells[keys + ["n"]].copy(),

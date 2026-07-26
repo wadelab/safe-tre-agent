@@ -34,6 +34,11 @@ class PolicyConfig:
     dom_threshold: float = 0.5
     influence_threshold: float = 0.5
     round_base: int = 5
+    # Dominance for second-moment cells (sums of squares). None means "the
+    # same bound as any other magnitude", which is the default. Stating it
+    # separately is the point: squaring is not share-preserving, so the same
+    # number is a much tighter rule there — see docs/acro-integration.md §3.
+    moment2_dom_threshold: float | None = None
     # which rules vet a cell: "standin" (the prototype's own) or
     # "standin+external" (those AND an external output checker, a cell
     # suppressed if either says so). An external checker is never the only
@@ -56,6 +61,7 @@ _ENV_OVERRIDES: dict[str, tuple[str, type]] = {
     "SAFETRE_DOM_THRESHOLD": ("dom_threshold", float),
     "SAFETRE_INFLUENCE_THRESHOLD": ("influence_threshold", float),
     "SAFETRE_ROUND_BASE": ("round_base", int),
+    "SAFETRE_MOMENT2_DOM_THRESHOLD": ("moment2_dom_threshold", float),
     "SAFETRE_VETTER": ("vetter", str),
     "SAFETRE_CHECKER_CMD": ("checker_cmd", str),
 }
@@ -80,6 +86,8 @@ def _yaml_values(path: str) -> dict:
         out["dom_threshold"] = float(disc["dom_threshold"])
     if "influence_threshold" in disc:
         out["influence_threshold"] = float(disc["influence_threshold"])
+    if "moment2_dom_threshold" in disc:
+        out["moment2_dom_threshold"] = float(disc["moment2_dom_threshold"])
     if "round_base" in disc:
         out["round_base"] = int(disc["round_base"])
     if "query_budget" in sess:
@@ -119,6 +127,9 @@ def _validate(cfg: PolicyConfig) -> None:
         raise ValueError("dom_threshold must be in (0, 1]")
     if cfg.influence_threshold <= 0.0:
         raise ValueError("influence_threshold must be > 0")
+    if cfg.moment2_dom_threshold is not None and not (
+            0.0 < cfg.moment2_dom_threshold <= 1.0):
+        raise ValueError("moment2_dom_threshold must be in (0, 1]")
     if cfg.vetter not in VETTERS:
         raise ValueError(f"vetter must be one of {VETTERS}, not {cfg.vetter!r}")
     # asking for an external checker without saying how to start it must fail

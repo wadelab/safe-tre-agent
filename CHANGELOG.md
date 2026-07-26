@@ -8,6 +8,32 @@ and fixes are in [docs/hardening-log.md](docs/hardening-log.md).
 
 ### Added
 
+- **A second moment is no longer checked as though it were a sum
+  ([acro-integration §3](docs/acro-integration.md)).** Squaring is not
+  share-preserving: a donor holding a fraction `p` of a cell holds
+  `p²/(p² + (1−p)²/(k−1))` of its sum of squares, crossing one half at
+  `p = 1/(1+√(k−1))` — 0.19 in a twenty-donor cell. So one nominal bound was
+  two rules, and the tighter one governed whether models were available at
+  all. R14 gained a `moment2` disclosure class (the vocabulary could not
+  previously express the distinction), `sum_sq` returns it, and the dominance
+  bound is selected by class through `VettingParameters.dominance_for`, with
+  `PolicyConfig.moment2_dom_threshold` where an operator states it. **Unset by
+  default, so behaviour is unchanged**; stating it makes the choice visible to
+  a certifier and settable without touching vetting code. Spec R5 amended.
+- **A gaussian model releases its coefficients when its dispersion cannot be
+  released.** The estimates are a function of the vetted mean cells and counts
+  alone, so `sum_sq` is now declared an *optional* table
+  (`ModelProcedure.optional_roles`): if it cannot be released completely it is
+  dropped entire — never partly, which would silently change the number it
+  feeds — and the release carries estimates with no standard error, t, p or
+  R², a `dispersion_released: False` flag, and a finding saying so. Nothing
+  derived from the withheld table leaves, the released cell table has no
+  `sum_sq` column, and P21 still holds: `refit_from_artifact` reproduces the
+  degraded release bit-for-bit. Gaussian skeleton points now split 47 full
+  fits / 36 coefficients-only / 456 refused, against 47 / 0 / 492 — exactly
+  the 36 the dispersion cell alone had been refusing. Confined to the gaussian
+  dispersion: binomial and poisson cannot be fitted without their tables, and
+  ANOVA is a variance decomposition. Spec R15 and P19 amended.
 - **An external output checker can now be switched on (roadmap item 1,
   rollout steps 3–4).** `PolicyConfig.vetter` selects `standin` (the default)
   or `standin+external`, with `checker_cmd` saying how to start the checker;

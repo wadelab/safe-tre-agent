@@ -116,6 +116,54 @@ operator without editing the vetting code. The measured availability cost of
 each setting should ship with it — `scripts/measure_dispersion_sensitivity.py`
 already produces exactly that number.
 
+**Decided 2026-07-26: options 3 and 4, together.** They are complements, not
+alternatives — one makes the rule sayable, the other makes its cost bearable.
+
+*Option 3, as built.* `sum_sq` no longer labels its value `magnitude`; R14
+gained a `moment2` class, because the vocabulary could not previously express
+the distinction the rule turns on. `VettingParameters.dominance_for` selects
+the bound by that class, and `PolicyConfig.moment2_dom_threshold` (unset by
+default, so nothing changes) is where an operator states it. What a stated
+bound *means* is now something they can reason about: a bound *s* on the
+squared share corresponds to a linear-scale share of *p* = *r*/(1+*r*) with
+*r* = √(*s*/((1−*s*)(*k*−1))), so `moment2: 0.8` says "one donor may hold
+about a third of a twenty-donor cell, or a fifth of a fifty-donor one".
+
+| squared bound | *k* = 20 | *k* = 50 |
+|---|---|---|
+| 0.5 (the default, unchanged) | 0.19 | 0.13 |
+| 0.8 | 0.31 | 0.22 |
+| 0.9 | 0.41 | 0.30 |
+
+*Option 4, as built.* A gaussian model's `sum_sq` tables are declared
+**optional** (`ModelProcedure.optional_roles`). If the gateway cannot release
+them completely, the fit proceeds from the vetted mean cells alone and the
+release carries coefficients with no standard error, t, p or R²; the model
+block records `dispersion_released: False` and the analyst gets a finding
+saying so. Nothing derived from the withheld table leaves, the released cell
+table has no `sum_sq` column at all, and P21 still holds — `refit_from_artifact`
+reproduces the degraded release bit-for-bit from what was released. An
+optional table is used only if it releases *completely*: a partly-suppressed
+one would silently change the number it feeds. This is confined to the
+gaussian dispersion — binomial and poisson cannot be fitted without their
+tables, and ANOVA *is* a variance decomposition, so both still refuse.
+
+Measured on the demo dataset, gaussian skeleton points now split 47 full fits
+/ 36 coefficients-only / 456 refused, against 47 / 0 / 492 before: exactly the
+36 that the dispersion cell alone was refusing.
+
+**Not done, and deliberately:** significance stars from a withheld dispersion.
+A star is a function of the standard error, so computing one from a suppressed
+`sum_sq` would release a coarsened function of an unvetted cell — breaking the
+invariant that everything released is a function of vetted cells (P21,
+release-equality), and leaking weakly, since β and *n* are released and a star
+bounds the SE, which bounds Σx², which bounds the dominant donor. The version
+that would work is a **robust dispersion** — winsorise or trim the top
+contributor so the cell is not dominated by construction, vet *that*, and
+derive inference from it. It is a statistical question rather than an
+engineering one (a winsorised SE is optimistic unless corrected, which is the
+wrong direction for a disclosure tool) and is left open.
+
 ## 4. The process boundary
 
 ACRO 0.4.x pins `pandas < 3` and the runtime uses pandas 3 (C3), so ACRO

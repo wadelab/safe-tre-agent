@@ -56,12 +56,12 @@ class QueryService:
         self.policy = policy or D.DisclosurePolicy()
 
     def _context(self, spec: QuerySpec):
-        """What an external checker needs about this query, built only when a
-        vetter actually reads it — it costs a second engine query, and the
-        stand-in rules have no use for it."""
-        if not self.policy.needs_contributions():
-            return None
-        return self.engine.cell_context(spec)
+        """What a vetter needs to know about this query: the disclosure class
+        of its released value (which selects the dominance bound) and its cell
+        keys, always; the donor-level contributions only when a vetter reads
+        them, since those cost a second engine query."""
+        return self.engine.cell_context(
+            spec, with_contributions=self.policy.needs_contributions())
 
     def handle(self, request: str, planner, auditor: D.SessionAuditor | None = None,
                audit_log=None, user: str = "anon") -> Result:
@@ -265,8 +265,10 @@ class QueryService:
             return deny(f, "session query budget exceeded")
 
         marginals = self.engine.marginal_donor_counts()
+        optional = proc.optional_roles(spec)
         finalized: dict[str, pd.DataFrame] = {}
         cohorts: list[tuple[str, tuple]] = []
+        notes: list[D.Finding] = []
         for role, agg in zip(roles, aggregates, strict=True):
             df = self.engine.run(agg)
             trace.append(f"engine[{role}]: {len(df)} aggregate row(s) computed")
@@ -288,6 +290,18 @@ class QueryService:
             # redaction means some design cell is unsafe to release, so the
             # message names the aggregate role only — never which cell or why.
             if action != "release":
+                if role in optional:
+                    # the fit goes ahead without it, and the output says so:
+                    # a coefficient computed from vetted means is releasable
+                    # even when the dispersion behind its standard error is
+                    # not. Nothing derived from this table is released.
+                    trace.append(f"gateway[{role}]: withheld; the model "
+                                 "releases without what it would have provided")
+                    notes.append(D.Finding(
+                        "low", "model_table_withheld", suppressable=True,
+                        detail=f"the {role!r} table could not be released; the "
+                               "model omits what it supplies"))
+                    continue
                 f = [D.Finding("high", "model_incomplete_cell_table",
                                "an underlying design-cell table cannot be fully "
                                "released for this model")]
@@ -327,6 +341,6 @@ class QueryService:
             auditor.record_cohort(dataset, cohort)
         spec_dict = spec.model_dump() | {
             "aggregates": [a.measure_key() for a in aggregates]}
-        record("released", spec_dict, [], output)
+        record("released", spec_dict, notes, output)
         return Result("released", output=output, spec=spec_dict,
-                      findings=[], trace=trace, artifacts=artifacts)
+                      findings=notes, trace=trace, artifacts=artifacts)

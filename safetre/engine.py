@@ -388,14 +388,22 @@ class QueryEngine:
         frame = self.con.execute(plan.sql, plan.params).df()
         return frame[frame["v"].notna()] if "v" in frame.columns else frame
 
-    def cell_context(self, spec: QuerySpec):
-        """Everything a vetter needs about the query behind a cell table."""
+    def cell_context(self, spec: QuerySpec, with_contributions: bool = False):
+        """Everything a vetter needs about the query behind a cell table.
+
+        Cheap by default: the disclosure class and the cell keys cost nothing,
+        and only an external checker needs the donor-level contributions,
+        which are a second query.
+        """
         from .disclosure import CellContext
 
         proc = get_procedure(spec.measure.fn)
-        return CellContext(contributions=self.contributions(spec),
-                           keys=tuple(spec.group_by),
-                           aggfunc=proc.checker_aggfunc(spec.measure))
+        contract = proc.output_contract(spec.measure)
+        return CellContext(
+            contributions=self.contributions(spec) if with_contributions else None,
+            keys=tuple(spec.group_by),
+            aggfunc=proc.checker_aggfunc(spec.measure),
+            value_class=contract.get("value"))
 
     def _attach_witness(self, spec: QuerySpec, plan: SQLPlan, column: str,
                         result: pd.DataFrame) -> pd.DataFrame:

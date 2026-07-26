@@ -50,6 +50,7 @@ _policy = DisclosurePolicy(
     threshold=_cfg.min_cell_size, max_rows=_cfg.max_output_rows,
     dom_threshold=_cfg.dom_threshold, influence_threshold=_cfg.influence_threshold,
     round_base=_cfg.round_base,
+    moment2_dom_threshold=_cfg.moment2_dom_threshold,
     vetter=build_vetter(_cfg.vetter, _cfg.checker_cmd))
 service = QueryService(_tables, _policy)
 audit_log = AuditLog(os.environ.get("SAFETRE_AUDIT_DB", "audit.db"))
