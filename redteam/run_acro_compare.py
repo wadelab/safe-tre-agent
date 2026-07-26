@@ -200,8 +200,7 @@ def main() -> int:
     # in the repository, so CI generates it — with the same seed and size
     # `scripts/make_data.py` uses, or the published numbers would describe a
     # dataset nobody else can reproduce
-    tables = (synth.load_csvs()
-              if os.path.isdir("data") and os.listdir("data")
+    tables = (synth.load_csvs() if synth.csvs_present()
               else synth.generate(seed=DEMO_SEED, n_donors=DEMO_DONORS))
     engine = QueryEngine(tables)
     policy = DisclosurePolicy()

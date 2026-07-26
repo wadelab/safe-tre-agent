@@ -508,6 +508,22 @@ def save_csvs(tables: dict[str, pd.DataFrame], out_dir: str = "data") -> None:
         df.to_csv(os.path.join(out_dir, f"{name}.csv"), index=False)
 
 
+def csvs_present(out_dir: str = "data") -> bool:
+    """Whether `out_dir` actually holds the tables, rather than merely
+    existing.
+
+    Callers used to ask `isdir(out_dir) and listdir(out_dir)`, which is true
+    of a directory containing anything at all — an editor swap file, a
+    notebook, someone's scratch script. The CSVs are gitignored, so a fresh
+    checkout with one stray tracked file under `data/` sent every caller down
+    the load path to a FileNotFoundError. Ask the question that was meant.
+    """
+    import os
+
+    return all(os.path.exists(os.path.join(out_dir, f"{name}.csv"))
+               for name in TABLES)
+
+
 def load_csvs(out_dir: str = "data") -> dict[str, pd.DataFrame]:
     import os
     return {

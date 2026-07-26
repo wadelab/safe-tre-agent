@@ -104,7 +104,7 @@ def run_service_guarded(tables, steps):
 
 
 def main():
-    tables = synth.load_csvs() if os.path.isdir("data") and os.listdir("data") else synth.generate()
+    tables = synth.load_csvs() if synth.csvs_present() else synth.generate()
     attacks = yaml.safe_load(open(os.path.join(HERE, "attacks.yaml")))
 
     rows = []

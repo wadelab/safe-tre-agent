@@ -24,7 +24,7 @@ def make_llm():
 
 def main():
     request = " ".join(sys.argv[1:]) or "mean spend by age band"
-    tables = synth.load_csvs() if os.path.isdir("data") and os.listdir("data") else synth.generate()
+    tables = synth.load_csvs() if synth.csvs_present() else synth.generate()
     analyst = Analyst(make_llm(), tables)
 
     resp = analyst.run(request, guard=True)
