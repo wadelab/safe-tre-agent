@@ -62,6 +62,7 @@ nav:
   - Engineering record:
       - Hardening log: hardening-log.md
       - Decision log: decision-log.md
+      - Bestiary of caged beasts: bestiary.md
       - Best-practice review: best-practice-review.md
       - ACRO comparison: acro-comparison.md
       - ACRO integration design: acro-integration.md
