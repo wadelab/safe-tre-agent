@@ -31,10 +31,29 @@ def _canonical(obj) -> str:
     return json.dumps(obj, sort_keys=True, separators=(",", ":"), default=str)
 
 
-def _load_key(db_path: str) -> bytes:
+class HostResidentAuditKey(RuntimeError):
+    """Production asked for a tamper-evident log and got a key sitting next to
+    it. Raised rather than warned: the chain's whole purpose is to survive a
+    host compromise, and a compromise that finds both the log and the key can
+    re-MAC a forged chain that `verify()` then accepts."""
+
+
+def _load_key(db_path: str, require_external: bool = False) -> bytes:
     env = os.environ.get("SAFETRE_AUDIT_KEY")
     if env:
         return env.encode()
+    if require_external and os.environ.get("SAFETRE_ALLOW_HOST_AUDIT_KEY") != "1":
+        raise HostResidentAuditKey(
+            f"SAFETRE_AUDIT_KEY is not set, so the audit chain would be signed "
+            f"with a key generated beside the log at {db_path}.key — on the "
+            f"same host, where a compromise that can rewrite the log can also "
+            f"read the key and forge a chain that verifies. Refusing to start. "
+            f"Supply the key from a secret this host does not otherwise hold "
+            f"(see deploy/safetre-web.service), and anchor the chain head "
+            f"off-box with SAFETRE_AUDIT_HEAD_ANCHOR so tampering stays "
+            f"detectable even if the key is later compromised. "
+            f"SAFETRE_ALLOW_HOST_AUDIT_KEY=1 overrides this for a "
+            f"non-production deployment.")
     # Dev fallback: a random key persisted beside the DB (0600). NOT tamper-proof
     # against a host compromise (key + log on the same box) — prod must set
     # SAFETRE_AUDIT_KEY from an off-box secret.
@@ -58,8 +77,13 @@ def _load_key(db_path: str) -> bytes:
 
 
 class AuditLog:
-    def __init__(self, path: str = "audit.db", key: bytes | None = None):
-        self._key = key if key is not None else _load_key(path)
+    def __init__(self, path: str = "audit.db", key: bytes | None = None,
+                 require_external_key: bool = False):
+        """`require_external_key` refuses the dev fallback that generates a key
+        beside the database. The web app passes it in production (hardening
+        #65); the CLI and the tests do not, because a throwaway log with a
+        throwaway key is exactly what they want."""
+        self._key = key if key is not None else _load_key(path, require_external_key)
         self.con = sqlite3.connect(path, check_same_thread=False)
         self._lock = threading.Lock()
         self.con.execute("PRAGMA journal_mode=WAL")

@@ -1,5 +1,6 @@
 """Web-layer tests via FastAPI TestClient (no running server needed)."""
 
+import json
 import os
 import tempfile
 
@@ -173,3 +174,43 @@ def test_the_capture_affordance_is_explicit_and_off_by_default(monkeypatch):
     monkeypatch.setenv("SAFETRE_ALLOW_PREFILL_AUTORUN", "1")
     assert _autorun_prefill() is True
     assert 'data-autorun-prefill="1"' in client.get("/").text
+
+
+# --- #64: the request body has a ceiling, enforced before anything reads it ---
+
+def test_oversized_body_is_refused_by_declared_length():
+    """#64 (round-9 V5): `QueryRequest.q` is capped at 500 characters, which
+    bounds what the application accepts and nothing about what the transport
+    buffers. Validation runs after the body is read, so a padded object was
+    received in full and only then rejected as an extra field."""
+    from safetre_web.body import DEFAULT_MAX_BODY_BYTES
+
+    padded = json.dumps({"q": "mean spend by age band",
+                         "pad": "A" * (DEFAULT_MAX_BODY_BYTES * 4)})
+    r = client.post("/api/query", content=padded,
+                    headers={"content-type": "application/json"})
+    assert r.status_code == 413
+    assert r.json()["limit_bytes"] == DEFAULT_MAX_BODY_BYTES
+
+
+def test_oversized_body_is_refused_without_a_declared_length():
+    """A chunked request declares no Content-Length, so the length gate alone
+    is advisory — the attacker chooses whether to declare. The receive channel
+    is counted as it arrives."""
+    from safetre_web.body import DEFAULT_MAX_BODY_BYTES
+
+    def chunks():
+        yield b'{"q": "hello", "pad": "'
+        for _ in range(8):
+            yield b"A" * DEFAULT_MAX_BODY_BYTES
+        yield b'"}'
+
+    r = client.post("/api/query", content=chunks(),
+                    headers={"content-type": "application/json"})
+    assert r.status_code == 413
+
+
+def test_a_normal_query_is_unaffected_by_the_ceiling():
+    """The ceiling must not be a control that also refuses real work."""
+    r = client.post("/api/query", json={"q": "mean spend by age band"})
+    assert r.status_code == 200

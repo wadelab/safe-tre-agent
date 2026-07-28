@@ -34,8 +34,9 @@ from safetre.planner import LLMPlanner, MockPlanner
 from safetre.query import CATALOGUE
 from safetre.service import QueryService
 
+from .body import DEFAULT_MAX_BODY_BYTES, RequestSizeLimit
 from .channel import channel_allowed
-from .identity import configuration_problems, current_user
+from .identity import configuration_problems, current_user, is_production
 from .rate import RateLimiter
 from .session import SessionStore
 from .timing import ResponseTimeBoundary, sleep_to_boundary  # noqa: F401
@@ -74,7 +75,13 @@ _policy = DisclosurePolicy(
     moment2_dom_threshold=_cfg.moment2_dom_threshold,
     vetter=build_vetter(_cfg.vetter, _cfg.checker_cmd))
 service = QueryService(_tables, _policy)
-audit_log = AuditLog(os.environ.get("SAFETRE_AUDIT_DB", "audit.db"))
+# `require_external_key` in production: without SAFETRE_AUDIT_KEY the log would
+# be signed by a key generated beside it, so a host compromise holds both and
+# can re-MAC a forged chain that verify() accepts — the exact threat the chain
+# exists to address. The shipped unit set the database path and not the key,
+# and startup only warned (hardening #65).
+audit_log = AuditLog(os.environ.get("SAFETRE_AUDIT_DB", "audit.db"),
+                     require_external_key=is_production())
 # Off-box anchor for the audit chain head (optional); when set, /api/audit/verify
 # checks the recomputed head against it, not just internal consistency.
 _audit_head_anchor = os.environ.get("SAFETRE_AUDIT_HEAD_ANCHOR") or None
@@ -336,3 +343,11 @@ def audit_verify(request: Request):
 app.add_middleware(ResponseTimeBoundary,
                    settings=lambda: (_cfg.response_quantum_ms,
                                      _cfg.response_ceiling_ms))
+
+# And this one outside even that (hardening #64). The body ceiling is a cost
+# control, not a disclosure control: a 413 tells the sender only how big their
+# own request was. Padding it would mean holding an oversized body for the full
+# quantum, which is the denial of service paying for itself.
+app.add_middleware(RequestSizeLimit,
+                   max_bytes=int(os.environ.get("SAFETRE_MAX_BODY_BYTES",
+                                                DEFAULT_MAX_BODY_BYTES)))

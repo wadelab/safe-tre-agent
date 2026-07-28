@@ -24,6 +24,7 @@ Each test pins one finding from the security review so a regression fails CI:
   #60 a pipeline error spends budget: an exception is not a free query
   #62 the exact differencing leg is priced, and says nothing the cheap one does not
   #63 the cheap total-delta layer over-counts a donor spanning cells (stated)
+  #65 production refuses an audit key generated beside the log it signs
 """
 
 import concurrent.futures as cf
@@ -1257,3 +1258,60 @@ def test_a_chain_written_before_the_accounting_column_still_verifies(tmp_path,
     log.con.execute("UPDATE records SET accounting = NULL")   # as a pre-#58 row
     log.con.commit()
     assert AuditLog(path).verify()
+
+
+# --- #65: production refuses a key that lives beside the log ------------------
+
+def test_production_refuses_a_host_resident_audit_key(tmp_path, monkeypatch):
+    """#65 (round-9 V6): with no `SAFETRE_AUDIT_KEY` the log is signed by a key
+    generated beside it, so a compromise that can rewrite the database can also
+    read the key and re-MAC a chain `verify()` accepts — which is the one
+    threat the HMAC exists to address. The shipped unit set the database path
+    and not the key, and startup only warned."""
+    from safetre.audit import AuditLog, HostResidentAuditKey
+
+    monkeypatch.delenv("SAFETRE_AUDIT_KEY", raising=False)
+    monkeypatch.delenv("SAFETRE_ALLOW_HOST_AUDIT_KEY", raising=False)
+    db = str(tmp_path / "audit.db")
+
+    with pytest.raises(HostResidentAuditKey):
+        AuditLog(db, require_external_key=True)
+    assert not (tmp_path / "audit.db.key").exists(), \
+        "refusing must not leave the dev key it refused to use"
+
+    # an explicit override exists for a non-production deployment ...
+    monkeypatch.setenv("SAFETRE_ALLOW_HOST_AUDIT_KEY", "1")
+    AuditLog(db, require_external_key=True)
+    monkeypatch.delenv("SAFETRE_ALLOW_HOST_AUDIT_KEY")
+
+    # ... and an externally supplied key is what production is meant to do
+    monkeypatch.setenv("SAFETRE_AUDIT_KEY", "0" * 64)
+    log = AuditLog(str(tmp_path / "keyed.db"), require_external_key=True)
+    log.append(user="u", request="q", spec=None, status="denied",
+               findings=[], output_shape=None)
+    assert log.verify()
+
+
+def test_development_still_gets_its_throwaway_key(tmp_path, monkeypatch):
+    """The dev fallback stays: a throwaway log with a throwaway key is what the
+    CLI and the tests want, and #65 is about production claiming a property it
+    did not have — not about making local work harder."""
+    from safetre.audit import AuditLog
+
+    monkeypatch.delenv("SAFETRE_AUDIT_KEY", raising=False)
+    with pytest.warns(UserWarning, match="SAFETRE_AUDIT_KEY not set"):
+        AuditLog(str(tmp_path / "dev.db"))
+    assert (tmp_path / "dev.db.key").exists()
+
+
+def test_missing_head_anchor_is_reported_in_production(monkeypatch):
+    """#65: the anchor is the control that survives a full host compromise —
+    a rewrite by someone holding the key still fails against an off-box head."""
+    from safetre_web.identity import configuration_problems
+
+    monkeypatch.setenv("SAFETRE_REQUIRE_IDENTITY", "1")
+    monkeypatch.delenv("SAFETRE_AUDIT_HEAD_ANCHOR", raising=False)
+    assert any("SAFETRE_AUDIT_HEAD_ANCHOR" in p for p in configuration_problems())
+
+    monkeypatch.setenv("SAFETRE_AUDIT_HEAD_ANCHOR", "a" * 64)
+    assert not any("SAFETRE_AUDIT_HEAD_ANCHOR" in p for p in configuration_problems())

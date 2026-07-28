@@ -78,6 +78,13 @@ def _require_identity() -> bool:
     return _truthy("SAFETRE_REQUIRE_IDENTITY")
 
 
+def is_production() -> bool:
+    """`SAFETRE_REQUIRE_IDENTITY=1` is what a real deployment sets, so it is
+    the marker other controls read to decide whether a development convenience
+    is still acceptable (the audit key's dev fallback, hardening #65)."""
+    return _require_identity()
+
+
 def _allowed(login: str) -> bool:
     """Whether this login is a Safe Person.
 
@@ -169,6 +176,12 @@ def configuration_problems() -> list[str]:
             problems.append(
                 "SAFETRE_REQUIRE_IDENTITY=1 without SAFETRE_ALLOWLIST: the Safe "
                 "People gate admits nobody until an allowlist is set")
+        if not os.environ.get("SAFETRE_AUDIT_HEAD_ANCHOR", ""):
+            problems.append(
+                "SAFETRE_REQUIRE_IDENTITY=1 without SAFETRE_AUDIT_HEAD_ANCHOR: "
+                "the chain is checked only for internal consistency, so a "
+                "wholesale rewrite by someone holding the key verifies. An "
+                "off-box anchor is what makes that detectable")
     return problems
 
 

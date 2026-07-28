@@ -339,7 +339,16 @@ D1–D7). After the [first hardening round](hardening-log.md), what remains:
 - The disclosure engine is an ACRO-*inspired* stand-in (it now does threshold +
   dominance + rounding); production should wrap **ACRO** proper.
 - The audit log is HMAC-keyed but should be **mirrored off-box** and its key held
-  off-box for full tamper-resistance.
+  off-box for full tamper-resistance. Since hardening #65 a production
+  deployment (`SAFETRE_REQUIRE_IDENTITY=1`) **refuses to start** rather than
+  generate a key beside the log, because a compromise holding both can re-MAC a
+  chain that verifies. Stated precisely, since the shipped unit can only do so
+  much: an `EnvironmentFile` puts the key outside the state directory and makes
+  it rotatable, which defeats a copied database, a restored backup, or write
+  access to `/var/lib` — but on one host it does not defeat root. The control
+  that survives that is the off-box **anchor**
+  (`SAFETRE_AUDIT_HEAD_ANCHOR`), against which a wholesale rewrite fails
+  however well it is forged; a missing anchor is now reported at startup.
 - Remote-LLM mode to a non-local endpoint still egresses the *research
   questions*. The code now requires `SAFETRE_ALLOW_REMOTE_LLM=1`, but that flag
   remains synthetic-data-only and must not be enabled for real safepod data.

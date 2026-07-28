@@ -40,6 +40,34 @@ Environment=SAFETRE_CHANNEL_ALLOW_NETS=127.0.0.1/32,::1/128
 #     >> /etc/safetre/proxy.env
 EnvironmentFile=/etc/safetre/proxy.env
 Environment=SAFETRE_ALLOWLIST=researcher@example.ac.uk
+# --- audit chain: the key must NOT be derivable from this host alone ---------
+# The chain is HMAC-keyed so that someone who can REWRITE the database cannot
+# forge it. Without SAFETRE_AUDIT_KEY the app generates a key beside the log
+# (0600) — which means a host compromise holds the log AND the key and can
+# re-MAC a chain that verify() accepts, defeating the whole control. This unit
+# used to set the database path and not the key, and startup only warned; it
+# now refuses to start (hardening #65).
+#
+# Generate once, keep it off this host's repo and off the state directory that
+# holds audit.db, and load it the same way as the proxy secret:
+#   install -m 0600 /dev/null /etc/safetre/audit.env
+#   printf 'SAFETRE_AUDIT_KEY=%s\n' "$(openssl rand -hex 32)" \
+#     >> /etc/safetre/audit.env
+#
+# Being honest about what this buys on a single host: /etc and /var/lib are the
+# same disk, so an attacker with root still reaches both. What it defeats is the
+# weaker and likelier case — write access to the state directory, a restored or
+# copied audit.db, a backup — and it makes the key a thing an operator can
+# rotate and store elsewhere. The control that survives full host compromise is
+# the off-box ANCHOR below: publish the chain head somewhere this machine cannot
+# write, and a wholesale rewrite stops verifying however good the forgery is.
+EnvironmentFile=/etc/safetre/audit.env
+# The last known-good chain head, recorded off-box (a log line to a remote
+# collector, a note in the operations record — anywhere this host cannot edit).
+# /api/audit/verify checks the recomputed head against it, and rehydration
+# refuses to rebuild the session controls from a chain that does not match
+# (hardening #59). Update it whenever you record a new head.
+#Environment=SAFETRE_AUDIT_HEAD_ANCHOR=<64-hex chain head from /api/audit/verify>
 # bind localhost only; expose via `tailscale serve --bg 8800`
 ExecStart=/opt/safe-tre-agent/.venv/bin/uvicorn safetre_web.app:app --host 127.0.0.1 --port 8800
 
