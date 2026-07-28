@@ -102,9 +102,9 @@ for why the red-team rounds continue regardless of how good the models get.
 | F1 | **Done.** Rows, simulatability and donor arity in the disclosure model | #40 lag, V8, V13 | Small–medium | `formal/disclosure_policy.als` |
 | F2 | **Done.** Band-alignment theorem in Lean | #39, class-wide | Small | `formal/lean/SafeTre/` |
 | F10 | **Done.** Denial-channel indistinguishability | V9, V10, generalises #30 | Small–medium | Lean or Alloy + tests |
-| F4 | Vetting arithmetic over ℚ in Lean | #41, #42 class | Medium | new `SafeTre/Arith.lean` |
+| F4 | **Done.** Vetting arithmetic in Lean (exact integers, not ℚ) | #41, #42 class | Medium | `SafeTre/Arith.lean` |
 | F5 | Declared surfaces done (`manifest.py`, #61); model parametrisation open | #46, V12 | Medium | both toolchains + `manifest.py` |
-| F7 | Counterexample ↔ attack pipeline | the #40/V2 failure mode itself | Process + small tooling | `redteam/`, `formal/`, sync tests |
+| F7 | **Done.** Counterexample ↔ attack pipeline | the #40/V2 failure mode itself | Process + small tooling | `formal/correspondence.yaml` |
 | F8 | Trust-zone model of the deployment | #45, #50, V6 | Medium | new `formal/trust_zones.als` |
 | F6 | Value-level release-function theorem (§C programme) | #41–#44 structurally | Large | `formal/lean/` |
 | F9 | DP accountant | value-level guarantee as a theorem | Large (roadmap item 3) | new |
@@ -310,7 +310,25 @@ Pair the theorem with a generated conformance test over every refusal-producing
 path, in the style of `tests/test_procedure_conformance.py`, so a new procedure
 inherits the obligation instead of re-deciding it.
 
-### F4. Vetting arithmetic over ℚ
+### F4. Vetting arithmetic — **delivered**
+
+*Delivered 2026-07-29.* One deviation from the plan, and it made the result
+stronger: **not ℚ**. Lean's core `Rat` has no kernel-reducible decidability
+without Mathlib, and this package deliberately has no dependencies — but every
+rule here is a *comparison* against a rational threshold, and integer
+cross-multiplication expresses a comparison exactly. So the decisions are
+modelled without any rational arithmetic at all, `omega` proves most of them,
+and the one nonlinear step (transitivity of `≤` on ratios) is three
+multiplications and a cancellation by hand.
+
+Two things worth recording. The monotonicity theorem was stated with the
+implication **the wrong way round** on the first attempt and typechecked as far
+as its final step, which is a good argument for the generated pin: 864 cells
+the live `StandinVetter` was asked about, re-decided by the model, boundary
+values included. They all agree — so the exact-versus-float gap is not, on
+these rules, a real one.
+
+### F4. Vetting arithmetic over ℚ — original plan
 
 #41 (signed dominance inversion) and #42 (non-finite payloads releasing) were
 arithmetic bugs in formulas for which no property had ever been stated. The
@@ -356,7 +374,23 @@ that states a policy the system is not running.
   Lean artifacts are. A number that describes a control belongs in the same
   regime as a model that describes one.
 
-### F7. Counterexample ↔ attack pipeline
+### F7. Counterexample ↔ attack pipeline — **delivered**
+
+*Delivered 2026-07-29* as `formal/correspondence.yaml` plus
+`tests/test_formal_correspondence.py`. Every `run` in every model is classified
+as a vacuity **guard**, an **attack** that must name an executable twin, or a
+**residual** that must name a twin or the record pricing it. Both directions
+are enforced, and I checked they have teeth: adding an unclassified run to a
+model fails, and renaming a reproducer out from under the table fails.
+
+The classification is the part that earns its keep. Writing it forced a
+decision on each run about *what it is for*, and one — `InteractionResidualExists` —
+turned out to have no executable twin and could not have one, because since #40
+the exact leg denies precisely that pair, so there is no released output to
+reproduce. That is now stated in the table with the reason, rather than being
+an absence nobody had noticed.
+
+### F7. Counterexample ↔ attack pipeline — original plan
 
 The models and the red-team harness currently validate each other only by hand,
 which is how the #40 lag happened and how V2 stayed invisible behind an

@@ -1,0 +1,94 @@
+# Model ↔ attack correspondence (FORMAL_METHODS_ANALYSIS, recommendation F7).
+#
+# The models and the red-team harness validated each other only by hand, and
+# that is how the #40 lag happened: `disclosure_policy.als` went on proving a
+# sound bound over donor cohorts for a round after the code had moved to rows,
+# because nothing failed when the model stopped describing the code. V2 is the
+# same shape from the other side — `LineageIsExactlyReleases` encoded
+# one-cohort-per-request as a FACT, so the model could not express the bug even
+# in principle, and no test noticed that it could not.
+#
+# This file is the mechanical link, and `tests/test_formal_correspondence.py`
+# enforces it in BOTH directions:
+#
+#   model -> harness   every `run` command in every .als is classified here,
+#                      and an `attack` must name an executable twin that
+#                      exists. A new attack run cannot be added without one.
+#   harness -> model   every twin named here must exist, so deleting or
+#                      renaming a reproducer breaks the build rather than
+#                      quietly orphaning the model instance it stood for.
+#
+# Three kinds:
+#   guard     an inhabitation / vacuity run. It exists so the `check`s above it
+#             are not vacuously true; there is nothing to reproduce.
+#   attack    a satisfiable run exhibiting a real attack that the shipped code
+#             prevents, usually with an assumption dropped. MUST have an
+#             executable twin: if the model exhibits it and nothing executes
+#             it, the model is the only thing claiming the attack is real.
+#   residual  an accepted, priced gap the code documents. MUST name either a
+#             twin or the record that prices it — a residual with neither is
+#             just an undocumented hole with a satisfiable run.
+
+glm_gateway.als:
+  someAdmissibleSpec:
+    kind: guard
+    note: the admissible space is inhabited, so P19/P21/P4 are not vacuous.
+  CoefficientsWithoutDispersion:
+    kind: residual
+    hardening: 53
+    twin: tests/test_hardening.py::test_a_model_without_dispersion_is_visibly_different
+    priced: artifacts/optional_role_channel.json
+
+disclosure_policy.als:
+  someSession:
+    kind: guard
+    note: two distinct releases coexist, so the auditor rules are not vacuous.
+  InteractionResidualExists:
+    kind: residual
+    twin: null
+    priced: docs/decisions/D7-donor-totals-and-band-filters.md
+    note: >-
+      A pair the MARGINAL layer alone would allow whose true difference is
+      small. Not separately executable, and deliberately so: since #40 the
+      exact row-level leg denies exactly this pair, so there is no released
+      output to reproduce. It stays as a run because it is the reason that leg
+      exists — and the price of it is #62.
+  Hardening40AttackWithoutRowLayer:
+    kind: attack
+    hardening: 40
+    twin: redteam/round8_repro.py::row_level_differencing
+  V13DonorTotalOvercounts:
+    kind: residual
+    hardening: 63
+    twin: tests/test_hardening.py::test_donor_total_overcounts_a_donor_spanning_cells
+  V8ExactLegIsNotSimulatable:
+    kind: residual
+    hardening: 62
+    twin: tests/test_hardening.py::test_the_two_differencing_legs_are_indistinguishable
+    priced: artifacts/exact_leg_channel.json
+
+temporal_session.als:
+  someTemporalSession:
+    kind: guard
+    note: a serialized session reaches both a release and a denial.
+  someRestartedSession:
+    kind: guard
+    note: >-
+      A session restarts and keeps serving. Without this the restart
+      properties could hold because the restart path is unreachable.
+  Hardening18RaceWithoutLock:
+    kind: attack
+    hardening: 18
+    twin: tests/test_hardening.py::test_concurrent_differencing_serialised_by_session_lock
+  V1BudgetRefundedOnRestart:
+    kind: attack
+    hardening: 58
+    twin: redteam/round9_repro.py::v1_budget_is_restart_faithful
+  V2CohortLostOnRestart:
+    kind: attack
+    hardening: 58
+    twin: redteam/round9_repro.py::v2_successes_cohort_survives
+  V3DeletionDefeatsLineage:
+    kind: attack
+    hardening: 59
+    twin: redteam/round9_repro.py::v3_deletion_is_refused

@@ -19,6 +19,7 @@ Phases 1–2). Three groups:
 
 import SafeTre.Sql
 import SafeTre.Cases
+import SafeTre.ArithCases
 
 -- several `<;>`-joined branches share a simp set; per-branch unused-argument
 -- lint noise is expected there
@@ -591,5 +592,26 @@ theorem cases_pin_engine :
     cases.all (fun c =>
       valid c.1 && (render (compile c.1) == c.2.1) &&
       ((compile c.1).paramCount == c.2.2)) = true := by native_decide
+
+/-! ## 5. The vetting-arithmetic pin (F4) -/
+
+/-- The arithmetic model is inhabited and non-trivial: some cases release and
+some do not, so the pin below is not asserting that everything is refused. -/
+theorem arith_cases_are_mixed :
+    (arithCases.any (fun c => c.2.2)) && (arithCases.any (fun c => !c.2.2)) = true := by
+  native_decide
+
+/-- **The pin.** For every generated case the model's exact rational decision
+equals the decision the live `StandinVetter` actually made.
+
+This is where the modelling assumption is tested rather than asserted. The
+model compares ratios by integer cross-multiplication; the engine compares
+IEEE doubles. The generated witnesses are exact binary fractions, and the
+threshold cases (a witness exactly equal to the bar) are included on purpose,
+so a disagreement here would be a real difference in the RULE — a `<` where
+the other has `<=` — and not an artefact of representation. -/
+theorem arith_cases_pin_vetter :
+    arithCases.all (fun c => releases c.1 c.2.1 == c.2.2) = true := by
+  native_decide
 
 end SafeTre

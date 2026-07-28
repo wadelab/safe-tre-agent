@@ -238,6 +238,16 @@ This does not replace Lean/Alloy, but it gives CI a broad executable approximati
 
 ### Phase 3 — Research-Grade (3–6 months)
 
+- [x] **(2026-07-29)** Formalise the vetting arithmetic (`SafeTre/Arith.lean`):
+      the dominance witness is a share, is sign-invariant, and agrees with the
+      naive share on non-negative data (#41); unresolved witnesses and
+      non-finite payloads fail closed (#42); rounding blurs by one base;
+      tightening a dial never releases more. Pinned to the live vetter over
+      864 generated cells
+- [x] **(2026-07-29)** Make the model ↔ attack correspondence mechanical
+      (`formal/correspondence.yaml`, `tests/test_formal_correspondence.py`):
+      every model run is a classified guard, attack or priced residual, and
+      every executable twin must exist
 - [ ] Integrate OpenDP for formal ε-DP on count/mean/sum queries
 - [ ] Prove compositional privacy budget tracking across the session query budget
 - [ ] Publish the formalization as a machine-checked verification artifact

@@ -14,7 +14,9 @@ hunting).
 | `glm_gateway.als` | Alloy model of the GLM release path: GLMSpec admissibility, nondeterministic per-cell vetting, the service rule. Checks P19/P21 over every vetting outcome and P4-admissibility over the exact catalogue atoms. |
 | `disclosure_policy.als` | Alloy model of the session auditor's cohort-lineage rule over **rows as well as donors** (`simulatable_cohort_bound`, `engine.row_symdiff_donors`, and the min-rule in `service._difference_bound`). Checks the marginal bound's soundness, that rare-category isolation is blocked (P11), that any released pair differs over at least T donors *at row level* (#40), and that the row layer subsumes the donor layer it replaced; machine-exhibits the #40 attack when the row layer is dropped, the interaction residual, the total-delta layer's over-count, and the non-simulatable bit the exact leg costs. |
 | `temporal_session.als` | Alloy 6 temporal model of a session **across restarts**: the `observe → apply → record` event order of `QueryService.handle`/`_handle_model`, the audited exception path, and the reconstruction `SessionStore.rehydrate` performs. Checks the budget invariant and exhaustion short-circuit (P17), the fail-closed gate (P7), differencing-pair serialisation under the per-Session lock (P16), that lineage records exactly the releases, that a restart is a no-op on the controls (replay equivalence), audit completeness (#37) and the policy record's position (#55); machine-exhibits the #18 race without the lock and the three round-9 restart attacks when their assumptions are dropped. |
+| `correspondence.yaml` | The model ↔ attack table (F7): every `run` in every model classified as a vacuity **guard**, an **attack** that must name an executable twin, or a priced **residual**. `tests/test_formal_correspondence.py` enforces it both ways — an unclassified run fails, and a twin that was renamed away fails. |
 | `run_checks.py` | Headless runner for the Alloy models: executes every command via the Alloy CLI and turns the receipts into a CI verdict (the CLI itself exits 0 even on a counterexample). Fails on any counterexample, any unsatisfiable run, or a missing command. |
+| `lean/SafeTre/Arith.lean` | The vetting arithmetic (F4): the dominance witness, the cell rule, rounding, and monotonicity, over exact integers. `ArithCases.lean` is **generated** — 864 cells the live `StandinVetter` was asked about, paired with its decisions. |
 | `lean/` | The Lean 4 package (`SafeTre`). `Types/Spec/Sql/Proofs.lean` are hand-written; `Catalogue.lean` (catalogue, DI/QI/S/R labels, live view columns) and `Cases.lean` (414 compiled-SQL pin pairs) are **generated** by `scripts/gen_lean_catalogue.py`. |
 
 ## What is proved (Lean, whole spec space)
@@ -47,6 +49,22 @@ All in `lean/SafeTre/Proofs.lean`, `sorry`-free:
   partition, and no edge falls strictly inside a band. This generalises #39
   from the instance that was patched to the class: a new internal range column
   without band rules, or an operator that cuts inside a band, fails the build.
+- **The vetting arithmetic (#41, #42)** — `Arith.lean`, over exact integers
+  rather than floats, because every rule here is a comparison against a
+  rational threshold and cross-multiplication expresses that exactly:
+  the magnitude witness really is a share (`0 ≤ MAX(abs) ≤ SUM(abs)`, so the
+  ratio is in `[0,1]` — the signed version had no such bound, which is what
+  #41 exploited); it is invariant under negating every contribution, and
+  identical to the naive signed share on non-negative data, which is why #41's
+  fix changed no existing decision; an unresolved witness or a non-finite
+  payload always suppresses (#42); rounding pins the true count only to a
+  window of one base; and tightening either the threshold or the dominance bar
+  never releases more, which is what #46's floors assume when they insist a
+  floor is a floor. Pinned to the code by `arith_cases_pin_vetter` over 864
+  generated cells — boundary values included, since `<` versus `<=` is exactly
+  what a rewrite gets wrong. The model is exact where the engine is
+  double-precision, so that pin is testing the modelling assumption rather
+  than restating it.
 - **The engine pin** `cases_pin_engine` — for all 414 generated cases the
   Lean-rendered SQL equals `engine.compile_query`'s output byte for byte,
   with matching parameter counts.
@@ -98,6 +116,9 @@ code. Pytest-checked hops close it, none needing Java or Lean:
 2a. `tests/test_formal_temporal_sync.py` — the live service's trace event
    order (engine → auditor → gateway → hitl) and record-only-on-release
    match `temporal_session.als`;
+2b. `tests/test_formal_correspondence.py` — every model `run` is classified
+   and every executable twin exists (F7), so a model can no longer go on
+   passing its own commands while describing code that has moved;
 3. `tests/test_formal_lean_sync.py` — the committed `Catalogue.lean` and
    `Cases.lean` equal `scripts/gen_lean_catalogue.py`'s output (catalogue,
    labels, live view columns, and the engine's actual SQL for every pin

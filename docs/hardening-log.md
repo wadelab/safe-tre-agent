@@ -83,6 +83,21 @@ that result to a human output checker instead of publishing it. The property now
 says what the gateway actually promises — no `high` finding ever leaves, and a
 frame carrying any residual finding never auto-releases.
 
+**The formal side of this round closed two recommendations, and both
+found something while being written.** F4 (the vetting arithmetic, now
+`formal/lean/SafeTre/Arith.lean`) states the properties #41 and #42 violated —
+that the dominance witness is a share, is invariant under negating every
+contribution, and agrees with the naive signed share exactly where the old
+formula was safe; and that an unresolved witness or a non-finite payload always
+suppresses. It is modelled over exact integers rather than floats, because
+every rule is a comparison against a rational threshold and cross-multiplication
+expresses that exactly. Writing it produced one theorem stated with its
+implication the wrong way round, which typechecked as far as the final step —
+so the 864-cell pin against the live vetter is not ceremony. F7
+(`formal/correspondence.yaml`) makes every model run a classified guard, attack
+or priced residual with an executable twin that must exist; writing the
+classification surfaced one run that can have no twin, and now says so.
+
 **#66 is the third instance of one mistake, and that is the finding.**
 D7 justified a non-simulatable denial as "the bit a direct query already
 returns" (#62). P22 justified naming a separated term because rank "is
