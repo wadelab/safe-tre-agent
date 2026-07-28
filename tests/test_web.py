@@ -147,3 +147,29 @@ def test_index_accessibility_contract():
     assert "title=" not in r
     # step state is text in a tag, never colour alone
     assert r.count("step-status") >= 7
+
+
+# --- #50: a prefill link fills the box, it does not run it ----------------------
+
+def test_a_prefill_link_does_not_run_itself_by_default():
+    """`/#q=...` writing into the HMAC-chained log under whoever opened the link
+    made the chain authenticate a request no human composed — and, because it
+    was answered, one recorded as released with an output shape."""
+    body = client.get("/").text
+    assert 'data-autorun-prefill="1"' not in body
+    assert "document.body.dataset.autorunPrefill" in \
+        open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                          "safetre_web", "static", "app.js")).read()
+
+
+def test_the_capture_affordance_is_explicit_and_off_by_default(monkeypatch):
+    """Headless Chrome cannot click, so the screenshot and deck scripts turn
+    auto-run back on. Like SAFETRE_ALLOW_TEST_CLIENT it is a sentinel: it must
+    take an explicit environment variable, and it must default to off."""
+    from safetre_web.app import _autorun_prefill
+
+    monkeypatch.delenv("SAFETRE_ALLOW_PREFILL_AUTORUN", raising=False)
+    assert _autorun_prefill() is False
+    monkeypatch.setenv("SAFETRE_ALLOW_PREFILL_AUTORUN", "1")
+    assert _autorun_prefill() is True
+    assert 'data-autorun-prefill="1"' in client.get("/").text

@@ -14,7 +14,7 @@ from typing import ClassVar
 
 import pandas as pd
 
-from .schema import identifier_columns, sensitive_columns
+from .schema import declared_domain, identifier_columns, sensitive_columns
 
 COUNT_COLUMNS = {"n", "count", "size", "freq", "n_donors"}
 DOM_THRESHOLD = 0.5      # suppress a cell if one contributor exceeds this share
@@ -60,6 +60,25 @@ def _count_cols(df: pd.DataFrame) -> list[str]:
 # payload and internal-helper columns: everything else in an aggregate frame is
 # a cell key.
 _NON_KEY_COLUMNS = COUNT_COLUMNS | {"value", "p_value", "dominance", "influence"}
+
+# The released numbers themselves — what an analyst reads off the table, as
+# opposed to the counts (rounded) and the safety witnesses (dropped).
+PAYLOAD_COLUMNS = {"value", "p_value"}
+
+
+def _payload_cols(df: pd.DataFrame) -> list[str]:
+    return [c for c in df.columns if str(c).lower() in PAYLOAD_COLUMNS]
+
+
+def _nonfinite(series: pd.Series) -> pd.Series:
+    """Rows whose payload is not a finite number.
+
+    Missing counts as non-finite: an aggregate that could not be computed is
+    not a statistic, and releasing it says something about the records behind
+    it that the gateway never checked.
+    """
+    values = pd.to_numeric(series, errors="coerce")
+    return values.isna() | values.abs().eq(float("inf"))
 
 
 def _looks_like_a_measure(series: pd.Series) -> bool:
@@ -111,12 +130,15 @@ def _group_columns(df: pd.DataFrame, keys: tuple[str, ...] | None = None) -> lis
 
 def leak_detector(df: pd.DataFrame | None, threshold: int | None = None,
                   max_rows: int | None = None, dom_threshold: float | None = None,
-                  influence_threshold: float | None = None) -> list[Finding]:
+                  influence_threshold: float | None = None,
+                  keys: tuple[str, ...] | None = None) -> list[Finding]:
     """Inspect a released output for residual disclosure risk.
 
     Used both as the gateway's check and as the red-team's ground-truth oracle.
     Thresholds default to the policy defaults so the oracle keeps a fixed meaning;
     the gateway passes its *configured* thresholds so `config.yaml` actually bites.
+    `keys` names the cell-key columns when the caller knows them (the query's own
+    group-by); without it the same conservative heuristic as `_group_columns`.
 
     Fails **closed**: a safety column that is NULL/NaN/±inf (i.e. the engine could
     not establish the cell is safe) is treated as a violation, not as safe. A
@@ -189,17 +211,96 @@ def leak_detector(df: pd.DataFrame | None, threshold: int | None = None,
                              f"one donor shifts r by more than {influence_threshold} "
                              f"(or was unresolved)"))
 
-    # excessive granularity (looks like a row dump)
-    if len(df) > max_rows and not _count_cols(df):
-        findings.append(Finding("medium", "too_granular",
-                                f"more than {max_rows} rows with no aggregation",
-                                audit_detail=f"{len(df)} rows with no aggregation"))
+    # A released AGGREGATE payload must be a finite number (hardening #42).
+    # Every other rule here fails closed on an unresolved witness; the payload
+    # itself was never checked at all, and `value` appeared in this module only
+    # to be classified as not-a-cell-key. An infinite total is not an
+    # aggregate, it is the statement "an extreme or invalid record is in this
+    # cell" — and it arrives without exotic data: a single -inf, or finite
+    # magnitudes whose sum overflows, both released with a dominance witness
+    # of ~0.
+    #
+    # Scoped to frames carrying a count column, i.e. engine cell tables, which
+    # is where a payload is an aggregate over records. A fitted model's output
+    # is a different shape with legitimate structural gaps — an ANOVA table's
+    # `Residual` row has no F and no p by definition — and its numbers are a
+    # deterministic function of already-vetted cells (P21) checked against a
+    # declared output contract (R14). Treating those NaNs as disclosure risk
+    # suppressed a benign model, which is a control firing on the arithmetic
+    # rather than on the data.
+    for c in (_payload_cols(df) if _count_cols(df) else []):
+        bad = df[_nonfinite(df[c])]
+        if len(bad) > 0:
+            findings.append(Finding(
+                "high", "nonfinite_value", suppressable=True,
+                detail="cells whose released value is not a finite number were "
+                       "suppressed",
+                audit_detail=f"{len(bad)} cell(s) with a non-finite '{c}'"))
+
+    # A released cell key must be a declared category (hardening #43).
+    # Hardening #29 established that a value outside its column's declared
+    # domain is disclosive by its NAME — a hostile string smuggled into a
+    # field, a data-entry typo — and dropped such values from the published
+    # marginals. The release path never got the same treatment, so a typo'd
+    # category carried by enough donors to clear the threshold printed the
+    # string anyway. Only the codebook vocabulary may appear as a key; a
+    # missing key is left alone, because "unknown" is not a name that leaks.
+    #
+    # This runs on the query's DECLARED group-by keys and never on the dtype
+    # heuristic. Only the query knows which frame column is which catalogue
+    # dimension: a hand-built frame whose column happens to be called `region`
+    # is not necessarily the catalogue's `region`, and projecting it onto that
+    # domain would suppress cells for a name collision. Every service-path
+    # release carries its keys (`CellContext`), so the production path is fully
+    # covered; a caller with no query context gets the rest of the rules.
+    for c in keys or ():
+        if c not in df.columns:
+            continue
+        domain = declared_domain(str(c))
+        if domain is None:
+            continue
+        column = df[c]
+        undeclared = df[~(column.isin(domain) | column.isna())]
+        if len(undeclared) > 0:
+            findings.append(Finding(
+                "high", "undeclared_cell_key", suppressable=True,
+                detail="cells whose key is not a declared category were "
+                       "suppressed",
+                audit_detail=f"{len(undeclared)} cell(s) with an undeclared "
+                             f"'{c}' key"))
+
+    # Excessive granularity: too many cells to be a summary (hardening #56).
+    #
+    # This used to require `not _count_cols(df)` — "more than N rows and no
+    # aggregation at all" — which on the QuerySpec path is unsatisfiable, because
+    # `compile_query` appends `COUNT(*) AS n` unconditionally. So `max_output_rows`
+    # was a live dial in `config.yaml` describing a control that could never fire:
+    # exactly the defect the config loader was rewritten to prevent.
+    #
+    # The row-dump reading belongs to the legacy code-writing path, which is now
+    # a counter-example rather than a shipped component (#52). What survives on
+    # the secure path is the concern the parameter actually documents — an output
+    # so finely cut that it stops being a summary — and cell count is how that is
+    # measured here. Medium, so it escalates to a human output checker rather
+    # than denying: the cells individually passed every rule, and it is their
+    # number that wants a second opinion.
+    #
+    # Measured over the whole group-by skeleton: median 20 released cells, max
+    # 157, and 11 of 241 combinations (5%) exceed the default of 100 — all of
+    # them three-dimension cross-tabs, which is the granularity the bound is for.
+    if len(df) > max_rows:
+        findings.append(Finding(
+            "medium", "too_granular",
+            f"the result has more than {max_rows} cells, which is finer than "
+            f"this dataset releases without review",
+            audit_detail=f"{len(df)} cells against a bound of {max_rows}"))
     return findings
 
 
 # the stand-in's own suppression-resolved rules, kept as a name set because the
 # red-team corpus and the Alloy models refer to them by name
-SUPPRESSABLE = {"small_cell", "dominance", "influence"}
+SUPPRESSABLE = {"small_cell", "dominance", "influence", "nonfinite_value",
+                "undeclared_cell_key"}
 
 
 def is_suppressable(finding: Finding) -> bool:
@@ -324,8 +425,13 @@ class StandinVetter(CellVetter):
     def vet(self, df: pd.DataFrame, params: VettingParameters,
             context: CellContext | None = None) -> Verdicts:
         dominance = params.dominance_for(context.value_class if context else None)
+        # The query's own group-by, when it has one. `()` (an ungrouped query)
+        # and `None` (a caller with no query at all) are different answers:
+        # the first says "there are no cell keys", the second "I cannot say",
+        # and only the first licenses projecting keys onto declared domains.
+        keys = context.keys if context is not None else None
         findings = leak_detector(df, params.threshold, params.max_rows,
-                                 dominance, params.influence_threshold)
+                                 dominance, params.influence_threshold, keys)
         deny = any(f.severity == "high" and f.rule not in SUPPRESSABLE
                    for f in findings)
         # a cell survives only if it passes every applicable rule, so the
@@ -338,6 +444,12 @@ class StandinVetter(CellVetter):
             suppress |= ~(df["dominance"] <= dominance)
         if "influence" in df.columns:
             suppress |= ~(df["influence"] <= params.influence_threshold)
+        for column in (_payload_cols(df) if _count_cols(df) else []):
+            suppress |= _nonfinite(df[column])
+        for column in keys or ():
+            domain = declared_domain(str(column))
+            if column in df.columns and domain is not None:
+                suppress |= ~(df[column].isin(domain) | df[column].isna())
         return Verdicts(suppress=suppress, findings=findings, deny=deny)
 
 
@@ -548,14 +660,55 @@ class DisclosurePolicy:
                     "complementary cells were suppressed to protect margins",
                     audit_detail=f"{extra} complementary cell(s) suppressed to "
                                  f"protect margins"))
-            return self._finalize(redacted, keys), "redacted", findings
+            return self._finalize(redacted, keys), "redacted", \
+                self._granularity(redacted, findings)
 
-        return self._finalize(df, keys), "release", findings
+        return self._finalize(df, keys), "release", self._granularity(df, findings)
+
+    def _granularity(self, released: pd.DataFrame, findings: list) -> list:
+        """Re-decide the granularity bound on what actually leaves.
+
+        A vetter sees the CANDIDATE cells and cannot know how many survive
+        suppression, so its `too_granular` verdict is about the wrong frame:
+        counted there, 46 of 241 group-by combinations escalate; counted on the
+        released frame, 11 do. The parameter bounds the granularity of the
+        output, so the released frame is the one to measure — a query whose
+        cells were mostly suppressed has not released a fine-grained table, it
+        has released a small one.
+        """
+        out = [f for f in findings if f.rule != "too_granular"]
+        if len(released) > self.max_rows:
+            out.append(Finding(
+                "medium", "too_granular",
+                f"the result has more than {self.max_rows} cells, which is "
+                f"finer than this dataset releases without review",
+                audit_detail=f"{len(released)} released cells against a bound "
+                             f"of {self.max_rows}"))
+        return out
 
 
 def _dim_value_set(universe: set, predicates: list) -> set:
-    """The set of a dimension's values selected by a list of (op, value) predicates."""
+    """The set of a dimension's values selected by a list of (op, value) predicates.
+
+    Three-valued logic, as SQL has it. A comparison against NULL is NULL rather
+    than true, so a row whose value is missing satisfies **no** predicate — not
+    even `!=`. The model here used to keep the NULL sentinel through `!=`, and
+    two things followed. `simulatable_cohort_bound` understated the true
+    symmetric difference by exactly the donors carrying a NULL, so it stopped
+    being the upper bound its docstring proves it to be — in the permissive
+    direction, and a filter naming a value no record held recovered one donor's
+    exact spend in two queries with no finding raised. And a range predicate
+    raised outright, because `None < 5` is a TypeError in Python where it is
+    merely NULL in SQL, turning a decision into a crash.
+
+    Since hardening #40 the exact row-level difference is what actually decides
+    a denial, so this is no longer load-bearing for safety. It is still the
+    cheap first pass, and a bound that is wrong in the permissive direction is
+    worth nothing as an early-out.
+    """
     s = set(universe)
+    if predicates:
+        s.discard(None)             # any predicate at all excludes the NULL rows
     for op, value in predicates:
         if op == "==":
             s &= {value}
@@ -637,7 +790,9 @@ class SessionAuditor:
     """Tracks released aggregates to catch differencing/triangulation.
 
     Two layers:
-    - `observe` — cheap first pass comparing released totals per measure.
+    - `observe` — cheap first pass comparing released DISTINCT-DONOR totals
+      per measure (rows would let a hyperactive donor's events mask a
+      two-cohort pair that differs by only a few people — hardening #38).
     - `observe_cohort` / `record_cohort` — query lineage: each released
       query's cohort (its normalized filter predicate) is remembered, and a new
       cohort whose symmetric difference with a prior one is a small set of
@@ -674,6 +829,10 @@ class SessionAuditor:
         return self._spent >= self.budget
 
     def observe(self, measure: str, total_n: float) -> list[Finding]:
+        """`total_n` is the DISTINCT-DONOR total of the release, not a row
+        count: the differencing threshold protects individuals (hardening
+        #38). The service computes it from the engine's internal `n_donors`
+        helper; callers with hand-built frames must do the same."""
         findings: list[Finding] = []
         self._spent += 1
         if self._spent > self.budget:
@@ -689,21 +848,31 @@ class SessionAuditor:
         return findings
 
     def observe_cohort(self, dataset: str, filters: tuple, bound) -> list[Finding]:
-        """Flag a cohort nearly identical to one already released this session.
+        """Flag a release whose difference from an earlier one is too few people.
 
         `filters` is QuerySpec.normalized_filters(); `bound(a, b) -> int` returns
-        an upper bound on the number of individuals in exactly one of the two
-        cohorts. The caller injects a *simulatable* bound computed from published
-        donor marginals, not the live donor sets. The refusal reveals only the one
-        bit "too similar to a prior release", not the numeric bound (see
-        `simulatable_cohort_bound` above and docs/security.md on simulatability).
+        an upper bound on the number of individuals the two releases differ over.
+        The caller injects `service._difference_bound`, which takes the smaller of
+        the simulatable marginal bound and the exact count of donors behind the
+        rows exactly one of the two queries aggregated (hardening #40).
+
+        The refusal reveals only the one bit "too similar to a prior release",
+        never the numeric bound (see docs/security.md on simulatability).
         Cost is bounded by the session budget: at most `budget` prior cohorts.
+
+        A difference of **zero** denies too. It used to pass, on the reading that
+        identical cohorts are not a differencing attack — but genuinely identical
+        cohorts are already skipped on the line above, so the only pairs reaching
+        a zero here are ones whose predicates *differ* while selecting the same
+        rows. That is a sub-threshold existence fact of its own: releasing both
+        halves of `age >= 58` / `age >= 59` proves nobody in the study is 58, and
+        a filter naming a value no record holds drops exactly the donors who
+        carry a NULL. Both were live before this changed.
         """
         for prev_dataset, prev_filters in self._cohorts:
             if prev_dataset != dataset or prev_filters == filters:
                 continue
-            d = bound(prev_filters, filters)
-            if 0 < d < self.threshold:
+            if bound(prev_filters, filters) < self.threshold:
                 return [Finding(
                     "high", "differencing",
                     "cohort is within the differencing threshold of a previously "

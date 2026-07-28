@@ -1,0 +1,30 @@
+{
+  "seed": 7,
+  "donors": 500,
+  "dom_threshold": 0.5,
+  "threshold": 10,
+  "models": {
+    "gaussian_points": 539,
+    "released_complete": 47,
+    "released_without_dispersion": 20,
+    "denied": 472,
+    "released": 67,
+    "fires_on_share_of_released_models": 0.29850746268656714
+  },
+  "released_columns": {
+    "complete": [
+      "term",
+      "level",
+      "estimate",
+      "std_error",
+      "statistic",
+      "p_value"
+    ],
+    "without_dispersion": [
+      "term",
+      "level",
+      "estimate"
+    ]
+  },
+  "channel_is_structural": true
+}

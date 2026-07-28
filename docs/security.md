@@ -76,23 +76,31 @@ See [Safepod model](safepod.md) for the physical controls and failure modes.
 | 2 | SQL injection | crafted filter value | values are **bound parameters**; identifiers allowlisted + regex-checked | `engine.py` |
 | 3 | Identifier / free-text egress | query selects `donor_id` / `free_text` | not in public views/catalogue, and re-checked at the gateway | `engine.py`, `disclosure.py` |
 | 4 | Small-cell / dominance disclosure | over-granular grouping; one donor dominating a cell or a correlation | minimum cell size (10); **p%-dominance** suppression (sum/mean); **leave-one-donor-out influence** suppression (corr); counts rounded to 5 | `disclosure.py`, `engine.py` |
-| 5 | Differencing / triangulation | many "safe" queries combined | per-session auditor flags near-equal totals; query budget *(shallow — see roadmap)* | `disclosure.py` |
+| 5 | Differencing / triangulation | many "safe" queries combined | per-session auditor flags near-equal **distinct-donor** totals; lineage tests the **row-level** difference of two releases, not just their donor cohorts (a filter on an app/event attribute leaves the cohorts identical while the released values differ by a suppressed cell); published marginals remain the cheap first test; internal range filters restricted to public band edges; query budget *(shallow — see roadmap)* | `disclosure.py`, `engine.py`, `query.py` |
 | 6 | Prompt injection via data | planted `free_text` tells model to exfiltrate | model can only emit a QuerySpec; `free_text` is unqueryable | `query.py` |
 | 7 | Hostile intent | "give me row-level records…" | intent vetting rejects pre-planning *(defence in depth only — the allowlist is the real boundary)* | `analyst.py` |
-| 8 | Header spoofing (identity) | forge `Tailscale-User-Login` | binds `127.0.0.1`; only canonical header trusted (`X-` dropped); `SAFETRE_REQUIRE_IDENTITY` fails closed; header trust is **gated on a loopback-only channel** — a widened channel needs an explicit `SAFETRE_TRUST_FORWARDED_IDENTITY` opt-in (else fail closed), with an optional proxy shared secret | `identity.py`, `channel.py` |
+| 8 | Header spoofing (identity) | forge `Tailscale-User-Login` from any local process — including the untrusted model runtime, which shares loopback | binds `127.0.0.1`; only canonical header trusted (`X-` dropped); a repeated or comma-joined header is **refused, not resolved**; `SAFETRE_PROXY_SHARED_SECRET` is **required** wherever `SAFETRE_REQUIRE_IDENTITY=1`, because loopback is a shared trust domain and not a boundary; an empty allowlist admits nobody in production; a widened channel still needs an explicit `SAFETRE_TRUST_FORWARDED_IDENTITY` opt-in | `identity.py`, `channel.py`, `deploy/safetre-web.service` |
 | 9 | Tamper with the record | edit/delete/**recompute** audit rows | **HMAC-keyed** chain (off-box key); `verify(expected_head)` checks an off-box anchor | `audit.py` |
 | 10 | XSS in the UI | hostile content rendered | strict CSP (`script-src 'self'`), Jinja autoescape, pandas `escape=True` | `app.py`, templates |
-| 11 | DoS / LLM cost amplification | request flood; huge `in` list; pathological group-by | per-user rate limit (429); `in`≤50, group-by≤3; DuckDB memory/thread + row caps | `rate.py`, `query.py`, `engine.py` |
+| 11 | DoS / LLM cost amplification | request flood; huge `in` list; pathological group-by; repeated full-chain audit verification | per-identity rate limit on **every** route (429), padded like any other response, with a tighter budget for the chain scan; `in`≤50, group-by≤3; DuckDB memory/thread + row caps | `rate.py`, `app.py`, `query.py`, `engine.py` |
 | 12 | Bypass the safepod channel | accidental public bind, direct LAN access, spoofed proxy headers | restricted-channel middleware checks real peer address; uvicorn binds localhost; systemd/network firewall deny non-channel traffic | `safetre_web/channel.py`, deployment |
 | 13 | LLM endpoint egress / SSRF | real planner configured to external or internal service URL | local-first default; allowlisted model endpoint hosts; remote endpoints require explicit synthetic-data opt-in | `safetre/llm.py` |
 | 14 | Tool-manifest drift | outside planner proposes unavailable or outdated tools | manifest hash, deterministic safepod validation, planned tools are non-executable until implemented and reviewed | `safetre/manifest.py`, `query.py` |
 | 15 | Concurrency bypass of session controls | fire the two halves of a differencing pair concurrently; race the budget | a **per-session lock** serialises one identity's requests across the whole `observe → apply → record_cohort` critical section; `SessionStore.get` is guarded; over-budget queries short-circuit | `safetre_web/session.py`, `app.py`, `service.py` |
-| 16 | Policy config that does nothing | operator tightens `min_cell_size`, code ignores it | thresholds resolve through one loader (defaults < `config.yaml` < env) and flow into the gateway/auditor; a test asserts a changed threshold changes a real suppression | `safetre/config.py`, `disclosure.py` |
+| 16 | Policy config that does nothing, or that silently disables a control | operator tightens `min_cell_size` and code ignores it; or a shipped `config.yaml` sets `min_cell_size: 1` and every gate still passes | thresholds resolve through one loader (defaults < `config.yaml` < env) and flow into the gateway/auditor; **safety floors apply to the resolved policy**, overridable only by an explicit `SAFETRE_ALLOW_UNSAFE_POLICY=1` that logs loudly; the effective policy is logged at startup | `safetre/config.py`, `disclosure.py`, `app.py` |
+| 17a | Hostile or merely realistic data content | a refund inverts the dominance ratio; an overflow releases `+inf`; a typo'd category prints as a cell key; a checker returns a payload as a rule name | dominance is a **magnitude** share `MAX(|c|)/SUM(|c|)`; a non-finite aggregate payload suppresses the cell; released cell keys are projected onto their **declared domains**; checker-returned rule names are projected onto a declared identifier shape and the rejected text is stored nowhere | `engine.py`, `disclosure.py`, `external_checker.py` |
 | 17 | Fail-open suppression | dominance/influence check returns NULL and the cell releases | unresolved safety columns fill to **+inf** (unsafe) and the detector treats NaN/inf as a violation — suppression fails **closed** | `engine.py`, `disclosure.py` |
 
 Raw age is treated as an internal analysis variable, not a public column. Fixed
 tools may use it inside the safepod, for example donor-level age/spend
-correlation, but it cannot be grouped, selected, rendered, or returned.
+correlation, but it cannot be grouped, selected, rendered, or returned. Since
+hardening #39 it can be **filtered only at the declared band edges** (`>=` one
+of 13/16/18/25/35/50, `<=` one of 15/17/24/34/49/69): an off-edge range or an
+exact-age equality is rejected at validation, because an internal filter that
+cuts finer than the public dimension it backs is a differencing channel — a
+range sweep reads sub-band totals out of individually safe releases, and two
+such slices with two common narrowing dimensions recover a 1-3 donor cell
+(decision D7).
 
 ## Side channels and residual oracles
 
@@ -158,6 +166,18 @@ closed:
   proportionally (7 of 15 pairs, against 9 without it), so the channel is in
   the engine's own work, not the checker's.
 
+  **The ceiling is now a deadline (2026-07-28, hardening #54).** It used to be
+  a post-hoc body swap: the handler ran to completion and only then was the
+  body replaced, so an overrunning query was answered when it finished and its
+  arrival time was a size gauge. It could not be fixed in place — inside
+  Starlette's `BaseHTTPMiddleware` neither cancelling the task (anyio's thread
+  pool is not cancellable by default) nor abandoning it (`call_next` runs in a
+  task group that waits for its child) answers on time, both measured at
+  1203 ms against a 200 ms ceiling. The boundary is now a raw ASGI layer
+  outside that task group, and 400/800/1600/3200 ms of work all answer at
+  252.3-252.5 ms. `redteam/timing_attacker.py` attacks the channel adaptively
+  rather than measuring it passively, and CI gates on the straddle vector.
+
   **Narrowed, 2026-07-26** ([D5](decisions/D5-timing-channel.md), spec R18).
   The deployment boundary now holds every response until the next multiple of
   a quantum and refuses work past a ceiling. Measured at the same boundary,
@@ -174,6 +194,25 @@ closed:
   there is no channel left to narrow. It is parked as an architectural change
   to a frozen shell ([roadmap](roadmap.md#parked)), and quantisation is what
   makes the interactive version defensible meanwhile.
+
+- **A model that releases without its dispersion says so (accepted, priced).**
+  A gaussian model whose sum-of-squares cells fail the dominance bound still
+  releases, from vetted means alone, and reports that the dispersion table was
+  withheld. That is a fact about the data — one bit per cohort about
+  second-moment dominance, which repeated over cohorts maps where the whales
+  are. Measured at **30% of released gaussian models**
+  (`artifacts/optional_role_channel.json`).
+
+  It is not closed, and the reason is worth stating because the obvious repair
+  is the wrong one: the channel is not the message. A partial release carries
+  **three columns where a complete one carries six** — no standard error, no
+  statistic, no p-value, because those come from the within-cell scatter the
+  withheld table supplies — so deleting the finding would remove the sentence
+  and leave the channel exactly where it was. It is the same class as the
+  primary SDC oracle above, and the two real closures are priced for an
+  operator to choose between: deny partial models (−30% of released gaussian
+  models) or always omit dispersion (−100% of standard errors). The DP
+  accountant closes it properly.
 
 - **Audit-lock contention (accepted, low).** Every request serialises briefly on
   the audit log's write lock. That serialisation is a *correctness requirement*
@@ -278,13 +317,20 @@ D1–D7). After the [first hardening round](hardening-log.md), what remains:
   event-level cell dominated by one active donor cannot pass.
 - **Differencing control is per-session and simulatable.** The auditor tracks
   query *lineage* — each released cohort (normalized filter predicate) is
-  remembered — and denies a near-duplicate cohort. The deny/allow decision is
-  computed from **published donor marginals**, not the live donor sets, so a
-  refusal leaks nothing an analyst could not already compute (simulatable
-  auditing). It catches isolating a globally-rare category by one predicate; it
-  does **not** catch differencing confined to an otherwise-narrow cohort (helped
-  by the per-cell donor threshold), nor defend across sessions or colluding
-  users. Global accounting needs a **differential-privacy accountant**.
+  remembered — and denies a near-duplicate cohort, and its total-delta check
+  compares **distinct-donor totals**, not rows (hardening #38: on an
+  event-level view a hyperactive donor's events masked two cohorts 1-3 people
+  apart). The deny/allow decision is computed from **published donor
+  marginals**, not the live donor sets, so a refusal leaks nothing an analyst
+  could not already compute (simulatable auditing). It catches isolating a
+  globally-rare category by one predicate and the double-differencing pair
+  from round 8; what it still does **not** catch is differencing whose
+  per-dimension marginals are large while the *interactive* overlap is small
+  (the price of deciding from one-dimensional marginals — the DP accountant
+  is the principled close), nor anything across sessions or colluding users.
+  Internal range filters are band-aligned since hardening #39, so a range
+  sweep cannot cut below the published band granularity either.
+ 
 - **Secondary suppression is heuristic beyond one dimension.** A margin left
   with exactly one suppressed cell now triggers complementary suppression of
   the next-smallest cell (iterated to a fixpoint). This is exact for one

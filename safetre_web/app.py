@@ -12,10 +12,9 @@ Security posture:
 
 from __future__ import annotations
 
-import asyncio
+import logging
 import math
 import os
-import time
 import pathlib
 
 from fastapi import FastAPI, HTTPException, Request
@@ -34,9 +33,10 @@ from safetre.query import CATALOGUE
 from safetre.service import QueryService
 
 from .channel import channel_allowed
-from .identity import current_user
+from .identity import configuration_problems, current_user
 from .rate import RateLimiter
 from .session import SessionStore
+from .timing import ResponseTimeBoundary, sleep_to_boundary  # noqa: F401
 
 BASE = pathlib.Path(__file__).parent
 app = FastAPI(title="safe-tre-agent", docs_url=None, redoc_url=None)
@@ -61,6 +61,41 @@ audit_log = AuditLog(os.environ.get("SAFETRE_AUDIT_DB", "audit.db"))
 _audit_head_anchor = os.environ.get("SAFETRE_AUDIT_HEAD_ANCHOR") or None
 sessions = SessionStore(threshold=_cfg.differencing_delta, budget=_cfg.query_budget)
 limiter = RateLimiter(int(os.environ.get("SAFETRE_RATE_LIMIT", "120")))
+# A full-chain verification is an integrity scan, not an interactive read: it
+# reads every row under the audit lock and recomputes every MAC. It gets its
+# own, much tighter budget on top of the global one, because the ordinary rate
+# still permits enough concurrent scans to matter (hardening #47).
+verify_limiter = RateLimiter(
+    int(os.environ.get("SAFETRE_AUDIT_VERIFY_RATE_LIMIT", "6")))
+
+# Say out loud what the effective policy is, and refuse to be quiet about a
+# production deployment whose Safe People gate is not configured. Both fail
+# closed on the request path anyway; a deployment should learn which control is
+# off before an analyst meets a wall of 403s, and a release should be traceable
+# to the thresholds that allowed it (hardening #45, #46).
+_log = logging.getLogger("safetre")
+_log.info("effective disclosure policy: %s", _cfg.digest())
+for _problem in configuration_problems():
+    _log.warning("Safe People misconfiguration: %s", _problem)
+
+# Put the effective policy INSIDE the tamper-evident chain, at the point it
+# takes effect (hardening #55). A released row records the request, the spec
+# and the status but nothing about the thresholds that allowed it, so a clean
+# release under `min_cell=1` is schema-identical to one under the shipped
+# policy — the log could not answer "which rules approved this?", the question
+# `CellVetter.describe` exists to answer. A distinguished record needs no
+# schema change and no chain migration: every row after it is attributable to
+# the policy in force at its own position in the chain.
+audit_log.append(user="system", request="policy", spec={"policy": _cfg.digest()},
+                 status="config", findings=[], output_shape=None)
+
+# Session state is a control, so it must not evaporate on a deploy. Rebuild each
+# identity's differencing lineage and query budget from the audit log before the
+# first request is served (hardening #49); without this, the two halves of a
+# differencing pair could simply be split across a restart.
+_restored = sessions.rehydrate(audit_log, _cfg.session_window_hours)
+_log.info("restored %d session(s) from the last %d hour(s) of audit history",
+          _restored, _cfg.session_window_hours)
 
 
 def make_planner():
@@ -107,6 +142,38 @@ async def security_headers(request: Request, call_next):
     return resp
 
 
+# Registered between the security headers and the channel check, so it runs
+# INSIDE the response-time padding (an unpadded 429 would be its own signal)
+# and AFTER the channel gate (a request off the channel should not spend a
+# bucket at all).
+@app.middleware("http")
+async def rate_limit(request: Request, call_next):
+    """Rate-limit every route, not only `/api/query` (hardening #47).
+
+    `limiter.allow` used to be called from one handler. `/api/audit/verify`,
+    `/api/marginals`, `/api/schema` and `/api/manifest` were unlimited — and
+    verify is not a cheap read: it rescans the whole HMAC chain holding the
+    audit lock that every append also takes. Measured: 400 GETs drew zero 429s,
+    and twelve concurrent verifiers moved `/api/query` median latency from
+    51 ms to 1582 ms. At 31x that is not only a shared-fate denial of service
+    on the control everything serialises on, it walks honest queries into the
+    response-time ceiling, so the timing control starts refusing real analysis.
+
+    Keyed on the authenticated login where there is one, and on the peer
+    address otherwise, so an unauthenticated flood cannot spend an identity's
+    budget — nor share one bucket with every other refused caller.
+    """
+    path = request.url.path
+    if path == "/healthz" or path.startswith("/static"):
+        return await call_next(request)
+    user, allowed = current_user(request)
+    key = user if allowed else f"peer:{request.client.host if request.client else '?'}"
+    if not limiter.allow(key):
+        return JSONResponse({"detail": "rate limit exceeded; slow down"},
+                            status_code=429)
+    return await call_next(request)
+
+
 @app.middleware("http")
 async def restricted_channel(request: Request, call_next):
     allowed, reason = channel_allowed(request)
@@ -118,67 +185,18 @@ async def restricted_channel(request: Request, call_next):
     return await call_next(request)
 
 
-def sleep_to_boundary(elapsed: float, quantum: float) -> float:
-    """How long to wait so that `elapsed` becomes a whole number of quanta.
+def _autorun_prefill() -> bool:
+    """Whether a `/#q=...` link may run itself on load.
 
-    Pure, so the arithmetic is tested exhaustively rather than by watching a
-    clock. Note it rounds *up to the next* boundary even when elapsed is
-    already an exact multiple: landing exactly on a boundary is itself
-    information about how long the work took.
+    Off by default (hardening #50): a link that runs on load writes an
+    attacker-chosen request into the tamper-evident log under whoever opened
+    it, and records it as answered. It survives only for the screenshot and
+    deck scripts, which drive a headless browser that cannot click. Like
+    `SAFETRE_ALLOW_TEST_CLIENT` this is a sentinel — never set it on a real
+    deployment.
     """
-    if quantum <= 0:
-        return 0.0
-    return (math.floor(elapsed / quantum) + 1) * quantum - elapsed
-
-
-# Registered LAST so it is the OUTERMOST middleware: everything else — the
-# channel rejection, the identity gate, template rendering — happens inside
-# its window and is therefore covered. A fast-fail path that skipped the
-# padding would become the channel it is here to close (spec R18).
-@app.middleware("http")
-async def constant_response_time(request: Request, call_next):
-    """Hold every response until the next multiple of the quantum.
-
-    Latency tracks how much work a query did, and work tracks cohort size —
-    closely enough, measured, to put sub-threshold cells in size order within
-    a few queries, which is exactly what suppression exists to prevent
-    (`scripts/measure_timing_channel.py`, decision D5).
-
-    Quantising rather than fixing the time is deliberate. Cells at or above
-    the frequency threshold have their counts published in the marginals
-    already, so hiding *those* differences buys nothing; what must be
-    indistinguishable is the sub-threshold work, and that varies by only a few
-    milliseconds. A quantum comfortably larger than that spread puts all of it
-    in one bucket at a fraction of the cost of padding every request to the
-    worst case.
-
-    The ceiling is part of the control, not a performance guard: without it
-    the slowest requests advertise themselves by overrunning the top bucket.
-    Work that exceeds it is answered with a refusal — padded like everything
-    else, because an unpadded refusal would be its own signal.
-    """
-    quantum = _cfg.response_quantum_ms / 1000.0
-    ceiling = _cfg.response_ceiling_ms / 1000.0
-    started = time.monotonic()
-
-    async def hold() -> None:
-        await asyncio.sleep(
-            max(0.0, sleep_to_boundary(time.monotonic() - started, quantum)))
-
-    try:
-        response = await call_next(request)
-    except Exception:
-        # an error path that answered faster than every other path would be
-        # the channel wearing a different hat
-        await hold()
-        raise
-    if time.monotonic() - started > ceiling:
-        response = JSONResponse(
-            {"detail": "refused: this request exceeded the response-time "
-                       "ceiling", "ceiling_ms": _cfg.response_ceiling_ms},
-            status_code=503)
-    await hold()
-    return response
+    return os.environ.get("SAFETRE_ALLOW_PREFILL_AUTORUN", "").strip().lower() \
+        in ("1", "true", "yes", "on")
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -188,6 +206,7 @@ def index(request: Request):
     return templates.TemplateResponse(request, "index.html", {
         "user": user, "allowed": allowed, "catalogue": CATALOGUE,
         "manifest": manifest, "schema": public_schema(),
+        "autorun_prefill": _autorun_prefill(),
     })
 
 
@@ -196,8 +215,8 @@ def query(request: Request, body: QueryRequest):
     user, allowed = current_user(request)
     if not allowed:
         raise HTTPException(403, "not on the Safe People allowlist")
-    if not limiter.allow(user):
-        raise HTTPException(429, "rate limit exceeded; slow down")
+    # rate limiting moved to the `rate_limit` middleware (#47), which covers
+    # every route; charging the bucket twice here would halve this one's budget
 
     sess = sessions.get(user)
     # Serialise a single identity's requests across the whole check-then-act
@@ -266,7 +285,22 @@ def marginals(request: Request):
 
 @app.get("/api/audit/verify")
 def audit_verify(request: Request):
-    _, allowed = current_user(request)
+    user, allowed = current_user(request)
     if not allowed:
         raise HTTPException(403, "not on the Safe People allowlist")
+    if not verify_limiter.allow(user):
+        raise HTTPException(429, "audit verification is rate limited; slow down")
     return {"chain_intact": audit_log.verify(expected_head=_audit_head_anchor)}
+
+
+# Added LAST so it is the OUTERMOST layer: the channel rejection, the rate
+# limit, the identity gate and template rendering all happen inside its window.
+# It is raw ASGI rather than an `@app.middleware("http")` function because only
+# that can answer while the inner application is still running — see
+# `safetre_web/timing.py` for the two measurements that forced it (#34, #54).
+# The settings are read per request, not captured, so `config.yaml` and the
+# environment stay the values that bite (R10) — and so the dials remain
+# testable without rebuilding the application.
+app.add_middleware(ResponseTimeBoundary,
+                   settings=lambda: (_cfg.response_quantum_ms,
+                                     _cfg.response_ceiling_ms))

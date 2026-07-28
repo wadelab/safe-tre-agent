@@ -114,3 +114,30 @@ def test_the_refusal_is_padded_like_everything_else(client, monkeypatch):
     elapsed = time.monotonic() - started
     assert response.status_code == 503
     assert elapsed >= 0.150, f"refusal answered in {elapsed:.3f}s"
+
+
+# --- #54: the ceiling is a deadline, not a post-hoc check ------------------------
+
+def test_an_overrun_does_not_reveal_how_far_it_overran():
+    """#34 stood open for a round: the handler ran to completion and only then
+    was the body swapped, so a query taking 1.2 s against a 0.2 s ceiling was
+    answered at 1.256 s — advertising its size exactly as it would have with no
+    ceiling at all.
+
+    Driven through `redteam/timing_attacker.py` so the assertion and the
+    adversarial artifact cannot drift apart.
+    """
+    import os
+    import sys
+
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "redteam"))
+    from timing_attacker import ceiling_straddle
+
+    result = ceiling_straddle(samples=3)
+    assert result["all_refused"], (
+        "the probe never hit the ceiling, so it measured nothing: "
+        f"{result['observed']}")
+    assert not result["reveals_overrun_size"], (
+        "8x the work is visible in the answer time, which is #34 again: "
+        f"{result['observed']}")

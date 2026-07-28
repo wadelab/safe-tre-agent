@@ -79,9 +79,13 @@ def valid_glmspec_dicts(draw) -> dict:
                           unique=True))
     filters = []
     if draw(st.booleans()):
-        filters.append({"column": "age_years",
-                        "op": draw(st.sampled_from([">", ">=", "<", "<="])),
-                        "value": draw(st.integers(min_value=10, max_value=90))})
+        # the legal internal-filter space (hardening #39): band-aligned ranges
+        from safetre.query import INTERNAL_RANGE_RULES
+
+        rule = INTERNAL_RANGE_RULES["age_years"]
+        op = draw(st.sampled_from(rule["ops"]))
+        filters.append({"column": "age_years", "op": op,
+                        "value": draw(st.sampled_from(rule["edges"][op]))})
     return {"tool": "glm", "dataset": dataset, "family": family,
             "response": response, "terms": terms, "filters": filters}
 

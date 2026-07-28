@@ -24,6 +24,18 @@ from pptx.dml.color import RGBColor
 from pptx.enum.text import PP_ALIGN
 from pptx.util import Inches, Pt
 
+# A harness must never write to the operator's real audit log. `safetre_web.app`
+# opens `SAFETRE_AUDIT_DB` at import and now appends a policy record there
+# (#55), so merely importing it from a script pollutes `./audit.db` — which is
+# hardening #36 all over again, and did happen (#57). Pin a throwaway path
+# BEFORE the import, exactly as `tests/conftest.py` does for the test suite.
+import os as _os          # noqa: E402
+import tempfile as _tempfile  # noqa: E402
+
+_os.environ.setdefault(
+    "SAFETRE_AUDIT_DB",
+    _os.path.join(_tempfile.gettempdir(), "safetre-harness-audit.db"))
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # GOV.UK-derived palette, to match the interface the decks now show.
@@ -57,6 +69,21 @@ def capture(shots_dir: str, base: str) -> None:
         urllib.request.urlopen(base + "/healthz", timeout=3)
     except Exception:
         sys.exit(f"web app not reachable at {base}; start it with scripts/restart_web.sh")
+    # A `/#q=...` link fills the box but no longer runs itself (hardening #50),
+    # and headless Chrome cannot click. Without the capture affordance every
+    # result shot would come back showing an empty result panel — silently, and
+    # the deck would ship looking as though the gateway returned nothing.
+    try:
+        home = urllib.request.urlopen(base + "/", timeout=5).read().decode()
+    except Exception:
+        home = ""
+    if 'data-autorun-prefill="1"' not in home:
+        sys.exit(
+            "the server at {0} does not have prefill auto-run enabled, so the\n"
+            "result screenshots would be blank. Restart it for the capture with\n"
+            "  SAFETRE_ALLOW_PREFILL_AUTORUN=1\n"
+            "and stop it afterwards — it is a capture affordance, never a\n"
+            "setting for a real deployment.".format(base))
     for name, path in SHOTS.items():
         subprocess.run(
             [chrome, "--headless=new", "--disable-gpu", "--hide-scrollbars",

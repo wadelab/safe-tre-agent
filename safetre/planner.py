@@ -56,6 +56,9 @@ PLANNER_SYSTEM = (
     "the request actually names; never invent or drop one. Models release only "
     "coefficients, a summary block, and the vetted cell table — never "
     "residuals, fitted values, or per-donor predictions.\n"
+    "Age filters on age_years must align to the declared age-band edges: "
+    ">= one of 13, 16, 18, 25, 35, 50 and <= one of 15, 17, 24, 34, 49, 69. "
+    "Exact-age equality or membership filters are rejected.\n"
     "Examples:\n"
     "  'regress total spend on age band and sex' -> "
     '{"tool":"glm","dataset":"donor_spend","family":"gaussian",'
@@ -96,6 +99,41 @@ class LLMPlanner:
         return json.loads(_extract_json(raw))
 
 
+def _age_window_filters(lo: int, hi: int) -> list[dict]:
+    """The tightest whole-band age filter set covering [lo, hi].
+
+    Validation accepts only band-aligned range filters on `age_years`
+    (hardening #39), so the mock snaps: the lower edge is the smallest band
+    start >= lo, the upper edge the largest band end <= hi. The result never
+    includes an age outside the asked window.
+    """
+    from .query import AGE_BAND_HI_EDGES, AGE_BAND_LO_EDGES
+
+    out: list[dict] = []
+    los = [b for b in AGE_BAND_LO_EDGES if b >= lo]
+    his = [b for b in AGE_BAND_HI_EDGES if b <= hi]
+    if los and los[0] > AGE_BAND_LO_EDGES[0]:
+        out.append({"column": "age_years", "op": ">=", "value": los[0]})
+    if his and his[-1] < AGE_BAND_HI_EDGES[-1]:
+        out.append({"column": "age_years", "op": "<=", "value": his[-1]})
+    return out
+
+
+def _containing_band_filters(v: int) -> list[dict]:
+    """Exact-age equality is not filterable (#39); answer with the band that
+    contains v, which is what the request almost always means."""
+    from .query import AGE_BAND_HI_EDGES, AGE_BAND_LO_EDGES
+
+    out: list[dict] = []
+    lo_edge = max((b for b in AGE_BAND_LO_EDGES if b <= v), default=None)
+    hi_edge = min((b for b in AGE_BAND_HI_EDGES if b >= v), default=None)
+    if lo_edge is not None and lo_edge > AGE_BAND_LO_EDGES[0]:
+        out.append({"column": "age_years", "op": ">=", "value": lo_edge})
+    if hi_edge is not None and hi_edge < AGE_BAND_HI_EDGES[-1]:
+        out.append({"column": "age_years", "op": "<=", "value": hi_edge})
+    return out
+
+
 class MockPlanner:
     """Deterministic planner. Some cases deliberately propose *off-allowlist*
     specs (free_text / donor_id) to prove validation rejects them."""
@@ -123,14 +161,25 @@ class MockPlanner:
 
         between = re.search(r"\bage\s+between\s+(\d+)\s+and\s+(\d+)\b", request, re.I)
         if between:
-            lo, hi = int(between.group(1)), int(between.group(2))
-            filters.extend([
-                {"column": "age_years", "op": ">=", "value": lo},
-                {"column": "age_years", "op": "<=", "value": hi},
-            ])
+            filters.extend(_age_window_filters(int(between.group(1)),
+                                               int(between.group(2))))
         else:
             for op, value in re.findall(r"\bage\s*(==|!=|<=|>=|<|>)\s*(\d+)\b", request, re.I):
-                filters.append({"column": "age_years", "op": op, "value": int(value)})
+                v = int(value)
+                # snap to whole bands (hardening #39); an exact-age exclusion
+                # is not expressible at all and is dropped
+                if op == "==":
+                    filters.extend(_containing_band_filters(v))
+                elif op == "!=":
+                    continue
+                elif op == ">=":
+                    filters.extend(_age_window_filters(v, 10**9))
+                elif op == ">":
+                    filters.extend(_age_window_filters(v + 1, 10**9))
+                elif op == "<=":
+                    filters.extend(_age_window_filters(-10**9, v))
+                elif op == "<":
+                    filters.extend(_age_window_filters(-10**9, v - 1))
         return filters
 
     @staticmethod

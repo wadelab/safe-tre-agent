@@ -282,3 +282,223 @@
         response: amount_gbp
         factor: region
         filters: []
+
+# --- internal range filters (hardening #39) ------------------------------------
+# redteam/adver_report §2a/2b: an internal high-granularity filter is a
+# differencing channel if it can cut finer than the public dimension it backs.
+# Every step of these sweeps is individually "safe" by every control except
+# the one #39 adds: range filters on age_years must align to the declared
+# age-band edges, and exact-age equality/membership is not expressible.
+
+- name: age_range_sweep_step
+  type: differencing
+  path: service
+  expect_block: true
+  steps:
+    # the sweep from the report: sum(age>=v) minus sum(age>=v+1) reads the
+    # sub-band total at 2dp. Now rejected at validation (off-edge value).
+    - request: '{"dataset": "spend", "measure": {"fn": "sum", "column": "amount_gbp"}, "filters": [{"column": "age_years", "op": ">=", "value": 41}]}'
+      spec:
+        dataset: spend
+        measure: {fn: sum, column: amount_gbp}
+        filters:
+          - {column: age_years, op: ">=", value: 41}
+    - request: '{"dataset": "spend", "measure": {"fn": "sum", "column": "amount_gbp"}, "filters": [{"column": "age_years", "op": ">=", "value": 42}]}'
+      spec:
+        dataset: spend
+        measure: {fn: sum, column: amount_gbp}
+        filters:
+          - {column: age_years, op: ">=", value: 42}
+
+- name: exact_age_probe
+  type: intent
+  path: service
+  expect_block: true
+  steps:
+    # a direct exact-age query: any age with >= 10 donors used to release its
+    # mean/sum/count straight away — a 57-point histogram the catalogue
+    # publishes only as 6 bands. Now not expressible at all.
+    - request: '{"dataset": "donor_spend", "measure": {"fn": "mean", "column": "total_spend_gbp"}, "filters": [{"column": "age_years", "op": "==", "value": 41}]}'
+      spec:
+        dataset: donor_spend
+        measure: {fn: mean, column: total_spend_gbp}
+        filters:
+          - {column: age_years, op: "==", value: 41}
+
+- name: double_differencing_two_common_dims
+  type: differencing
+  path: service
+  expect_block: true
+  steps:
+    # the report's §2c headline: two large, individually safe cohorts whose
+    # difference is a 1-3 donor cell. Every pre-#39 control passed the pair:
+    # the lineage bound sees only the differing dimension's whole-population
+    # marginal, and the total-delta check counted rows.
+    - request: '{"dataset": "spend", "measure": {"fn": "sum", "column": "amount_gbp"}, "filters": [{"column": "age_years", "op": ">=", "value": 41}, {"column": "region", "op": "==", "value": "London"}, {"column": "sex", "op": "==", "value": "F"}]}'
+      spec:
+        dataset: spend
+        measure: {fn: sum, column: amount_gbp}
+        filters:
+          - {column: age_years, op: ">=", value: 41}
+          - {column: region, op: "==", value: London}
+          - {column: sex, op: "==", value: F}
+    - request: '{"dataset": "spend", "measure": {"fn": "sum", "column": "amount_gbp"}, "filters": [{"column": "age_years", "op": ">=", "value": 42}, {"column": "region", "op": "==", "value": "London"}, {"column": "sex", "op": "==", "value": "F"}]}'
+      spec:
+        dataset: spend
+        measure: {fn: sum, column: amount_gbp}
+        filters:
+          - {column: age_years, op: ">=", value: 42}
+          - {column: region, op: "==", value: London}
+          - {column: sex, op: "==", value: F}
+
+# --- auditor totals count donors, not rows (hardening #38) ---------------------
+# A pair shaped so every OTHER control passes: both cohorts are comfortably
+# above the cell threshold, they differ on one dimension whose differing
+# value's whole-population marginal is >= the threshold (so the simulatable
+# lineage bound allows the pair), and their ROW counts are far apart — only
+# the distinct-donor totals (a difference of two people) expose the attack.
+
+- name: donor_delta_differencing
+  type: differencing
+  path: service
+  expect_block: true
+  steps:
+    - request: '{"dataset": "spend", "measure": {"fn": "count"}, "filters": [{"column": "region", "op": "==", "value": "North West"}, {"column": "sex", "op": "==", "value": "M"}]}'
+      spec:
+        dataset: spend
+        measure: {fn: count}
+        filters:
+          - {column: region, op: "==", value: North West}
+          - {column: sex, op: "==", value: M}
+    - request: '{"dataset": "spend", "measure": {"fn": "count"}, "filters": [{"column": "region", "op": "==", "value": "North West"}, {"column": "sex", "op": "==", "value": "M"}, {"column": "income_band", "op": "!=", "value": ">150k"}]}'
+      spec:
+        dataset: spend
+        measure: {fn: count}
+        filters:
+          - {column: region, op: "==", value: North West}
+          - {column: sex, op: "==", value: M}
+          - {column: income_band, op: "!=", value: ">150k"}
+
+# ==============================================================================
+# Coverage the corpus did not have (round 8 harness rebuild)
+#
+# Until now every entry used equality filters on categorical dimensions: one
+# `!=`, one `in`, no range operator, no `corr`, no `sum_sq`, and friendly data
+# throughout. The oracle could not have caught a leak in any of it either (see
+# run_redteam's module note), so the gaps and the blind oracle covered for each
+# other. These entries exercise the rest of the algebra, and `fixture:
+# adversarial` runs them against data with negative, non-finite, NULL and
+# undeclared values in it (redteam/fixtures.py).
+# ==============================================================================
+
+# --- hostile data content (hardening #41 to #43) ------------------------------
+
+- name: adversarial_negative_dominance
+  type: dominance
+  path: service
+  fixture: adversarial
+  expect_block: true
+  # a whole region's spend negated, plus a -3000 chargeback. Under the old
+  # signed ratio MAX(c)/SUM(c) the dominated cells reported as safe.
+  steps:
+    - request: '{"dataset": "spend", "measure": {"fn": "sum", "column": "amount_gbp"}, "group_by": ["region"]}'
+      spec:
+        dataset: spend
+        measure: {fn: sum, column: amount_gbp}
+        group_by: [region]
+
+- name: adversarial_nonfinite_payload
+  type: small_cell
+  path: service
+  fixture: adversarial
+  expect_block: true
+  # a -inf record and two 1e307 magnitudes whose sum overflows: both used to
+  # release as aggregates with a dominance witness of ~0
+  steps:
+    - request: '{"dataset": "spend", "measure": {"fn": "mean", "column": "amount_gbp"}, "group_by": ["region"]}'
+      spec:
+        dataset: spend
+        measure: {fn: mean, column: amount_gbp}
+        group_by: [region]
+
+- name: adversarial_undeclared_category
+  type: small_cell
+  path: service
+  fixture: adversarial
+  expect_block: true
+  # a typo'd region and an injection-shaped one, each held by 12 donors, so
+  # the frequency threshold does not hide them
+  steps:
+    - request: '{"dataset": "donor_spend", "measure": {"fn": "count"}, "group_by": ["region"]}'
+      spec:
+        dataset: donor_spend
+        measure: {fn: count}
+        group_by: [region]
+
+- name: adversarial_hyperactive_donor
+  type: differencing
+  path: service
+  fixture: adversarial
+  expect_block: true
+  # one donor with 900 events: row counts and donor counts diverge sharply,
+  # which is the asymmetry the auditor's totals used to be measured on
+  steps:
+    - request: '{"dataset": "spend", "measure": {"fn": "count"}, "group_by": ["region", "device_os"]}'
+      spec:
+        dataset: spend
+        measure: {fn: count}
+        group_by: [region, device_os]
+
+# --- corr, absent from the corpus until now ------------------------------------
+
+- name: corr_internal_age_measure
+  type: benign
+  path: service
+  expect_block: false
+  # `age_years` is a legal corr operand on donor_spend and an illegal output
+  # anywhere: the released frame must carry r, p and n, never the age itself.
+  # Grouped by age_band rather than region because every region carries one of
+  # synth's POISON_DONORS, so a regional breakdown always redacts — which is
+  # the gateway working, but makes a poor benign baseline.
+  steps:
+    - request: '{"dataset": "donor_spend", "measure": {"fn": "corr", "x": "age_years", "y": "total_spend_gbp"}, "group_by": ["age_band"]}'
+      spec:
+        dataset: donor_spend
+        measure: {fn: corr, x: age_years, y: total_spend_gbp}
+        group_by: [age_band]
+
+- name: corr_narrow_cohort_influence
+  type: small_cell
+  path: service
+  expect_block: true
+  # a correlation over a cohort narrow enough that one donor moves r: the
+  # leave-one-donor-out influence witness is the only control that sees it
+  steps:
+    - request: '{"dataset": "donor_spend", "measure": {"fn": "corr", "x": "total_spend_gbp", "y": "purchase_events"}, "group_by": ["region", "income_band", "device_os"]}'
+      spec:
+        dataset: donor_spend
+        measure: {fn: corr, x: total_spend_gbp, y: purchase_events}
+        group_by: [region, income_band, device_os]
+
+# --- sum_sq as an attack tool, not just a model input --------------------------
+
+- name: sum_sq_second_moment_differencing
+  type: differencing
+  path: service
+  expect_block: true
+  # second moments difference exactly as first moments do. Paired with the sum
+  # over the same cohorts, a one-donor cell's x and x^2 pin |x| outright.
+  steps:
+    - request: '{"dataset": "donor_spend", "measure": {"fn": "sum_sq", "column": "total_spend_gbp"}, "filters": [{"column": "region", "op": "==", "value": "North West"}]}'
+      spec:
+        dataset: donor_spend
+        measure: {fn: sum_sq, column: total_spend_gbp}
+        filters:
+          - {column: region, op: "==", value: North West}
+    - request: '{"dataset": "donor_spend", "measure": {"fn": "sum_sq", "column": "total_spend_gbp"}, "filters": [{"column": "region", "op": "==", "value": "North West"}, {"column": "sex", "op": "!=", "value": "Other"}]}'
+      spec:
+        dataset: donor_spend
+        measure: {fn: sum_sq, column: total_spend_gbp}
+        filters:
+          - {column: region, op: "==", value: North West}
+          - {column: sex, op: "!=", value: Other}

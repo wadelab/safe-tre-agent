@@ -14,6 +14,7 @@ Security properties:
 from __future__ import annotations
 
 import re
+import threading
 from dataclasses import dataclass
 from typing import Any
 
@@ -108,8 +109,14 @@ class SQLPlan:
 _FILTER_OPS = {"==", "!=", "<", "<=", ">", ">=", "in"}
 
 
-def _where_triples(filters) -> tuple[str, tuple[Any, ...]]:
-    """WHERE clause from (column, op, value) triples; values stay bound params."""
+def _predicate_sql(filters) -> tuple[str, tuple[Any, ...]]:
+    """(column, op, value) triples as a standalone boolean expression.
+
+    No `WHERE` keyword, so the result composes: the differencing auditor needs
+    to ask for rows matching one filter list and *not* another, which means the
+    two predicates have to be negatable and combinable (`row_symdiff_donors`).
+    An empty filter list selects everything.
+    """
     clauses, params = [], []
     for column, op, value in filters:
         col = _ident(column)
@@ -123,8 +130,13 @@ def _where_triples(filters) -> tuple[str, tuple[Any, ...]]:
             params.append(value)
         else:
             raise ValueError(f"illegal filter operator {op!r}")
-    where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
-    return where, tuple(params)
+    return (" AND ".join(clauses) if clauses else "TRUE"), tuple(params)
+
+
+def _where_triples(filters) -> tuple[str, tuple[Any, ...]]:
+    """WHERE clause from (column, op, value) triples; values stay bound params."""
+    predicate, params = _predicate_sql(filters)
+    return ("" if predicate == "TRUE" else f" WHERE {predicate}"), params
 
 
 def _where(spec: QuerySpec, extra_clauses: tuple[str, ...] = ()) -> tuple[str, tuple[Any, ...]]:
@@ -192,8 +204,20 @@ def compile_dominance_query(spec: QuerySpec) -> SQLPlan:
         f"SELECT {gpre}donor_id, SUM({contribution}) AS c FROM {unit}{where} "  # nosec
         f"GROUP BY {gpre}donor_id"
     )
+    # MAGNITUDE share, not signed share (hardening #41). `MAX(c)/SUM(c)` reads
+    # the p%-rule as "the largest contributor's fraction of the total", which
+    # silently assumes every contribution is non-negative. Real refund, net-flow
+    # and delta measures are not: over a negative total, `MAX` selects the LEAST
+    # negative donor while `SUM` is large and negative, so the ratio collapses
+    # towards zero and a cell one donor dominates outright reports as safe.
+    # Measured: negating one region's spend moved its witness from 0.620 to
+    # 0.0027 with the concentration unchanged, and a single chargeback took a
+    # cell to -0.081 while that donor held 66% of the magnitude and 210% of the
+    # released total. `abs` is identical on non-negative data — the same MAX,
+    # the same SUM — so no existing decision changes. A cell whose magnitudes
+    # sum to zero yields NULL, which fills to +inf and suppresses (fail closed).
     sql = (
-        f"SELECT {gpre}MAX(c) / NULLIF(SUM(c), 0) AS dominance "  # nosec
+        f"SELECT {gpre}MAX(abs(c)) / NULLIF(SUM(abs(c)), 0) AS dominance "  # nosec
         f"FROM ({inner}) t" + (f" GROUP BY {gsel}" if spec.group_by else "")
     )
     return SQLPlan(
@@ -345,11 +369,46 @@ class QueryEngine:
         self.con = duckdb.connect(database=":memory:")
         self.con.execute(f"SET memory_limit='{MEMORY_LIMIT}'")
         self.con.execute(f"SET threads={THREADS}")
+        # Materialise rather than register (hardening #51). A registered pandas
+        # frame is CONNECTION-scoped — a cursor cannot see it, verified — and a
+        # cursor per thread is what makes concurrent use safe. Copying the data
+        # into DuckDB's own storage is what lets every thread work from its own
+        # cursor over one shared catalogue.
         for name, df in tables.items():
-            self.con.register(name, df)
+            source = f"_src_{name}"
+            self.con.register(source, df)
+            # both identifiers go through `_ident`, which regex-checks against
+            # a strict pattern before quoting, so nothing caller-controlled
+            # reaches the statement (P9)
+            ddl = f"CREATE TABLE {_ident(name)} AS SELECT * FROM {_ident(source)}"  # nosec
+            self.con.execute(ddl)
+            self.con.unregister(source)
         for ddl in (*_VIEWS.values(), *_UNIT_VIEWS.values()):
             self.con.execute(ddl)
         self._marginals: dict | None = None
+        self._local = threading.local()
+
+    @property
+    def cursor(self):
+        """This thread's cursor over the shared database.
+
+        `QueryEngine` is built once and driven from FastAPI's threadpool by
+        concurrent users, and DuckDB's Python client does not guarantee
+        concurrent `execute().df()` on one connection. In this system that is
+        not merely a correctness risk: a frame returned to the wrong request is
+        a disclosure, because the vetting that approved one analyst's cells
+        would be attached to another's, and the audit row would record the
+        release under the wrong identity.
+
+        `cursor()` is DuckDB's documented answer — an independent execution
+        context over the same catalogue — so each thread gets one, made on
+        first use and kept for the life of the thread.
+        """
+        cursor = getattr(self._local, "cursor", None)
+        if cursor is None:
+            cursor = self.con.cursor()
+            self._local.cursor = cursor
+        return cursor
 
     def run(self, spec: QuerySpec) -> pd.DataFrame:
         """Raw aggregate frame: exact values, safety helpers attached.
@@ -361,7 +420,7 @@ class QueryEngine:
         """
         proc = get_procedure(spec.measure.fn)
         plan = compile_query(spec)
-        result = self.con.execute(plan.sql, plan.params).df()
+        result = self.cursor.execute(plan.sql, plan.params).df()
 
         # every procedure that reads individual values attaches its declared
         # influence witness (O3) — dominance for sums/means, leave-one-out for
@@ -385,7 +444,7 @@ class QueryEngine:
         `n_donors` does.
         """
         plan = compile_contribution_query(spec)
-        frame = self.con.execute(plan.sql, plan.params).df()
+        frame = self.cursor.execute(plan.sql, plan.params).df()
         return frame[frame["v"].notna()] if "v" in frame.columns else frame
 
     def cell_context(self, spec: QuerySpec, with_contributions: bool = False):
@@ -414,7 +473,7 @@ class QueryEngine:
         default to "safe". (For corr this covers e.g. every leave-one-out
         dropping below the 3-row floor.)
         """
-        witness = self.con.execute(plan.sql, plan.params).df()
+        witness = self.cursor.execute(plan.sql, plan.params).df()
         if spec.group_by:
             result = result.merge(witness, on=spec.group_by, how="left")
         else:
@@ -431,7 +490,7 @@ class QueryEngine:
 
     def _attach_donor_count(self, spec: QuerySpec, plan: SQLPlan, result: pd.DataFrame):
         """Distinct donors per cell (internal); a missing cell means zero donors."""
-        nd = self.con.execute(plan.sql, plan.params).df()
+        nd = self.cursor.execute(plan.sql, plan.params).df()
         if spec.group_by:
             result = result.merge(nd, on=spec.group_by, how="left")
         else:
@@ -460,7 +519,7 @@ class QueryEngine:
             per_dim: dict = {}
             for dim in dims:
                 col = _ident(dim)
-                rows = self.con.execute(
+                rows = self.cursor.execute(
                     f"SELECT {col} AS v, COUNT(DISTINCT donor_id) AS c "  # nosec
                     f"FROM {unit} GROUP BY {col}"
                 ).fetchall()
@@ -540,7 +599,44 @@ class QueryEngine:
         """
         where, params = _where_triples(filters)
         sql = f"SELECT COUNT(DISTINCT donor_id) FROM {self._unit_view(dataset)}{where}"  # nosec
-        return int(self.con.execute(sql, params).fetchone()[0])
+        return int(self.cursor.execute(sql, params).fetchone()[0])
+
+    def row_symdiff_donors(self, dataset: str, filters_a, filters_b) -> int:
+        """Distinct donors behind the rows exactly one of two queries counted.
+
+        The differencing controls used to compare donor **cohorts**, which is
+        the right question only while every filter dimension is an attribute of
+        a donor. `age_rating` is an attribute of the *app*: two cohorts can hold
+        exactly the same people while the rows they aggregate differ by a whole
+        suppressed cell. Both differencing layers then correctly report no
+        difference — the cohorts really are identical — and the released numbers
+        still differ by that cell. Twenty such cells were recoverable on the demo
+        data after hardening #39 closed the `age_years` route (#40).
+
+        A released value is a function of the rows it aggregated, so that is what
+        the auditor has to difference. This counts the donors contributing at
+        least one row to the symmetric difference of the two row sets.
+
+        For donor-level filters it is exactly ``|A △ B|``: a donor outside both
+        cohorts contributes no rows, and one inside both contributes none to the
+        difference. So it subsumes the cohort comparison rather than trading it
+        for something weaker, and `cohort_symdiff` remains for callers that
+        genuinely mean the donor sets.
+
+        Exact rather than simulatable, deliberately — see D7. The bound it
+        replaces overstated the true difference by 13x on the attack it was
+        meant to catch, and the bit it exposes is the one a direct query for the
+        difference cell already returns.
+        """
+        unit = self._unit_view(dataset)
+        pa, params_a = _predicate_sql(filters_a)
+        pb, params_b = _predicate_sql(filters_b)
+        sql = (
+            f"SELECT COUNT(DISTINCT donor_id) FROM {unit} "                 # nosec
+            f"WHERE (({pa}) AND NOT ({pb})) OR (({pb}) AND NOT ({pa}))"
+        )
+        params = params_a + params_b + params_b + params_a
+        return int(self.cursor.execute(sql, params).fetchone()[0])
 
     def cohort_symdiff(self, dataset: str, filters_a, filters_b) -> int:
         """|A △ B|: distinct donors in exactly one of two cohorts.
@@ -556,4 +652,4 @@ class QueryEngine:
         b = f"SELECT DISTINCT donor_id FROM {unit}{wb}"  # nosec
         # EXCEPT halves are distinct and disjoint, so UNION ALL is exact.
         sql = f"SELECT COUNT(*) FROM (({a} EXCEPT {b}) UNION ALL ({b} EXCEPT {a})) t"  # nosec
-        return int(self.con.execute(sql, pa + pb + pb + pa).fetchone()[0])
+        return int(self.cursor.execute(sql, pa + pb + pb + pa).fetchone()[0])

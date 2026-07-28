@@ -72,6 +72,24 @@ MAX_GROUP_BY = 3
 MAX_FILTERS = 5
 MAX_IN_VALUES = 50      # cap `in` lists to bound query cost (DoS)
 
+# --- internal high-granularity filters: band-aligned ranges only (#39) --------
+# An internal filter variable is a differencing channel when it can cut finer
+# than the public dimension it backs. A range sweep on exact age
+# (age_years >= v for v = 13..69) reconstructs an age histogram the catalogue
+# publishes only as bands; an exact-age equality pinpoints a sub-band cohort;
+# and two such slices combined with two common narrowing dimensions recover a
+# 1-3 donor cell from two large, individually safe releases. Range filters on
+# `age_years` must therefore align to the declared age-band edges — every such
+# predicate selects a union of whole bands, whose marginals are public — and
+# equality/membership on exact age is not offered at all. The edges mirror the
+# declared `age_band` domain (tests/test_invariants.py keeps them in sync).
+AGE_BAND_LO_EDGES = (13, 16, 18, 25, 35, 50)      # ">=" must take one of these
+AGE_BAND_HI_EDGES = (15, 17, 24, 34, 49, 69)      # "<=" must take one of these
+INTERNAL_RANGE_RULES: dict[str, dict] = {
+    "age_years": {"ops": (">=", "<="),
+                  "edges": {">=": AGE_BAND_LO_EDGES, "<=": AGE_BAND_HI_EDGES}},
+}
+
 GLM_FAMILIES = ("gaussian", "binomial", "poisson")
 # terms bound == MAX_GROUP_BY so every design-cell query is a legal group-by
 MAX_MODEL_TERMS = MAX_GROUP_BY
@@ -123,6 +141,19 @@ def check_filters(dataset: str, filters: list[Filter]) -> None:
         if f.op not in allowed:
             raise ValueError(f"operator {f.op!r} not allowed on {f.column!r}")
         _check_filter_value(f, kind)
+        rule = INTERNAL_RANGE_RULES.get(f.column)
+        if rule is not None:
+            if f.op not in rule["ops"]:
+                raise ValueError(
+                    f"operator {f.op!r} is not allowed on internal filter "
+                    f"{f.column!r}; use a band-aligned range "
+                    f"({' or '.join(rule['ops'])})")
+            edges = rule["edges"][f.op]
+            if f.value not in edges:
+                raise ValueError(
+                    f"filter on internal variable {f.column!r} must align to "
+                    f"the declared age-band edges ({', '.join(map(str, edges))} "
+                    f"for {f.op!r}); exact ages are internal-only")
 
 
 def _normalized_filters(filters: list[Filter]) -> tuple:

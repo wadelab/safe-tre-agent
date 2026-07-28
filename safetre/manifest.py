@@ -20,7 +20,7 @@ from .query import (
 )
 from .schema import ROLE_LABELS, column_description, declared_domain, role_of
 
-MANIFEST_VERSION = "2026-07-07.aggregate+glm+anova.v5"
+MANIFEST_VERSION = "2026-07-28.aggregate+glm+anova.v8"
 
 
 def public_schema() -> dict[str, Any]:
@@ -108,6 +108,13 @@ def public_manifest() -> dict[str, Any]:
                     "text_fields_allowed": False,
                     "raw_rows_allowed": False,
                     "internal_analysis_variables_returnable": False,
+                    # hardening #39: internal range filters are band-aligned
+                    "internal_filter_ops": {
+                        "age_years": {
+                            ">=": [13, 16, 18, 25, 35, 50],
+                            "<=": [15, 17, 24, 34, 49, 69],
+                        },
+                    },
                 },
                 "release": {
                     "minimum_cell_size": 10,

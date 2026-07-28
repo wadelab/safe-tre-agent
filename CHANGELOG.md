@@ -8,6 +8,179 @@ and fixes are in [docs/hardening-log.md](docs/hardening-log.md).
 
 ### Security
 
+- **Red-team round 8 ([hardening log](docs/hardening-log.md)): the filter
+  algebra was a differencing channel, and the harness could not see it.**
+  Twenty fixes, one residual priced rather than closed, and round 7's two
+  open findings closed. A full adversarial review of the query surface
+  ([redteam/adver_report.md](redteam/adver_report.md)).
+  The QuerySpec boundary held; the leaks ran through the filter algebra nobody
+  had attacked with, through data content nobody had made hostile, and through
+  failure paths nobody had made fail. #37 to #39 came from the report; #40 to
+  #48 came from probing those fixes and working the rest of it, #48 being why
+  none of it had been caught before; #49 to #52 close the remaining state,
+  concurrency and honesty items; #53 to #56 close out the report, including
+  round 7's #34 and #35.
+  - **Pipeline exceptions escaped as un-audited 500s** (#37). A planner
+    failure, engine error or raising fit produced a 500 with no audit record —
+    a hole in the tamper-evident log and a crashability oracle. `service.handle`
+    is now an audited, fail-closed wrapper: the exception's TYPE goes to the
+    audit log (never its message), and the caller gets the canonical withheld
+    response. Spec R8 amended: every request — released, redacted, denied, or
+    errored — produces exactly one audit record.
+  - **The auditor's total-delta check counted rows, not donors** (#38). On an
+    event-level view, two cohorts 1-3 people apart but ~30 events apart passed
+    every control — the double-differencing shape that recovers a 1-3 donor
+    cell from two large, individually safe releases. The auditor now totals
+    distinct donors (completing D4's individuals-not-rows reading), and a
+    model's roles are observed under role-qualified keys so a binomial's
+    trials/successes tables are not false-flagged as a pair.
+  - **Internal range filters cut finer than the public dimensions they back**
+    (#39). A sweep `age_years >= v` read each exact-age sub-band total out of
+    individually safe releases, and `age_years == 41` released any ≥10-donor
+    exact age directly. Range filters on an internal variable must now align
+    to the declared band edges (`>=` 13/16/18/25/35/50, `<=`
+    15/17/24/34/49/69); exact-age equality/membership is not expressible.
+    Decision [D7](docs/decisions/D7-donor-totals-and-band-filters.md); spec R6
+    amended; the public manifest states the edges (`MANIFEST_VERSION`
+    2026-07-28 v8, the webpage-visible version tag).
+  - New red-team entries pin all three: `age_range_sweep_step`,
+    `exact_age_probe`, `double_differencing_two_common_dims`,
+    `donor_delta_differencing`.
+  - **The lineage auditor differenced donor cohorts, but a release is a
+    function of rows** (#40). Found by probing #39 rather than by reading the
+    report: #39 closed the `age_years` route, not the shape. `age_rating` is an
+    attribute of the app rather than the donor, so `{age_rating>=7, ...}` and
+    `{age_rating>=8, ...}` hold *exactly the same people* while the rows they
+    aggregate differ by a suppressed cell — 20 such cells were still
+    recoverable. `QueryEngine.row_symdiff_donors` counts the donors behind the
+    rows exactly one of two queries aggregated, and the guard becomes
+    `d < threshold` so a difference of zero denies too. On donor-level filters
+    the new count equals `cohort_symdiff` exactly. Spec P11 amended.
+  - **Dominance was a signed share, so a negative measure inverted it** (#41).
+    Over a negative total `MAX(c)/SUM(c)` selects the least negative donor:
+    negating one region's spend moved its witness from 0.620 to 0.0027 with the
+    concentration unchanged. The witness is now the magnitude share, which is
+    identical on non-negative data.
+  - **A released payload was never checked for finiteness** (#42). A single
+    `-inf` record, and finite magnitudes whose sum overflows, both released.
+    Non-finite aggregate payloads now suppress the cell; a fitted model's
+    output is out of scope, since an ANOVA `Residual` row has no F or p by
+    definition.
+  - **Undeclared values were dropped from the marginals and then printed as
+    cell keys** (#43). #29's reasoning — a value outside its declared domain is
+    disclosive by its name — now applies on the release path, against the
+    query's declared group-by keys rather than a dtype guess.
+  - **The external checker's returned rule names reached analyst text and the
+    audit log** (#44). Poisoned category values travel to the checker as cell
+    keys and came back as finding names. A returned name is now projected onto
+    a declared identifier shape; the rejected text is recorded nowhere.
+  - **Loopback was treated as a trust boundary** (#45). The identity header was
+    trusted because the channel was loopback-only — but the model runtime is
+    untrusted by the threat model and runs on loopback. 21 forged requests were
+    accepted and attributed to a victim, and rotating the header minted a fresh
+    query budget and empty differencing lineage, because the session controls
+    are keyed on the login. `SAFETRE_PROXY_SHARED_SECRET` is now required
+    whenever `SAFETRE_REQUIRE_IDENTITY=1`, an empty allowlist admits nobody in
+    production, repeated and comma-joined headers are refused, and the shipped
+    systemd unit carries both settings. Spec P13 amended.
+  - **Policy floors were checked on the dataclass defaults, not the resolved
+    configuration** (#46). Any single relaxed dial passed 737 of 737 tests.
+    Floors now apply to the resolved policy, with `SAFETRE_ALLOW_UNSAFE_POLICY=1`
+    as an explicit, loudly-logged override; the effective policy is logged at
+    startup.
+  - **Only `/api/query` was rate-limited** (#47). Twelve concurrent
+    `/api/audit/verify` clients moved query median latency from 51 ms to
+    1582 ms. A middleware now covers every route, and the full-chain scan has
+    its own tighter budget.
+  - **The red-team harness could not fail** (#48) — the finding that explains
+    the rest of the round. Its oracle asked `leak_detector` about the final released
+    frame, which after finalization has no dominance, influence or donor-count
+    columns left to test, so it could not return "yes"; and it required a
+    control to have fired, which an attacker supplies by appending an unrelated
+    over-granular query. A session that recovered one donor's exact spend
+    reported PASS. The oracle is now computed from the row-level data, inspects
+    every step, and asks what released cells *combine* into; the verdict is its
+    findings alone. `redteam/fixtures.py` adds negative, non-finite, NULL,
+    undeclared and hyperactive-donor data, and the corpus gains `corr`,
+    `sum_sq` and hostile-fixture entries. `tests/test_redteam_oracle.py`
+    calibrates the oracle in both directions — it must stay silent on a correct
+    system and speak up when a control is removed. Spec R12 amended.
+  - **Session state was not durable** (#49). A session lasted exactly as long
+    as the process, so a deploy or a crash cleared every analyst's query budget
+    and differencing lineage — a pair denied before a restart completed after
+    one, recovering a donor's exact spend, with the whole attack sitting unread
+    in the audit log. `SessionStore.rehydrate` rebuilds both at startup over a
+    declared `session.window_hours` (default 24). Note it tightens behaviour:
+    budget spent before a restart is still spent after it. Spec R6 amended.
+  - **A prefill link wrote into the audit log under whoever opened it** (#50).
+    `/#q=...` auto-ran, so a shared URL planted an attacker-chosen request as
+    the victim, recorded as released. The link now fills the box and stops; a
+    click is the consent. Auto-run survives only as
+    `SAFETRE_ALLOW_PREFILL_AUTORUN`, off by default, for the screenshot scripts
+    that drive a browser which cannot click.
+  - **One DuckDB connection served every concurrent user** (#51). A frame
+    returned to the wrong request would attach one analyst's vetting to
+    another's cells. Each thread now gets its own cursor over one shared
+    catalogue, which required materialising the input tables rather than
+    registering them (a registered frame is connection-scoped and invisible to
+    a cursor). Pinned by a 300-query, 12-thread load test.
+  - **The legacy code-writing sandbox moved out of the shipped package** (#52).
+    `static_check` is a denylist; `np.memmap` and `np.genfromtxt` walk past it
+    and release file contents. The path was never reachable from the web app or
+    the CLI, but it lived in `safetre/` and the red-team table put guard-OFF
+    beside guard-ON for it, which reads as though the guard were what made the
+    difference. It is now `redteam/legacy/`, labelled a counter-example, with
+    `tests/test_legacy_sandbox.py` pinning the bypass end to end — including
+    recovering file contents in order, since the release re-ordering is a side
+    effect and not a defence.
+  - `_dim_value_set` now models SQL three-valued logic, so the cheap marginal
+    bound is an upper bound again and a range predicate no longer raises on a
+    NULL-bearing dimension.
+  - **The optional-role bit is priced, not closed** (#53). A gaussian model
+    whose dispersion cells fail the dominance bound still releases and says so,
+    on 30% of released models. It is not closed because it cannot be closed by
+    silence: a partial release carries three columns where a complete one
+    carries six, so deleting the finding would remove the sentence and leave
+    the channel. The two real closures are priced for an operator to choose
+    between (`artifacts/optional_role_channel.json`).
+  - **The response-time ceiling is now a deadline** (#54, closing round 7's
+    #34). An overrunning request used to be answered when its work finished,
+    advertising its size exactly as the ceiling exists to prevent. The boundary
+    moved to a raw ASGI layer, because inside `BaseHTTPMiddleware` neither
+    cancelling nor abandoning the task answers on time — anyio's thread pool is
+    not cancellable and `call_next` runs in a task group that waits for its
+    child, both measured at 1203 ms against a 200 ms ceiling. Now 400/800/1600/
+    3200 ms of work all answer at 252.3-252.5 ms. `redteam/timing_attacker.py`
+    attacks the channel adaptively rather than measuring it passively, and the
+    straddle vector is gated in CI. Spec R18 amended.
+  - **The effective policy is recorded in the audit chain** (#55). A clean
+    release under `min_cell=1` was schema-identical to one under the shipped
+    policy, so the log could not say which rules approved an output. A
+    distinguished `status=config` record at startup puts the resolved policy
+    inside the chain, with no schema change and no migration.
+  - **`max_output_rows` can fire** (#56, closing round 7's #35). The rule
+    required "no aggregation at all", which every compiled query makes
+    impossible, so the dial was wired to nothing. It now bounds released cell
+    count and escalates to a human checker — judged on what is released rather
+    than what was computed, which is 11 of 241 group-by combinations rather
+    than 46.
+  - **A harness script wrote to the operator's real audit log** (#57). #55 made
+    importing `safetre_web.app` append a policy record, which silently turned
+    "import the app" into "write to the audit log" — and four harness scripts
+    imported it without pinning `SAFETRE_AUDIT_DB`, so `redteam/timing_attacker.py`
+    put 578 junk records in the developer's log. #36 recurring by a new route:
+    that fix lived in `tests/conftest.py` and never covered the scripts. They
+    now pin a throwaway path before the import; the polluted log is archived
+    rather than repaired, since it verified and re-MACing is the operation the
+    design exists to prevent.
+  - `redteam/round8_repro.py` re-runs every load-bearing finding and exits
+    nonzero while any is open; `redteam/remediation-plan.md` records the
+    verification and the ordering. Nothing from the report is left open; what
+    remains is roadmap work — the DP accountant, cross-user lineage, and
+    asynchronous delivery.
+
+### Security (round 7, 2026-07-26)
+
 - **Red-team round 7 ([hardening log](docs/hardening-log.md)): five fixes, two
   open.** An adversarial pass over the whole surface on the assumption the code
   is public. The release path held; the leaks ran through the paths nobody had

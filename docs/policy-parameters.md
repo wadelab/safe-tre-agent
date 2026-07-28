@@ -47,9 +47,9 @@ The minimum number of distinct donors a released cell may describe.
 
 ## `max_output_rows`
 
-How many rows a result may have before it looks like a row dump.
+How many cells a released result may have before it goes to a human output checker.
 
-**What the value means.** an un-aggregated result longer than this is flagged for human review rather than released automatically. It bounds granularity, not cell size.
+**What the value means.** a result finer than this is escalated rather than released automatically: the cells passed every rule individually, and it is their NUMBER that wants a second opinion. Counted on what is released, not on what was computed — a query whose cells were mostly suppressed has released a small table, not a fine one. This used to read 'rows with no aggregation at all', which on the QuerySpec path is unsatisfiable, because every compiled query appends a count: the dial described a control that could not fire (hardening #35, #56). Measured over the whole group-by skeleton: median 20 released cells, max 157, and 11 of 241 combinations escalate at this default — all of them three-dimension cross-tabs.
 
 | | |
 |---|---|
@@ -57,7 +57,7 @@ How many rows a result may have before it looks like a row dump.
 | Environment | `SAFETRE_MAX_OUTPUT_ROWS` |
 | `config.yaml` | `disclosure.max_output_rows` |
 | Clause | [R5](specification.md) |
-| Pinned by | `tests/test_disclosure.py` |
+| Pinned by | `tests/test_hardening.py` |
 | Measured cost | *not measured* |
 
 ## `query_budget`
@@ -86,6 +86,21 @@ How similar two cohorts may be before the second is refused.
 | Default | `10` |
 | Environment | `SAFETRE_DIFFERENCING_DELTA` |
 | `config.yaml` | `session.differencing_delta` |
+| Clause | [R6](specification.md) |
+| Pinned by | `tests/test_hardening.py` |
+| Measured cost | *not measured* |
+
+## `session_window_hours`
+
+How long a session's differencing lineage and query budget survive.
+
+**What the value means.** the controls that bound what one analyst can accumulate are rebuilt from the audit log on startup, over this many hours of history. It answers a question the code used to answer by accident: a session used to last exactly as long as the process, so a deploy or a crash handed every analyst a fresh budget and an empty lineage, and the two halves of a differencing pair could be split across a restart. Longer is stricter and costs startup time proportional to the history replayed; it is a window on ONE identity's own releases, not cross-user accounting, which needs the DP work.
+
+| | |
+|---|---|
+| Default | `24` |
+| Environment | `SAFETRE_SESSION_WINDOW_HOURS` |
+| `config.yaml` | `session.window_hours` |
 | Clause | [R6](specification.md) |
 | Pinned by | `tests/test_hardening.py` |
 | Measured cost | *not measured* |

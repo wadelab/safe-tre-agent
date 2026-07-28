@@ -11,7 +11,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from safetre import synth                            # noqa: E402
-from safetre.analyst import Analyst                  # noqa: E402
+from redteam.legacy.sandbox import Analyst           # noqa: E402
 from safetre.llm import LLMClient, MockLLM, real_llm_enabled  # noqa: E402
 
 

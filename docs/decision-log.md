@@ -30,6 +30,7 @@ alongside the reasoning that replaced it.
 | D4 | [Inference from a dispersion that cannot be released](decisions/D4-robust-dispersion.md) | **parked** | R15, P21 |
 | D5 | [What to do about the response-time channel](decisions/D5-timing-channel.md) | accepted | R3, R5, R6, R18 |
 | D6 | [An external checker is used by default when one is configured](decisions/D6-checker-default.md) | accepted | R5 |
+| D7 | [Auditor totals count donors, and internal range filters are band-aligned](decisions/D7-donor-totals-and-band-filters.md) | accepted | R5, R6 |
 
 ## D1 — Models fit from vetted cells, not from rows
 
@@ -90,6 +91,16 @@ Should the shipped default vet with the prototype's own rules alone, or compose 
 **What would change our mind.** The measured cost was 5% of gaussian model availability on synthetic data whose concentration was deliberately planted. Real data could be worse, and a deployment that finds the composite refusing analyses researchers need should re-run `scripts/measure_composite_cost.py` against its own data rather than assume these numbers transfer. Revisit also if a checker ever gains rules that are not monotone with ours — the whole argument rests on the union only ever suppressing more.
 
 [Read the record](decisions/D6-checker-default.md)
+
+## D7 — Auditor totals count donors, and internal range filters are band-aligned
+
+*2026-07-28 · accepted*
+
+An adversarial review (redteam/adver_report.md §2) showed the filter algebra is a differencing channel the auditor cannot see: a range sweep on exact age reads sub-band totals from individually safe releases, and two such slices with two common narrowing dimensions recover a 1-3 donor cell. Do we count donors in the auditor's delta check, restrict internal range filters to the public band edges, both, or something structural (DP)?
+
+**What would change our mind.** A differential-privacy accountant (roadmap item 4) would make both rules redundant by bounding the answer rather than the query shape; revisit then. Also revisit if a new internal high-granularity filter variable is added — it needs its own declared edge set in query.INTERNAL_RANGE_RULES, or the same analysis repeated — and if analysts complain that band-aligned age windows cost real utility, because the alternative (publishing two- dimensional marginals so the lineage bound can see interactions) is a different disclosure trade, not a free one.
+
+[Read the record](decisions/D7-donor-totals-and-band-filters.md)
 
 
 ## Adding a record

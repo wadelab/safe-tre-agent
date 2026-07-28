@@ -96,14 +96,29 @@ pre-rounding counts. See hardening #27 and #28.)*
 
 **R6** — The system MUST keep per-session lineage: record each released cohort,
 flag a new cohort within the differencing threshold of a prior one, and enforce
-a per-session query budget.
+a per-session query budget. *(Amended 2026-07-28: the totals the lineage
+compares are DISTINCT-DONOR totals, not row counts — on an event-level view a
+hyperactive donor inflates the row count without adding people, and two
+cohorts a few individuals apart must flag however many rows separate them.
+Filters on an internal high-granularity variable MUST align to the declared
+public band edges of the dimension it backs — `>=`/`<=` on `age_years` take
+band-edge values only — and exact-value equality or membership on it is not
+expressible, so a range sweep cannot cut finer than the published marginals.
+See hardening #38, #39 and decision D7. Amended further: session lineage and
+budget MUST survive a process restart, rebuilt from the audit log over a
+declared window, so that the two halves of a differencing pair cannot be split
+across a deploy or a crash. See hardening #49.)*
 
 **R7** — The system MUST route any residual (non-suppressable) finding to a
 human-in-the-loop decision that either escalates for review or denies.
 
-**R8** — The system MUST append every request — released, redacted, or denied —
-to the HMAC-chained audit log, and MUST expose a verification endpoint that
-checks the chain against an off-box anchor.
+**R8** — The system MUST append every request — released, redacted, denied, or
+errored — to the HMAC-chained audit log, and MUST expose a verification
+endpoint that checks the chain against an off-box anchor. *(Amended 2026-07-28:
+an exception anywhere in the pipeline MUST still produce exactly one audit
+record, carrying the exception's type and never its message, and the caller
+MUST receive the canonical withheld response, so a crash is neither an audit
+gap nor a distinguishable oracle. See hardening #37.)*
 
 **R9** — The system MUST publish its disclosure-safe metadata contracts: the
 capability **manifest**, the schema **codebook**, and the **marginals**
@@ -117,7 +132,21 @@ the compiled SQL plan, the findings, and the ordered pipeline trace MUST all be
 available for the request.
 
 **R12** — The project MUST provide a red-team harness that replays the attack
-suite with the gateway off and on and reports what leaked in each case.
+suite with the gateway off and on and reports what leaked in each case. Its
+oracle MUST be computed from the row-level data rather than from the gateway's
+own findings, MUST inspect every step of a sequence rather than the last, and
+MUST consider what the released outputs *combine* into. An attack passes when
+the session disclosed nothing; a control having fired is not a pass.
+
+*Amended 2026-07-28.* The harness previously judged a guarded run by asking
+`disclosure.leak_detector` about the final released frame and requiring at
+least one control to have fired. Neither half worked. Finalization drops the
+dominance, influence and donor-count columns and rounds the counts before
+release, so the first question cannot return "yes" on the QuerySpec path — a
+released frame yields no findings by construction. The second is supplied by
+the attacker: a three-step session that recovered one donor's exact spend
+reported PASS as soon as an unrelated over-granular query was appended, because
+that decoy tripped `small_cell` and `dominance` (hardening #48).
 
 **R13** — When a real model is configured but missing or unreachable, the system
 MUST fail loudly; it MUST NOT silently fall back to the deterministic mock
@@ -154,6 +183,16 @@ data, and CI MUST both check the committed formal model against that export
 deployment boundary MUST quantise every response to a fixed interval and MUST
 refuse any request whose work would exceed a stated ceiling, so that requests
 whose results are withheld are indistinguishable from each other by latency.
+The ceiling MUST be enforced as a **deadline**: a refused request MUST be
+answered at the boundary, not when its work happens to finish. *(Amended
+2026-07-28. The ceiling was a post-hoc body swap, so a query taking 1.2 s
+against a 0.2 s ceiling was answered at 1.256 s, advertising its size exactly
+as it would have with no ceiling at all. It also cannot be enforced from a
+`BaseHTTPMiddleware`: anyio's thread pool is not cancellable by default and
+`call_next` runs inside a task group that waits for its child, so an early
+response is produced on time and delivered late — both measured. A timing
+control has to sit outside anything that waits for the work it is timing. See
+hardening #34 and #54.)*
 *(Added 2026-07-26 from the measurement in
 [D5](decisions/D5-timing-channel.md): latency tracked cohort size closely
 enough to put sub-threshold cells in size order within a few queries, which is
@@ -210,10 +249,30 @@ pattern before quoting.
 or symmetric-difference size) into any caller-visible message or the audit
 trail. Refusals are non-numeric.
 
-**P11** — MUST NOT decide a differencing denial from the live donor sets. The
-decision MUST be a function of the published, simulatable marginals only, so a
-refusal discloses nothing an analyst could not already compute. *(One residual
-bit — isolating a sub-threshold category — is the documented deviation a DP
+**P11** — MUST NOT release a pair of results whose difference isolates fewer
+than the differencing threshold of individuals. The test MUST be applied to the
+**rows** each query aggregated, not only to the donor cohorts that produced
+them: a released value is a function of the rows it counted, and a filter on an
+event or reference attribute can leave two cohorts holding identical people
+while their released values differ by a whole suppressed cell (hardening #40).
+The published, simulatable marginals remain the first test — they can only deny
+more, and they catch rare-category isolation without touching the data — but
+they are no longer the last word.
+
+*Amended 2026-07-28.* This clause previously read "MUST NOT decide a
+differencing denial from the live donor sets", requiring the decision to be a
+function of the published marginals alone. That bound was measured overstating
+the true symmetric difference by 13x on the attack it existed to catch, and
+blind by construction to the row-level case. Simulatability was buying a
+property — that a refusal discloses nothing — at the price of the control not
+working. The exact test is retained instead because its information cost is
+close to nil: when two cohorts differ on one dimension their difference *is* a
+single cell, so "these differ by fewer than ten donors" is the same bit the
+analyst gets by asking for that cell directly and receiving the canonical
+refusal. For multi-dimension differences the difference set is not always
+expressible as one query, and that residual is priced with the others below.
+See [D7](decisions/D7-donor-totals-and-band-filters.md). *(The residual bit for
+isolating a sub-threshold category remains the documented deviation a DP
 accountant closes; see [N1](#non-goals-what-it-does-not-claim).)*
 
 **P12** — MUST NOT publish, in the marginals, a sub-threshold donor count or any
@@ -221,9 +280,21 @@ value outside a column's declared domain. An undeclared value (a hostile string
 smuggled into a field) is disclosive by its name, so it is dropped entirely, not
 count-nulled.
 
-**P13** — MUST NOT trust the identity header on a channel wider than loopback
-without an explicit operator opt-in (and, if configured, a proxy shared secret).
-Otherwise identity fails closed.
+**P13** — MUST NOT trust the identity header without a proxy shared secret in
+any deployment that requires identity, and MUST NOT trust it on a channel wider
+than loopback without an explicit operator opt-in. A repeated or comma-joined
+identity header MUST be refused rather than resolved. Otherwise identity fails
+closed.
+
+*Amended 2026-07-28.* The secret was previously optional — honoured when
+configured, not required — because a loopback-only channel was taken to mean
+only the local proxy could reach the socket. The threat model says otherwise:
+the model runtime is untrusted (see the trust boundaries in
+[security.md](security.md)) and the shipped unit runs it on loopback, so the
+condition chosen to justify trusting the header is the condition under which an
+untrusted component can forge it. Because the session query budget and the
+differencing lineage are keyed on the login, a forgeable header made both
+unbounded (hardening #45).
 
 **P14** — MUST NOT serve any request — query or metadata — that arrives outside
 the restricted channel or from an identity not on the allowlist.
@@ -337,11 +408,11 @@ SQL plan to be inspectable, and it was exposed nowhere until `Result.plans`.
 | R4 exactly the registered measures | `procedures.py` (`REGISTRY`), `query.py` (`Measure`) | `test_procedure_conformance.py`, `test_secure.py` | Implemented |
 | R6 session lineage and budget | `disclosure.py` (`SessionAuditor`), `service.py` | `test_hardening.py`, `test_pipeline.py`, Alloy `temporal_session` | Implemented |
 | R7 human-in-the-loop routing | `disclosure.py` (`hitl_decision`, `is_suppressable`), `service.py` | `test_requirements.py`, `test_formal_temporal_sync.py` | Implemented |
-| R8 HMAC-chained audit and verification | `audit.py`, `safetre_web/app.py` | `test_secure.py`, `test_web.py` | Implemented |
+| R8 HMAC-chained audit and verification | `audit.py`, `safetre_web/app.py`, `service.py` (exception boundary) | `test_secure.py`, `test_web.py`, `test_audit_completeness.py` | Implemented |
 | R9 published metadata contracts | `manifest.py`, `schema.py`, `engine.py` (`marginal_donor_counts`) | `test_manifest.py`, `test_schema.py` | Implemented |
 | R10 channel and allowlist on every path | `safetre_web/channel.py`, `identity.py`, `app.py` | `test_web.py`, `test_hardening.py` | Implemented |
 | R11 decisions are inspectable | `service.py` (`Result`: spec, plans, findings, trace) | `test_requirements.py` | Implemented |
-| R12 red-team harness | `redteam/run_redteam.py`, `redteam/attacks.yaml` | CI job `test` (fails the build on any regression) | Implemented |
+| R12 red-team harness | `redteam/run_redteam.py`, `redteam/oracle.py`, `redteam/fixtures.py`, `redteam/attacks.yaml` | CI job `test` (fails the build on any regression); `tests/test_redteam_oracle.py` calibrates the oracle in both directions | Implemented |
 | R13 no silent fallback to the mock planner | `llm.py` (`resolve_planner_mode`) | `test_llm.py` | Implemented |
 | R5 complementary suppression | `disclosure.py` (`_secondary_suppress`, `_finalize`) | `test_disclosure.py`, `test_release_equality.py` | Partial (single-dim exact, multi-dim conservative) |
 | R14 procedure registry | `procedures.py` | `test_procedure_conformance.py` | Implemented |

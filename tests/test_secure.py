@@ -433,7 +433,7 @@ def test_grouping_filter_terms_do_not_force_grouping(tables):
     planner = _FixedSpecPlanner(
         {"dataset": "wellbeing", "measure": {"fn": "mean", "column": "wemwbs_score"},
          "group_by": ["region"],
-         "filters": [{"column": "age_years", "op": ">", "value": 40}]})
+         "filters": [{"column": "age_years", "op": ">=", "value": 35}]})
     r = QueryService(tables).handle("mean wellbeing by region for age over 40", planner)
     assert r.status in ("released", "redacted")
     assert not any(f.rule == "grouping_mismatch" for f in r.findings)

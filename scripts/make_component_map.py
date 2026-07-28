@@ -29,6 +29,18 @@ from make_decks import (
     _bar, _bg, _text, table_slide, title_slide,
 )
 
+# A harness must never write to the operator's real audit log. `safetre_web.app`
+# opens `SAFETRE_AUDIT_DB` at import and now appends a policy record there
+# (#55), so merely importing it from a script pollutes `./audit.db` — which is
+# hardening #36 all over again, and did happen (#57). Pin a throwaway path
+# BEFORE the import, exactly as `tests/conftest.py` does for the test suite.
+import os as _os          # noqa: E402
+import tempfile as _tempfile  # noqa: E402
+
+_os.environ.setdefault(
+    "SAFETRE_AUDIT_DB",
+    _os.path.join(_tempfile.gettempdir(), "safetre-harness-audit.db"))
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 RED = RGBColor(0xD4, 0x35, 0x1C)

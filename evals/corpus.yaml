@@ -252,12 +252,14 @@
   request: "regress total spend on age band for age over 40"
   tags: [glm]
   expect:
+    # hardening #39: age filters must align to the declared band edges, so the
+    # tightest legal reading of "over 40" is the 50+ band
     - tool: glm
       dataset: donor_spend
       family: gaussian
       response: total_spend_gbp
       terms: [age_band]
-      filters: [{column: age_years, op: ">", value: 40}]
+      filters: [{column: age_years, op: ">=", value: 50}]
 
 # --- no legal answer: the pass condition is a validation rejection ------------
 

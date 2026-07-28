@@ -50,7 +50,7 @@ the argument is honest about being incomplete rather than quiet about it.
 | P2 no row-level output | `engine.py` (aggregate-only views) | `test_secure.py`, `test_invariants.py` | ✓ |
 | P10 non-numeric refusals | `disclosure.py` (`SessionAuditor`) | `test_hardening.py` | ✓ |
 | R1 natural-language request to untrusted spec | `service.py` (`handle`), `planner.py` | `test_pipeline.py`, `test_secure.py` | ✓ |
-| R12 red-team harness | `redteam/run_redteam.py`, `redteam/attacks.yaml` | CI job `test` (fails the build on any regression) | ✓ |
+| R12 red-team harness | `redteam/run_redteam.py`, `redteam/oracle.py`, `redteam/fixtures.py`, `redteam/attacks.yaml` | CI job `test` (fails the build on any regression); `tests/test_redteam_oracle.py` calibrates the oracle in both directions | ✓ |
 
 ### Safe people
 
@@ -74,7 +74,7 @@ the argument is honest about being incomplete rather than quiet about it.
 | P15 tamper-evident audit | `audit.py` (HMAC chain) | `test_secure.py` | ✓ |
 | P16 concurrency serialisation | `session.py`, `app.py` | `test_hardening.py`, Alloy `temporal_session` | ✓ |
 | R3 read-only SQL under resource caps | `engine.py` (`compile_query`, `MEMORY_LIMIT`, `THREADS`, `ROW_CAP`) | `test_formal_enumeration.py`, `test_procedure_conformance.py`, `test_requirements.py` | ✓ |
-| R8 HMAC-chained audit and verification | `audit.py`, `safetre_web/app.py` | `test_secure.py`, `test_web.py` | ✓ |
+| R8 HMAC-chained audit and verification | `audit.py`, `safetre_web/app.py`, `service.py` (exception boundary) | `test_secure.py`, `test_web.py`, `test_audit_completeness.py` | ✓ |
 | R13 no silent fallback to the mock planner | `llm.py` (`resolve_planner_mode`) | `test_llm.py` | ✓ |
 
 ### Safe data

@@ -160,12 +160,29 @@ document.addEventListener("DOMContentLoaded", () => {
   input.addEventListener("input", updateCount);
   updateCount();
 
-  // Shareable prefill: /#q=mean%20spend%20by%20age%20band runs on load.
+  // Shareable prefill: /#q=mean%20spend%20by%20age%20band fills the box.
+  //
+  // It fills it and stops. Running on load meant a link could put an
+  // attacker-chosen string into the HMAC-chained audit log under whoever
+  // opened it — and because the request was answered, the planted row recorded
+  // `status=released` with an output shape, so the log read as that person
+  // asking for identifiable data and being granted it. The chain proves an
+  // entry is authentic; it was never able to prove a human composed it. A
+  // click is the consent that closes the gap (hardening #50).
+  //
+  // Auto-run survives only as an explicitly enabled capture affordance for the
+  // screenshot and deck scripts, which drive a headless browser that cannot
+  // click. It is off unless the server sets SAFETRE_ALLOW_PREFILL_AUTORUN, and
+  // like SAFETRE_ALLOW_TEST_CLIENT it is a sentinel: never enable it on a real
+  // deployment.
   const hash = new URLSearchParams(location.hash.slice(1));
   const preset = hash.get("q");
   if (preset) {
     input.value = preset.slice(0, input.maxLength);
     updateCount();
-    run();
+    input.focus();
+    if (document.body.dataset.autorunPrefill === "1") {
+      run();
+    }
   }
 });

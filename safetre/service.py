@@ -43,6 +43,20 @@ def _withheld() -> list:
                       detail="no part of this result passed the disclosure checks")]
 
 
+def _donor_total(df: pd.DataFrame) -> float:
+    """The distinct-donor size of a raw engine frame, for the session auditor.
+
+    Every engine result carries the internal `n_donors` helper (dropped by the
+    gateway before release). Falling back to the row count keeps the auditor
+    correct for frames that did not come through the engine.
+    """
+    if "n_donors" in df.columns:
+        return float(df["n_donors"].sum())
+    if "n" in df.columns:
+        return float(df["n"].sum())
+    return float(len(df))
+
+
 def _literal_spec(request: str) -> dict | None:
     """A request that is a single JSON object is an analyst-authored spec
     (R17): it bypasses the planner and the natural-language gates, and is
@@ -84,6 +98,32 @@ class QueryService:
         self.engine = QueryEngine(tables)
         self.policy = policy or D.DisclosurePolicy()
 
+    def _difference_bound(self, dataset: str, marginals: dict):
+        """The differencing test the session auditor decides with.
+
+        Two layers, and the smaller wins because either denying is a denial:
+
+        - `simulatable_cohort_bound` — decided from published marginals alone,
+          so it costs no query and catches rare-category isolation without
+          touching the data. Kept as the cheap early-out.
+        - `QueryEngine.row_symdiff_donors` — the donors behind the rows exactly
+          one of the two queries aggregated. Exact, and it is the quantity that
+          actually governs the disclosure: a released value is a function of the
+          rows it counted, not of the cohort that produced them. The bound alone
+          overstated the true difference by 13x on the attack it was meant to
+          catch, and missed entirely the case where two cohorts hold the *same
+          people* but aggregate different rows (hardening #40).
+
+        The exact leg runs only when the cheap one has not already denied.
+        """
+        def bound(a: tuple, b: tuple) -> int:
+            cheap = simulatable_cohort_bound(marginals, dataset, a, b)
+            if cheap < self.policy.threshold:
+                return cheap
+            return self.engine.row_symdiff_donors(dataset, a, b)
+
+        return bound
+
     def _context(self, spec: QuerySpec):
         """What a vetter needs to know about this query: the disclosure class
         of its released value (which selects the dominance bound) and its cell
@@ -94,6 +134,32 @@ class QueryService:
 
     def handle(self, request: str, planner, auditor: D.SessionAuditor | None = None,
                audit_log=None, user: str = "anon") -> Result:
+        """The audited, fail-closed entry point.
+
+        Any exception below — a planner failure, an engine error, a fit that
+        raises — must not escape as an un-audited 500 (hardening #37): it is
+        recorded with status "error" and the exception TYPE only (an exception
+        message may carry data), and the caller receives the canonical
+        withheld response, so a crash is neither an audit gap nor an oracle.
+        """
+        auditor = auditor or D.SessionAuditor()
+        try:
+            return self._handle_inner(request, planner, auditor=auditor,
+                                      audit_log=audit_log, user=user)
+        except Exception as exc:                  # noqa: BLE001 - audited boundary
+            findings = [D.Finding(
+                "high", "pipeline_error",
+                "the query pipeline failed before a release decision",
+                audit_detail=type(exc).__name__)]
+            if audit_log is not None:
+                audit_log.append(
+                    user=user, request=request, spec=None, status="error",
+                    findings=[f.__dict__ for f in findings], output_shape=None)
+            return Result("denied", message=WITHHELD_MESSAGE,
+                          findings=_withheld(), trace=[WITHHELD_TRACE])
+
+    def _handle_inner(self, request: str, planner, auditor: D.SessionAuditor,
+                      audit_log=None, user: str = "anon") -> Result:
         auditor = auditor or D.SessionAuditor()
         trace: list[str] = []
 
@@ -191,18 +257,22 @@ class QueryService:
         # analyst can count its rows; when it is not, they may not.
         trace.append("engine: aggregate computed")
 
-        total = float(df["n"].sum()) if "n" in df.columns else float(len(df))
+        # The auditor's totals are DONORS, not rows: two cohorts that differ
+        # by a few individuals must trip the delta check however many rows
+        # separate them — on an event-level view a hyperactive donor inflates
+        # n without adding people, which is exactly the gap a double-
+        # differencing pair exploits (hardening #38; completes D4's
+        # individuals-not-rows reading in the auditor, not just the threshold).
+        total = _donor_total(df)
         audit_findings = auditor.observe(spec.measure_key(), total)
-        # lineage: is this cohort a near-duplicate of one already released?
-        # The bound is computed from PUBLISHED donor marginals, not the live
-        # donor sets, so the deny/allow decision is simulatable — an analyst with
-        # the same public marginals could reproduce it, and a refusal leaks
-        # nothing (see disclosure.simulatable_cohort_bound).
+        # lineage: does this release differ from an earlier one by too few
+        # people? The published marginals decide it where they can, and the
+        # exact row-level difference decides it where they cannot — see
+        # `_difference_bound` and hardening #40.
         cohort = spec.normalized_filters()
         marginals = self.engine.marginal_donor_counts()
         audit_findings += auditor.observe_cohort(
-            spec.dataset, cohort,
-            lambda a, b: simulatable_cohort_bound(marginals, spec.dataset, a, b))
+            spec.dataset, cohort, self._difference_bound(spec.dataset, marginals))
 
         released, action, findings = self.policy.apply(df, self._context(spec))
         findings = findings + audit_findings
@@ -336,12 +406,19 @@ class QueryService:
             df = self.engine.run(agg)
             trace.append(f"engine[{role}]: aggregate computed")
 
-            total = float(df["n"].sum()) if "n" in df.columns else float(len(df))
-            audit_findings = auditor.observe(agg.measure_key(), total)
+            # Donor totals, as on the plain path (hardening #38). The auditor
+            # key is qualified by the aggregate's ROLE: a model's roles are
+            # one joint release — a binomial's successes table is released
+            # alongside its trials table, so the two differing by a few
+            # donors is not a differencing signal, it's the model. Two
+            # models (or two hand-issued counts on the plain path) still
+            # compare role-for-role as before.
+            total = _donor_total(df)
+            audit_findings = auditor.observe(f"{agg.measure_key()}#{role}", total)
             cohort = agg.normalized_filters()
             audit_findings += auditor.observe_cohort(
                 agg.dataset, cohort,
-                lambda a, b: simulatable_cohort_bound(marginals, agg.dataset, a, b))
+                self._difference_bound(agg.dataset, marginals))
             if audit_findings:
                 trace.append(WITHHELD_TRACE)
                 return deny(audit_findings, WITHHELD_MESSAGE, public=_withheld())

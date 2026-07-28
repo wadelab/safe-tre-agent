@@ -6,9 +6,9 @@ and assert the core invariant: a blocked request NEVER returns data.
 
 import pytest
 
-from safetre.analyst import Analyst
+from redteam.legacy.sandbox import Analyst
 from safetre.disclosure import DisclosurePolicy, SessionAuditor
-from safetre.guards import run_in_sandbox, static_check
+from redteam.legacy.guards import run_in_sandbox, static_check
 from safetre.llm import MockLLM
 from safetre import synth
 from safetre.synth import INJECTION, POISON_DONORS, SEX_OVERRIDES

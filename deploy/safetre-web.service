@@ -25,6 +25,21 @@ Environment=SAFETRE_AUDIT_DB=/var/lib/safetre/audit.db
 Environment=SAFETRE_REQUIRE_IDENTITY=1
 Environment=SAFETRE_RESTRICTED_CHANNEL=1
 Environment=SAFETRE_CHANNEL_ALLOW_NETS=127.0.0.1/32,::1/128
+# --- Safe People: BOTH of the next two are required in production ------------
+# The model runtime above listens on loopback and is UNTRUSTED by the threat
+# model, so "only the proxy can reach the socket" is false and the identity
+# header alone proves nothing. `tailscale serve` must inject the shared secret
+# (it is the one measure verified to refuse a forged header), and the allowlist
+# is the Safe People gate. Without them the app fails closed and logs why
+# (safetre_web/identity.py, hardening #45).
+#
+# Generate once, keep OFF this host's repo, and load from an EnvironmentFile
+# that is not world-readable:
+#   install -m 0600 /dev/null /etc/safetre/proxy.env
+#   printf 'SAFETRE_PROXY_SHARED_SECRET=%s\n' "$(openssl rand -hex 32)" \
+#     >> /etc/safetre/proxy.env
+EnvironmentFile=/etc/safetre/proxy.env
+Environment=SAFETRE_ALLOWLIST=researcher@example.ac.uk
 # bind localhost only; expose via `tailscale serve --bg 8800`
 ExecStart=/opt/safe-tre-agent/.venv/bin/uvicorn safetre_web.app:app --host 127.0.0.1 --port 8800
 

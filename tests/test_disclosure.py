@@ -3,7 +3,7 @@
 import pandas as pd
 
 from safetre.disclosure import DisclosurePolicy, SessionAuditor, leak_detector
-from safetre.guards import static_check
+from redteam.legacy.guards import static_check
 
 
 def test_dominance_cell_suppressed():

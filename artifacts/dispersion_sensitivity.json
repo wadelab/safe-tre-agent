@@ -16,7 +16,7 @@
     "gaussian_points": 539,
     "released": 47,
     "denied": 492,
-    "denied_by_dispersion_cell_alone": 36,
+    "lost_dispersion_only": 36,
     "denied_by_mean_cell": 456,
     "releasable_but_for_the_dispersion_cell": 83,
     "availability_cost": 0.43373493975903615

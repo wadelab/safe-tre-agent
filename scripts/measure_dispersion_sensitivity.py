@@ -121,10 +121,19 @@ def measure_cells(engine: QueryEngine, policy: DisclosurePolicy) -> dict:
 
 
 def measure_models(engine: QueryEngine, policy: DisclosurePolicy) -> dict:
-    """Gaussian skeleton points, by the cell that refused them."""
+    """Gaussian skeleton points, by the cell that refused them.
+
+    Note what "lost to the dispersion cell" means now. When the sum-of-squares
+    table alone is refused, the model is no longer denied: `sum_sq` is an
+    OPTIONAL role, so the fit goes ahead from vetted means and the release
+    simply carries no standard errors. The counter below therefore measures
+    what the dispersion bound costs in *dispersion*, not in models — and the
+    same event is a disclosure channel in its own right, priced separately in
+    `scripts/measure_optional_role_channel.py`.
+    """
     procedure = GLMProcedure()
     counts = {"gaussian_points": 0, "released": 0, "denied": 0,
-              "denied_by_dispersion_cell_alone": 0, "denied_by_mean_cell": 0}
+              "lost_dispersion_only": 0, "denied_by_mean_cell": 0}
     for point in procedure.skeleton(CATALOGUE):
         spec = GLMSpec(**point)
         if spec.family != "gaussian":
@@ -140,13 +149,13 @@ def measure_models(engine: QueryEngine, policy: DisclosurePolicy) -> dict:
             continue
         counts["denied"] += 1
         if refused == {"sum_sq"}:
-            counts["denied_by_dispersion_cell_alone"] += 1
+            counts["lost_dispersion_only"] += 1
         else:
             counts["denied_by_mean_cell"] += 1
-    available = counts["released"] + counts["denied_by_dispersion_cell_alone"]
+    available = counts["released"] + counts["lost_dispersion_only"]
     counts["releasable_but_for_the_dispersion_cell"] = available
     counts["availability_cost"] = (
-        counts["denied_by_dispersion_cell_alone"] / available if available else None)
+        counts["lost_dispersion_only"] / available if available else None)
     return counts
 
 
@@ -188,7 +197,7 @@ def main() -> int:
     print(f"gaussian skeleton points               : {models['gaussian_points']}")
     print(f"  released                             : {models['released']}")
     print(f"  refused by the dispersion cell ALONE : "
-          f"{models['denied_by_dispersion_cell_alone']}")
+          f"{models['lost_dispersion_only']}")
     print(f"  refused with the mean cell too       : {models['denied_by_mean_cell']}")
     if models["availability_cost"] is not None:
         print(f"  availability cost of the dispersion cell: "

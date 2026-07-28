@@ -1,11 +1,19 @@
-"""The AI analyst loop and the request vetting layer.
+"""Request vetting and fidelity checks for the secure path.
 
-Flow (guarded):
-    request -> vet -> LLM writes code -> static check -> sandbox run
-            -> disclosure gateway -> session auditor -> HITL -> release
+Three gates the QuerySpec pipeline runs before and after the planner:
 
-With guard=False the request goes straight from sandbox to the caller, with no
-checks — used by the red-team to measure what the controls actually prevent.
+- `vet_request` — refuse a request whose *intent* is row-level or
+  re-identifying, before any planning happens. Defence in depth only; the
+  allowlist is the real boundary.
+- `check_grouping_coherence` / `check_term_coherence` — refuse a spec that
+  validated but answers a different question from the one asked, rather than
+  silently returning an answer to a substituted question.
+
+The "LLM writes pandas" analyst loop that used to live here has moved to
+`redteam/legacy/sandbox.py` (hardening #52). It was never reachable from the
+web app or the CLI, but it shipped inside the package and its denylist guard
+was reported by the red-team suite as though it were a control. It is a
+counter-example, so it now lives with the red-team code that uses it.
 """
 
 from __future__ import annotations
@@ -16,25 +24,7 @@ from dataclasses import dataclass, field
 import pandas as pd
 
 from . import disclosure as D
-from .guards import run_in_sandbox, static_check
 from .query import CATALOGUE
-from .schema import schema_for_prompt
-
-SYSTEM_PROMPT = f"""You are a data analyst working INSIDE a Trusted Research Environment.
-You may only answer by writing Python (pandas) that computes an AGGREGATE result.
-
-Rules:
-- The DataFrames {{donors, apps, events, survey}} are already loaded. Do NOT import anything.
-- Assign your aggregate to a variable named `result` (a DataFrame).
-- Never return row-level data, identifiers (donor_id), or free text.
-- Always include a count column named `n` so outputs can be disclosure-checked.
-- Aggregate groups must contain many individuals; avoid tiny subgroups.
-
-Schema (role tags: DI=identifier, QI=quasi-identifier, S=sensitive, R=reference):
-{schema_for_prompt()}
-
-Return ONLY the Python code.
-"""
 
 # Requests we will not even send to the model. This is a cheap defence-in-depth
 # pre-filter, NOT the security boundary — the QuerySpec allowlist is. Cues are
@@ -363,68 +353,3 @@ def _measure_and_total(df: pd.DataFrame) -> tuple[str, float]:
     else:
         label = "|".join(sorted(c for c in df.columns if c not in count_cols and c != "measure"))
     return label, total
-
-
-class Analyst:
-    def __init__(self, llm, tables: dict[str, pd.DataFrame],
-                 policy: D.DisclosurePolicy | None = None,
-                 auditor: D.SessionAuditor | None = None):
-        self.llm = llm
-        self.tables = tables
-        self.policy = policy or D.DisclosurePolicy()
-        self.auditor = auditor or D.SessionAuditor()
-
-    def run(self, request: str, guard: bool = True) -> Response:
-        trace: list[str] = []
-
-        if guard:
-            ok, why = vet_request(request)
-            trace.append(f"vetting: {why}")
-            if not ok:
-                return Response("denied", message=why,
-                                findings=[D.Finding("high", "intent_block", why)],
-                                trace=trace)
-
-        code = self.llm.complete(SYSTEM_PROMPT, request)
-        trace.append(f"codegen: {len(code)} chars")
-
-        if guard:
-            sc = static_check(code)
-            trace.append(f"static_check: {'ok' if sc.ok else sc.reasons}")
-            if not sc.ok:
-                return Response("denied", message="; ".join(sc.reasons),
-                                findings=[D.Finding("high", "static_check", r) for r in sc.reasons],
-                                trace=trace)
-
-        sb = run_in_sandbox(code, self.tables)
-        trace.append(f"sandbox: {'ok' if sb.ok else sb.error}")
-        if not sb.ok:
-            return Response("error", message=sb.error or "execution failed", trace=trace)
-        raw = sb.result
-
-        if not guard:
-            return Response("released", output=raw, message="UNGUARDED", trace=trace)
-
-        # session-level audit (differencing / budget)
-        measure, total = _measure_and_total(raw)
-        audit = self.auditor.observe(measure, total)
-        trace.append(f"auditor: {[f.rule for f in audit]}")
-
-        released, action, findings = self.policy.apply(raw)
-        findings = findings + audit
-        trace.append(f"gateway: {action} ({[f.rule for f in findings]})")
-
-        # an auditor red flag (differencing/budget) is a hard denial
-        if audit or action == "deny":
-            return Response("denied", message="blocked by safe-outputs gateway",
-                            findings=findings, trace=trace)
-
-        # small cells are resolved by redaction; escalate only on what remains
-        residual = [f for f in findings if f.rule != "small_cell"]
-        decision = D.hitl_decision(residual)
-        trace.append(f"hitl: {decision}")
-        if decision == "deny":
-            return Response("denied", message="blocked at human-in-the-loop",
-                            findings=findings, trace=trace)
-        status = "review" if decision == "human" else ("redacted" if action == "redacted" else "released")
-        return Response(status, output=released, findings=findings, trace=trace)

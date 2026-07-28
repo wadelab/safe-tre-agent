@@ -1,0 +1,144 @@
+{
+  "quantum_ms": 50,
+  "ceiling_ms": 5000,
+  "threshold": 10,
+  "session_budget": 20,
+  "samples_per_cohort": 24,
+  "default": {
+    "fixture": "default",
+    "sub_threshold_cohorts": 6,
+    "pairs": 15,
+    "closest_pair": {
+      "a": "X",
+      "b": "North East",
+      "true_donors": [
+        6,
+        8
+      ],
+      "samples_to_order": 12.2,
+      "within_one_session": true
+    },
+    "pairs_orderable_within_a_session": 2,
+    "bucket_crossing_rates": {
+      "Other": 0.083,
+      "NS": 0.0,
+      "X": 0.0,
+      "North East": 0.0,
+      "Northern Ireland": 0.083,
+      "Wales": 0.0
+    },
+    "worst_pairs": [
+      {
+        "a": "X",
+        "b": "North East",
+        "true_donors": [
+          6,
+          8
+        ],
+        "samples_to_order": 12.2,
+        "within_one_session": true
+      },
+      {
+        "a": "NS",
+        "b": "X",
+        "true_donors": [
+          4,
+          6
+        ],
+        "samples_to_order": 15.1,
+        "within_one_session": true
+      },
+      {
+        "a": "X",
+        "b": "Wales",
+        "true_donors": [
+          6,
+          8
+        ],
+        "samples_to_order": 34.1,
+        "within_one_session": false
+      }
+    ]
+  },
+  "adversarial": {
+    "fixture": "adversarial",
+    "sub_threshold_cohorts": 6,
+    "pairs": 15,
+    "closest_pair": {
+      "a": "NS",
+      "b": "North East",
+      "true_donors": [
+        4,
+        8
+      ],
+      "samples_to_order": 73.8,
+      "within_one_session": false
+    },
+    "pairs_orderable_within_a_session": 0,
+    "bucket_crossing_rates": {
+      "Other": 0.083,
+      "NS": 0.0,
+      "X": 0.0,
+      "North East": 0.0,
+      "Northern Ireland": 0.0,
+      "Wales": 0.0
+    },
+    "worst_pairs": [
+      {
+        "a": "NS",
+        "b": "North East",
+        "true_donors": [
+          4,
+          8
+        ],
+        "samples_to_order": 73.8,
+        "within_one_session": false
+      },
+      {
+        "a": "NS",
+        "b": "Wales",
+        "true_donors": [
+          4,
+          8
+        ],
+        "samples_to_order": 117.2,
+        "within_one_session": false
+      },
+      {
+        "a": "North East",
+        "b": "Northern Ireland",
+        "true_donors": [
+          8,
+          8
+        ],
+        "samples_to_order": 127.1,
+        "within_one_session": false
+      }
+    ]
+  },
+  "ceiling_straddle": {
+    "quantum_ms": 50,
+    "ceiling_ms": 200,
+    "observed": {
+      "400": {
+        "status": 503,
+        "median_ms": 252.4
+      },
+      "800": {
+        "status": 503,
+        "median_ms": 252.3
+      },
+      "1600": {
+        "status": 503,
+        "median_ms": 252.5
+      },
+      "3200": {
+        "status": 503,
+        "median_ms": 252.4
+      }
+    },
+    "spread_ms": 0.2,
+    "all_refused": true,
+    "reveals_overrun_size": false
+  }
+}

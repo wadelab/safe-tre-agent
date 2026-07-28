@@ -69,6 +69,10 @@ def main() -> None:
     env = {k: v for k, v in os.environ.items() if not k.startswith("SAFETRE_")}
     with tempfile.TemporaryDirectory(prefix="safetre-shots-") as tmp:
         env["SAFETRE_LLM"] = "mock"
+        # headless Chrome screenshots cannot click, so the capture server
+        # re-enables prefill auto-run. It is off in every real deployment
+        # (hardening #50) and this process is thrown away afterwards.
+        env["SAFETRE_ALLOW_PREFILL_AUTORUN"] = "1"
         env["SAFETRE_AUDIT_DB"] = os.path.join(tmp, "audit.db")
         server = subprocess.Popen(
             ["uv", "run", "uvicorn", "safetre_web.app:app",

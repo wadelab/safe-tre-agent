@@ -102,6 +102,31 @@ class AuditLog:
             self.con.commit()
             return mac
 
+    def since(self, cutoff: float) -> list[dict]:
+        """Every record written at or after `cutoff`, oldest first.
+
+        The log is the only durable record of what a session has already been
+        told, so it is also the only thing a restart can rebuild that session
+        from (hardening #49). Read-only and unauthenticated on purpose: this is
+        used to *restore* controls, and a tampered row can only ever make the
+        rebuilt session more restrictive or drop a cohort that the operator
+        should be detecting with `verify()` anyway. Callers that need the
+        stronger guarantee should verify the chain first.
+        """
+        with self._lock:
+            rows = self.con.execute(
+                "SELECT ts,user,request,spec,status,findings FROM records "
+                "WHERE ts >= ? ORDER BY id", (cutoff,)).fetchall()
+        out = []
+        for ts, user, request, spec, status, findings in rows:
+            try:
+                out.append({"ts": ts, "user": user, "request": request,
+                            "spec": json.loads(spec), "status": status,
+                            "findings": json.loads(findings)})
+            except (ValueError, TypeError):
+                continue                      # a corrupt row is `verify`'s problem
+        return out
+
     def verify(self, expected_head: str | None = None) -> bool:
         """Recompute the keyed chain. If `expected_head` (an off-box anchor) is
         given, the recomputed head must also equal it."""

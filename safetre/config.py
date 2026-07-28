@@ -16,6 +16,7 @@ real suppression decision.
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass, field, fields
 
@@ -67,13 +68,22 @@ class PolicyConfig:
         pinned_by="tests/test_hardening.py")
     max_output_rows: int = _dial(
         100,
-        controls="how many rows a result may have before it looks like a row "
-                 "dump",
-        means="an un-aggregated result longer than this is flagged for human "
-              "review rather than released automatically. It bounds "
-              "granularity, not cell size.",
+        controls="how many cells a released result may have before it goes to "
+                 "a human output checker",
+        means="a result finer than this is escalated rather than released "
+              "automatically: the cells passed every rule individually, and it "
+              "is their NUMBER that wants a second opinion. Counted on what is "
+              "released, not on what was computed — a query whose cells were "
+              "mostly suppressed has released a small table, not a fine one. "
+              "This used to read 'rows with no aggregation at all', which on "
+              "the QuerySpec path is unsatisfiable, because every compiled "
+              "query appends a count: the dial described a control that could "
+              "not fire (hardening #35, #56). Measured over the whole group-by "
+              "skeleton: median 20 released cells, max 157, and 11 of 241 "
+              "combinations escalate at this default — all of them "
+              "three-dimension cross-tabs.",
         clause="R5", yaml_key="disclosure.max_output_rows",
-        pinned_by="tests/test_disclosure.py")
+        pinned_by="tests/test_hardening.py")
     query_budget: int = _dial(
         20,
         controls="how many aggregates one session may release",
@@ -92,6 +102,22 @@ class PolicyConfig:
               "would isolate that few people. The bound is computed from "
               "PUBLISHED marginals, so the refusal itself leaks nothing.",
         clause="R6", yaml_key="session.differencing_delta",
+        pinned_by="tests/test_hardening.py")
+    session_window_hours: int = _dial(
+        24,
+        controls="how long a session's differencing lineage and query budget "
+                 "survive",
+        means="the controls that bound what one analyst can accumulate are "
+              "rebuilt from the audit log on startup, over this many hours of "
+              "history. It answers a question the code used to answer by "
+              "accident: a session used to last exactly as long as the process, "
+              "so a deploy or a crash handed every analyst a fresh budget and "
+              "an empty lineage, and the two halves of a differencing pair "
+              "could be split across a restart. Longer is stricter and costs "
+              "startup time proportional to the history replayed; it is a "
+              "window on ONE identity's own releases, not cross-user "
+              "accounting, which needs the DP work.",
+        clause="R6", yaml_key="session.window_hours",
         pinned_by="tests/test_hardening.py")
     dom_threshold: float = _dial(
         0.5,
@@ -214,6 +240,21 @@ class PolicyConfig:
         pinned_by="tests/test_acro_boundary.py",
         unset_means="no external checker; required when `vetter` names one")
 
+    def digest(self) -> str:
+        """The effective policy, in one line, for the startup log.
+
+        A released audit row records the request, the spec and the status, but
+        nothing about the thresholds that allowed it: a clean release under
+        `min_cell=1, dom=1.0, round=1` is schema-identical to one under the
+        shipped policy, so the tamper-evident log cannot answer "which rules
+        approved this?" — the question `CellVetter.describe` exists to answer.
+        Stating the resolved policy at startup is the cheap half of closing
+        that; binding it into the chain itself needs a schema change to
+        `audit.records` and is tracked separately.
+        """
+        return " ".join(f"{f.name}={getattr(self, f.name)!r}"
+                        for f in fields(self))
+
 
 # env var -> (config field, caster). Env always wins so an operator can override
 # a checked-in config.yaml without editing files.
@@ -222,6 +263,7 @@ _ENV_OVERRIDES: dict[str, tuple[str, type]] = {
     "SAFETRE_MAX_OUTPUT_ROWS": ("max_output_rows", int),
     "SAFETRE_QUERY_BUDGET": ("query_budget", int),
     "SAFETRE_DIFFERENCING_DELTA": ("differencing_delta", int),
+    "SAFETRE_SESSION_WINDOW_HOURS": ("session_window_hours", int),
     "SAFETRE_DOM_THRESHOLD": ("dom_threshold", float),
     "SAFETRE_INFLUENCE_THRESHOLD": ("influence_threshold", float),
     "SAFETRE_ROUND_BASE": ("round_base", int),
@@ -291,6 +333,60 @@ def load_policy_config(path: str | None = None) -> PolicyConfig:
     return cfg
 
 
+def _allow_unsafe_policy() -> bool:
+    return os.environ.get("SAFETRE_ALLOW_UNSAFE_POLICY", "").strip().lower() in (
+        "1", "true", "yes", "on")
+
+
+# Floors on the RESOLVED policy, not on the dataclass defaults (hardening #46).
+#
+# `_validate` used to check only that each dial parsed: `min_cell_size=1`,
+# `dom_threshold=1.0`, `round_base=1`, `response_quantum_ms=0` and
+# `query_budget=10**9` all validated, and each silently disables a control.
+# Measured before this existed: any ONE of those relaxed passed 737 of 737
+# tests, and all of them together failed a single incidental web assertion —
+# never `test_disclosure_thresholds_have_a_floor`, which reads the dataclass
+# defaults and the module constants and so cannot see a config file at all.
+#
+# Each entry is (predicate, message). They express the SDC conventions the
+# parameters' own documentation cites, so a deployment that means to depart
+# from them is departing from the documented policy and should say so.
+_FLOORS: tuple[tuple, ...] = (
+    (lambda c: c.min_cell_size >= 5,
+     "min_cell_size must be >= 5: below that a released cell describes too few "
+     "people for the threshold rule to mean anything"),
+    (lambda c: 0.0 < c.dom_threshold <= 0.5,
+     "dom_threshold must be <= 0.5: above one half a single donor may be most "
+     "of a cell and the p%-rule stops bounding anything"),
+    (lambda c: 0.0 < c.influence_threshold <= 0.5,
+     "influence_threshold must be <= 0.5: it is the correlation analogue of "
+     "dominance and loosening it releases donor-driven correlations"),
+    (lambda c: c.round_base >= 5,
+     "round_base must be >= 5: finer rounding publishes counts at a precision "
+     "hardenings #26 to #28 exist to blur"),
+    (lambda c: 1 <= c.query_budget <= 10_000,
+     "query_budget must be between 1 and 10000: an unbounded budget is not a "
+     "budget, and every released aggregate is individually differencable"),
+    (lambda c: c.differencing_delta >= 5,
+     "differencing_delta must be >= 5: it is the number of individuals two "
+     "releases may differ over, and it should not sit below the cell floor"),
+    (lambda c: 1 <= c.session_window_hours <= 24 * 90,
+     "session_window_hours must be between 1 and 2160: zero would mean the "
+     "differencing lineage does not survive a restart, which is the defect it "
+     "exists to close"),
+    (lambda c: 1 <= c.max_output_rows <= 10_000,
+     "max_output_rows must be between 1 and 10000"),
+    (lambda c: c.response_quantum_ms > 0,
+     "response_quantum_ms must be > 0: zero reopens the timing channel that "
+     "D5 measured putting sub-threshold cohorts in size order"),
+)
+
+
+def policy_floor_problems(cfg: PolicyConfig) -> list[str]:
+    """Which resolved-policy floors this configuration fails."""
+    return [message for ok, message in _FLOORS if not ok(cfg)]
+
+
 def _validate(cfg: PolicyConfig) -> None:
     if cfg.min_cell_size < 1:
         raise ValueError("min_cell_size must be >= 1")
@@ -321,3 +417,20 @@ def _validate(cfg: PolicyConfig) -> None:
     # and the operator should learn about it before an analyst does
     if cfg.vetter.endswith("external") and not cfg.checker_cmd.strip():
         raise ValueError("vetter 'standin+external' needs checker_cmd")
+
+    # Semantic floors last, so a config that is merely malformed still fails
+    # with the specific message. Research deployments that genuinely need a
+    # weakened policy set SAFETRE_ALLOW_UNSAFE_POLICY=1 — which is deliberately
+    # an environment variable and not a config key, so it cannot be smuggled in
+    # by the same file whose values it waives, and it leaves a record in the
+    # process environment rather than in a file that looks like policy.
+    problems = policy_floor_problems(cfg)
+    if problems and not _allow_unsafe_policy():
+        raise ValueError(
+            "resolved disclosure policy is below the safety floors: "
+            + "; ".join(problems)
+            + ". Set SAFETRE_ALLOW_UNSAFE_POLICY=1 to override deliberately.")
+    if problems:
+        logging.getLogger("safetre").warning(
+            "SAFETRE_ALLOW_UNSAFE_POLICY is set; running below the safety "
+            "floors: %s", "; ".join(problems))

@@ -12,7 +12,10 @@ from safetre import synth
 from safetre.analyst import _dims_mentioned, check_grouping_coherence
 from safetre.disclosure import COUNT_COLUMNS, ROUND_BASE, DisclosurePolicy, leak_detector
 from safetre.engine import ROW_CAP, QueryEngine, compile_dominance_query, compile_query
-from safetre.query import CATALOGUE, CAT_OPS, MAX_FILTERS, MAX_GROUP_BY, NUM_OPS, QuerySpec
+from safetre.query import (
+    CATALOGUE, CAT_OPS, INTERNAL_RANGE_RULES, MAX_FILTERS, MAX_GROUP_BY, NUM_OPS,
+    QuerySpec,
+)
 from safetre.schema import identifier_columns, sensitive_columns
 from safetre.service import QueryService
 
@@ -59,6 +62,12 @@ def _filter_for(draw, dataset: str) -> dict:
     dims = CATALOGUE[dataset]["dims"] | CATALOGUE[dataset].get("internal_filters", {})
     column = draw(st.sampled_from(sorted(dims)))
     kind = dims[column]
+    rule = INTERNAL_RANGE_RULES.get(column)
+    if rule is not None:
+        # the legal internal-filter space (hardening #39): band-aligned ranges
+        op = draw(st.sampled_from(rule["ops"]))
+        return {"column": column, "op": op,
+                "value": draw(st.sampled_from(rule["edges"][op]))}
     ops = CAT_OPS if kind in ("cat", "bool") else NUM_OPS
     op = draw(st.sampled_from(sorted(ops)))
     scalar = _scalar_for(kind)
