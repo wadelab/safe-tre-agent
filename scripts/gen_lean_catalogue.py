@@ -27,7 +27,9 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from safetre import synth                                     # noqa: E402
+import pandas as pd                                            # noqa: E402
+
+from safetre import dataset as _dataset                        # noqa: E402
 from safetre.engine import QueryEngine, compile_query         # noqa: E402
 from safetre.procedures import REGISTRY                       # noqa: E402
 from safetre.query import (                                       # noqa: E402
@@ -57,9 +59,45 @@ def forbidden_columns() -> list[str]:
     return sorted(identifier_columns() | {"free_text", "ts"})
 
 
+def _empty_base_tables() -> dict[str, "pd.DataFrame"]:
+    """One empty, correctly-typed frame per base table of the ACTIVE dataset.
+
+    This used to be `synth.generate()`, which knows only the packaged demo's
+    tables — so on any operator dataset the generator died with
+    `KeyError: 'events'` and the Lean proofs could not be regenerated for the
+    catalogue they were supposed to be about. The committed theorems then
+    described the demo's columns rather than the study's, which is the one
+    thing a proof must not do quietly.
+
+    Only column NAMES are wanted here (`DESCRIBE` on the created views), so no
+    data are needed and none are invented: empty frames with the right dtypes
+    let DuckDB create every view — including the derived `SUM(CASE ...)`
+    columns, which need their operand to be numeric — and describe it. It is
+    also the stricter choice, because a readback that cannot see any values
+    cannot accidentally depend on one.
+    """
+    definition = _dataset.active()
+    # output column name -> declared kind, gathered from every view
+    kinds: dict[str, str] = {}
+    for view in definition.datasets.values():
+        kinds.update(view.dims)
+        kinds.update(view.internal_filters)
+        for measure in list(view.measures) + list(view.internal_measures):
+            kinds[measure] = "num"
+
+    dtypes = {"cat": "object", "bool": "bool", "int": "int64", "num": "float64"}
+    tables: dict[str, pd.DataFrame] = {}
+    for name, columns in definition.tables.items():
+        tables[name] = pd.DataFrame({
+            column: pd.Series([], dtype=dtypes.get(kinds.get(column, "cat"), "object"))
+            for column in columns
+        })
+    return tables
+
+
 def _view_columns() -> tuple[dict[str, list[str]], dict[str, list[str]]]:
     """The engine's real view columns, read back from DuckDB itself."""
-    engine = QueryEngine(synth.generate(seed=7, n_donors=30, n_apps=5))
+    engine = QueryEngine(_empty_base_tables())
     public, unit = {}, {}
     for ds in sorted(CATALOGUE):
         public[ds] = [r[0] for r in engine.con.execute(f'DESCRIBE "{ds}"').fetchall()]

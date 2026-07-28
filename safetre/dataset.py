@@ -241,6 +241,19 @@ class RangeRule(BaseModel):
         for op, values in self.edges.items():
             if not values:
                 raise ValueError(f"range-rule edges for {op!r} cannot be empty")
+        # The `>=` edges are the bands' lower bounds and the `<=` edges their
+        # upper bounds, so the two lists describe the SAME bands and must pair
+        # up. Checked here rather than left to the formal artifacts, which do
+        # catch it (`edges_are_the_band_boundaries`, and the Lean generator
+        # refuses to derive bands from mismatched lists) — but only when
+        # somebody regenerates them, whereas the operator wants to know while
+        # they are editing the file.
+        if len(self.edges) == 2 and len({len(v) for v in self.edges.values()}) != 1:
+            counts = {op: len(v) for op, v in sorted(self.edges.items())}
+            raise ValueError(
+                f"range-rule edges must describe the same bands, so the lists "
+                f"must pair up — got {counts}. The '>=' edges are the bands' "
+                f"lower bounds and the '<=' edges their upper bounds")
         return self
 
 

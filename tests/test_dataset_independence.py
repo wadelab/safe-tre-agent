@@ -357,12 +357,16 @@ def _broken(mutate) -> dict:
     _broken(lambda d: d["datasets"]["visits"]["dims"].update(nowhere="cat")),
     _broken(lambda d: d["datasets"]["visits"]["columns"].append("patients.nowhere")),
     _broken(lambda d: d["datasets"]["visits"]["joins"].append(
-        {"table": "visits", "key": "visit_id"})),                   # key not in base
+        {"table": "visits", "key": "visit_id"})),                   # joined to itself
     _broken(lambda d: d.update(internal_range_rules={"height_cm": {
         "ops": [">="], "edges": {">=": [150]}}})),                  # rule for nothing
+    # the '>=' edges are the bands' floors and the '<=' edges their ceilings,
+    # so lists of different lengths cannot describe the same bands
+    _broken(lambda d: d["internal_range_rules"]["age_years"]["edges"]
+            .update({">=": [18, 40]})),                             # edges do not pair
 ], ids=["person-not-a-column", "person-not-DI", "DI-on-public-view",
-        "dim-not-in-view", "column-not-in-table", "join-key-missing",
-        "range-rule-for-nothing"])
+        "dim-not-in-view", "column-not-in-table", "self-join",
+        "range-rule-for-nothing", "range-edges-do-not-pair"])
 def test_bad_definitions_are_rejected(doc):
     with pytest.raises(ValidationError):
         DatasetDefinition.model_validate(doc)
@@ -372,3 +376,37 @@ def test_bad_identifier_in_definition_is_rejected():
     doc = _broken(lambda d: d["datasets"].update({"bad name": d["datasets"].pop("visits")}))
     with pytest.raises(ValidationError):
         DatasetDefinition.model_validate(doc)
+
+
+def test_the_lean_generator_follows_the_active_definition(clinic, tmp_path):
+    """The formal artifacts must be regenerable for the study they describe.
+
+    `gen_lean_catalogue` read its live view columns from an engine built over
+    `synth.generate()`, which knows only the packaged demo's tables — so on any
+    operator dataset it died with `KeyError: 'events'`, and the committed Lean
+    theorems could only ever be about the demo's catalogue. A proof about the
+    wrong columns is worse than no proof, because it reads as assurance.
+
+    It now builds the engine from EMPTY, correctly-typed frames derived from
+    the active definition: only column names are wanted, so no data are needed
+    and none are invented.
+    """
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "gen_lean_catalogue",
+        pathlib.Path(__file__).resolve().parent.parent / "scripts"
+        / "gen_lean_catalogue.py")
+    gen = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(gen)
+
+    text = gen.catalogue_lean()
+    assert 'def datasets : List String := ["patient_cost", "visits"]' in text
+    # the person key is projected under the internal alias on the unit view ...
+    assert '"visits" => ["donor_id", "age_years"' in text
+    # ... and never on the public one
+    public = next(line for line in text.splitlines()
+                  if line.startswith('  | "visits" => ["sex"'))
+    assert "donor_id" not in public and "patient_id" not in public
+    # nothing demo-shaped survives
+    assert "donor_spend" not in text and "amount_gbp" not in text

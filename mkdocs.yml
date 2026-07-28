@@ -56,6 +56,7 @@ nav:
       - User guide: userguide.md
       - Test deployment: test-deployment.md
       - Deployment: deployment.md
+      - Serving a different study: datasets.md
       - Certification & hardware: certification.md
       - Development: development.md
       - Maintenance guidelines: maintenance.md
