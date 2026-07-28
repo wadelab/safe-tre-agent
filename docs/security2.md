@@ -1,8 +1,8 @@
 # Formal-methods hardening recommendations
 
-Status: **F1, F2 and F3 delivered** (2026-07-28, post rounds 8 and 9); F4–F10
-proposed. The delivered items landed with the round-9 code fixes they specify —
-hardening #58–#61, see the [hardening log](hardening-log.md) and
+Status: **F1–F7 and F10 delivered** (2026-07-28/29, post rounds 8 and 9); F8
+and F9 remain. The delivered items landed with the round-9 code fixes they
+specify — hardening #58–#67, see the [hardening log](hardening-log.md) and
 [formal/README.md](https://github.com/wadelab/safe-tre-agent/blob/main/formal/README.md). Companion to
 [security.md](security.md), [FORMAL_METHODS_ANALYSIS.md](FORMAL_METHODS_ANALYSIS.md),
 [formal/README.md](https://github.com/wadelab/safe-tre-agent/blob/main/formal/README.md) and
@@ -103,10 +103,10 @@ for why the red-team rounds continue regardless of how good the models get.
 | F2 | **Done.** Band-alignment theorem in Lean | #39, class-wide | Small | `formal/lean/SafeTre/` |
 | F10 | **Done.** Denial-channel indistinguishability | V9, V10, generalises #30 | Small–medium | Lean or Alloy + tests |
 | F4 | **Done.** Vetting arithmetic in Lean (exact integers, not ℚ) | #41, #42 class | Medium | `SafeTre/Arith.lean` |
-| F5 | Declared surfaces done (`manifest.py`, #61); model parametrisation open | #46, V12 | Medium | both toolchains + `manifest.py` |
+| F5 | **Done.** Declared surfaces (#61) and models parametrised over the dials | #46, V12 | Medium | both toolchains + `manifest.py` |
 | F7 | **Done.** Counterexample ↔ attack pipeline | the #40/V2 failure mode itself | Process + small tooling | `formal/correspondence.yaml` |
 | F8 | Trust-zone model of the deployment | #45, #50, V6 | Medium | new `formal/trust_zones.als` |
-| F6 | Value-level release-function theorem (§C programme) | #41–#44 structurally | Large | `formal/lean/` |
+| F6 | **Done** at the column/cell level; the value level is F9's | #41–#44 structurally | Large | `SafeTre/Release.lean` |
 | F9 | DP accountant | value-level guarantee as a theorem | Large (roadmap item 3) | new |
 
 **Recommended first slice: F3, then F1 + F2.** F3 moves to the front because
@@ -353,7 +353,19 @@ formulas must have, which is precisely what was missing when `MAX(c)/SUM(c)`
 was written down. Pin to the code with a generated-cases hop in the style of
 `cases_pin_engine`.
 
-### F5. Parametrise models and declared surfaces over the policy dials
+### F5. Parametrise models and declared surfaces over the policy dials — **delivered**
+
+*Delivered 2026-07-29.* The Alloy threshold and budget are now parameters
+ranging over every value the bounded scope admits, rather than the literal 3 —
+so a counterexample at ANY admissible setting fails CI, and "these properties
+are threshold-generic" is checked instead of asserted. On the Lean side the
+arithmetic theorems already quantified over policies, so what was missing was
+the floors themselves: `SatisfiesFloors` mirrors `policy_floor_problems`, and
+three theorems say what it buys — most usefully that under any admissible
+configuration a released cell's largest contributor holds at most half its
+magnitude, which is the p%-rule actually bounding something.
+
+### F5, original plan
 
 #46 showed the shipped controls could be silently disabled by configuration.
 V12 shows the other half: `manifest.py` hardcodes `minimum_cell_size: 10` and
@@ -424,7 +436,24 @@ to sit in different zones. Both would have flagged the shipped unit. Worth
 doing once F3 and F1 are in, as a machine-checked restatement of the zone table
 that the unit file must then satisfy.
 
-### F6. Value-level release-function theorem (the §C programme)
+### F6. Release-function theorem — **delivered at the column/cell level**
+
+*Delivered 2026-07-29* as `SafeTre/Release.lean`, and the scope needs saying
+plainly. Proved: a released cell is a function of its key, its payload, the
+vetting verdict and the rounded count, so the witnesses, the donor count and
+the exact count reach the analyst only through those — any perturbation
+leaving them fixed leaves the release identical. That is the theorem behind
+the perturbation half of `test_release_equality.py`, the half that found #27
+and #28, and it is the channel that has actually bitten: released output still
+a function of a quantity the gateway believed it had erased.
+
+**Not** proved, and not provable here: value-level noninterference — that a
+released aggregate is insensitive to any one donor's data. An aggregate must
+depend on the values it aggregates. That is the quantitative claim, it belongs
+to F9, and proving the structural half while calling it the whole would be
+exactly the overclaim this document exists to stop.
+
+### F6, original plan
 
 Designed in FORMAL_METHODS_ANALYSIS.md §C; its prerequisite (release =
 postprocess ∘ finalize ∘ vet, hardening #26) has landed, and

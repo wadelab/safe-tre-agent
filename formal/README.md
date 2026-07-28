@@ -16,6 +16,7 @@ hunting).
 | `temporal_session.als` | Alloy 6 temporal model of a session **across restarts**: the `observe → apply → record` event order of `QueryService.handle`/`_handle_model`, the audited exception path, and the reconstruction `SessionStore.rehydrate` performs. Checks the budget invariant and exhaustion short-circuit (P17), the fail-closed gate (P7), differencing-pair serialisation under the per-Session lock (P16), that lineage records exactly the releases, that a restart is a no-op on the controls (replay equivalence), audit completeness (#37) and the policy record's position (#55); machine-exhibits the #18 race without the lock and the three round-9 restart attacks when their assumptions are dropped. |
 | `correspondence.yaml` | The model ↔ attack table (F7): every `run` in every model classified as a vacuity **guard**, an **attack** that must name an executable twin, or a priced **residual**. `tests/test_formal_correspondence.py` enforces it both ways — an unclassified run fails, and a twin that was renamed away fails. |
 | `run_checks.py` | Headless runner for the Alloy models: executes every command via the Alloy CLI and turns the receipts into a CI verdict (the CLI itself exits 0 even on a counterexample). Fails on any counterexample, any unsatisfiable run, or a missing command. |
+| `lean/SafeTre/Release.lean` | The release function (F6): `release = postprocess ∘ finalize`, and what can reach a released cell. The theorem behind `tests/test_release_equality.py`'s perturbation direction. |
 | `lean/SafeTre/Arith.lean` | The vetting arithmetic (F4): the dominance witness, the cell rule, rounding, and monotonicity, over exact integers. `ArithCases.lean` is **generated** — 864 cells the live `StandinVetter` was asked about, paired with its decisions. |
 | `lean/` | The Lean 4 package (`SafeTre`). `Types/Spec/Sql/Proofs.lean` are hand-written; `Catalogue.lean` (catalogue, DI/QI/S/R labels, live view columns) and `Cases.lean` (414 compiled-SQL pin pairs) are **generated** by `scripts/gen_lean_catalogue.py`. |
 
@@ -65,6 +66,26 @@ All in `lean/SafeTre/Proofs.lean`, `sorry`-free:
   what a rewrite gets wrong. The model is exact where the engine is
   double-precision, so that pin is testing the modelling assumption rather
   than restating it.
+- **The configuration floors (#46, F5)** — the arithmetic theorems quantify
+  over policies rather than one dial setting, and `SatisfiesFloors` states what
+  `config.py::policy_floor_problems` enforces. What follows from it is then
+  provable: under any admissible configuration a released cell's largest
+  contributor holds at most half its magnitude (`floors_bound_the_single_donor_share`
+  — the p%-rule actually bounding something, which is what `dom_threshold > 0.5`
+  would stop it doing), a released cell describes at least five people, and the
+  rounding window is at least five wide. `tests/test_hardening.py::
+  test_the_lean_floors_are_the_configured_floors` pins the predicate to the
+  running check.
+- **What can reach a released value (F6)** — `Release.lean`. A released cell is
+  a function of its key, its payload, the vetting VERDICT and the ROUNDED
+  count; the witnesses, the donor count and the exact count reach it only
+  through those, so any perturbation leaving them fixed leaves the release
+  identical (`release_invariant_under_invisible_perturbation`). That is the
+  theorem behind the perturbation half of `tests/test_release_equality.py`,
+  which is the half that found #27 and #28. `RelCell` has no field a witness
+  could occupy, in the same way `SafeSelect` has no constructor for a join.
+  **Not** value-level noninterference: an aggregate must depend on the values
+  it aggregates, and the quantitative claim belongs to the DP accountant.
 - **The engine pin** `cases_pin_engine` — for all 414 generated cases the
   Lean-rendered SQL equals `engine.compile_query`'s output byte for byte,
   with matching parameter counts.

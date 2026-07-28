@@ -233,7 +233,8 @@ This does not replace Lean/Alloy, but it gives CI a broad executable approximati
       tables; machine-checked by refit-equality over the enumerated skeleton
       (`tests/test_glm_properties.py`, `tests/test_glm_noninterference.py`).
       The full web-path label lattice remains open.
-- [ ] Formalize information-flow labels and prove noninterference for the web query path — *labels and the column-level corollary are done (§A); the value-level route is designed in the §C note; open*
+- [x] **(2026-07-29)** Formalize information-flow labels and prove noninterference for the web query path, at the column/cell level — `SafeTre/Release.lean`: a released cell is a function of key, payload, verdict and rounded count, so witnesses and exact counts reach it only through those. The VALUE-level claim (insensitivity to one donor) stays open and is the DP accountant's
+- [x] **(2026-07-29)** Parametrise the models over the policy dials (F5): the Alloy threshold and budget range over every admissible value, and `SatisfiesFloors` states what `policy_floor_problems` enforces
 - [x] **(2026-07-14)** Prove that the composition of `QuerySpec` validation + engine + disclosure gateway maintains the identifier-free invariant end-to-end — `end_to_end_release_safe` (column-level; value-level is the §C programme)
 
 ### Phase 3 — Research-Grade (3–6 months)

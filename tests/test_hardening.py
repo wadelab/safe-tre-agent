@@ -1315,3 +1315,40 @@ def test_missing_head_anchor_is_reported_in_production(monkeypatch):
 
     monkeypatch.setenv("SAFETRE_AUDIT_HEAD_ANCHOR", "a" * 64)
     assert not any("SAFETRE_AUDIT_HEAD_ANCHOR" in p for p in configuration_problems())
+
+
+# --- F5: the Lean floors are the floors the code enforces ---------------------
+
+def test_the_lean_floors_are_the_configured_floors():
+    """`SafeTre.SatisfiesFloors` states the dial bounds the arithmetic theorems
+    reason from, and `config.policy_floor_problems` is what actually refuses a
+    configuration. Two statements of one rule drift — that is #58's whole
+    lesson — so this pins them together from the Python side, where the check
+    can run without a Lean toolchain.
+
+    Each case names a dial the Lean predicate bounds and a value just outside
+    that bound; the running check must reject it. And a policy satisfying every
+    Lean floor must be accepted, or the theorems would be about configurations
+    the code refuses to run.
+    """
+    from safetre.config import PolicyConfig, policy_floor_problems
+
+    # SatisfiesFloors: 5 <= minCell, 0 < dom <= 1/2, 5 <= roundBase
+    outside = [
+        ("min_cell_size", PolicyConfig(min_cell_size=4)),
+        ("dom_threshold", PolicyConfig(dom_threshold=0.51)),
+        ("dom_threshold", PolicyConfig(dom_threshold=0.0)),
+        ("round_base", PolicyConfig(round_base=4)),
+    ]
+    for dial, cfg in outside:
+        problems = policy_floor_problems(cfg)
+        assert any(dial in p for p in problems), (
+            f"Lean's SatisfiesFloors excludes this {dial}, the running check "
+            f"admits it: {problems}")
+
+    # and the shipped defaults sit inside every Lean floor
+    shipped = PolicyConfig()
+    assert not policy_floor_problems(shipped)
+    assert shipped.min_cell_size >= 5
+    assert 0 < shipped.dom_threshold <= 0.5
+    assert shipped.round_base >= 5

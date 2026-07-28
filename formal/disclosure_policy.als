@@ -27,8 +27,15 @@
 //                           per cell by service._donor_total, which is why the
 //                           cheap total-delta layer over-counts (V13, below).
 //
-// The threshold is abstracted to 3 (the code's 10): the properties are
-// threshold-generic, and a small constant keeps the bounded search exact.
+// THE THRESHOLD IS A PARAMETER, not a constant (recommendation F5). It used to
+// be the literal 3 everywhere, which checks the properties for one dial
+// setting and says nothing about the others — and #46 is precisely the finding
+// that the shipped controls could be moved by configuration. Here it ranges
+// over every value the bounded scope admits, so a counterexample at ANY
+// admissible threshold fails CI, and the claim "these properties are
+// threshold-generic" is checked rather than asserted. `differencing_delta` has
+// a floor of 5 in `config.py::_FLOORS`; the model scales that down with
+// everything else, and what matters is that more than one value is covered.
 //
 // What is checked (counterexample = CI failure):
 //   MarginalBoundSound          — the docstring's soundness claim: the summed
@@ -86,6 +93,12 @@
 // closing a gap rather than exhibiting it.
 
 module disclosure_policy
+
+// the differencing threshold the auditor decides with, free within the range
+// the bounded search can exercise
+one sig Params { T: Int }
+fact AdmissibleThreshold { Params.T >= 2 and Params.T <= 4 }
+fun T: one Int { Params.T }
 
 sig Dim {}
 // a dimension is an attribute of the PERSON or of the ROW — the distinction
@@ -169,7 +182,7 @@ fun effectiveBound [a, b: Cohort] : Int {
 // only pairs reaching a zero are ones whose predicates DIFFER while selecting
 // the same rows — which is a sub-threshold existence fact of its own.
 pred auditorAllows [a, b: Cohort] {
-  a.sel = b.sel or effectiveBound[a, b] >= 3
+  a.sel = b.sel or effectiveBound[a, b] >= T
 }
 
 // The pre-#40 rule, kept so the attack it admitted can be exhibited. TWO
@@ -181,7 +194,7 @@ pred donorOnlyAuditorAllows [a, b: Cohort] {
   a.sel = b.sel or
     let d = (simBound[a, b] < donorSymdiff[a, b] implies simBound[a, b]
                                                   else donorSymdiff[a, b]) |
-      not (d > 0 and d < 3)
+      not (d > 0 and d < T)
 }
 
 // a Release is a query the auditor let through this session
@@ -210,7 +223,7 @@ check MarginalBoundSound for 2 Dim, 4 Val, 4 Donor, 5 Row, 2 Cohort, 0 Release, 
 // two rare exclusions in one step walked through.
 assert RareCategoryIsolationBlocked {
   all disj r1, r2: Release | let a = r1.cohort, b = r2.cohort |
-    donorSymdiff[a, b] = 0 or simBound[a, b] >= 3
+    donorSymdiff[a, b] = 0 or simBound[a, b] >= T
 }
 check RareCategoryIsolationBlocked
   for 2 Dim, 4 Val, 4 Donor, 5 Row, 3 Cohort, 3 Release, 6 Int
@@ -220,7 +233,7 @@ check RareCategoryIsolationBlocked
 // not even state.
 assert RowDifferenceAlwaysBounded {
   all disj r1, r2: Release | let a = r1.cohort, b = r2.cohort |
-    a.sel = b.sel or rowSymdiffDonors[a, b] >= 3
+    a.sel = b.sel or rowSymdiffDonors[a, b] >= T
 }
 check RowDifferenceAlwaysBounded
   for 2 Dim, 4 Val, 4 Donor, 5 Row, 3 Cohort, 3 Release, 6 Int
@@ -254,9 +267,9 @@ run someSession for 2 Dim, 4 Val, 4 Donor, 5 Row, 2 Cohort, 2 Release, 6 Int
 // not releases, precisely because the released pair can no longer occur.
 pred InteractionResidualExists {
   some disj a, b: Cohort {
-    simBound[a, b] >= 3
+    simBound[a, b] >= T
     donorSymdiff[a, b] > 0
-    donorSymdiff[a, b] < 3
+    donorSymdiff[a, b] < T
   }
 }
 run InteractionResidualExists for 2 Dim, 4 Val, 4 Donor, 5 Row, 2 Cohort, 0 Release, 6 Int
@@ -269,7 +282,7 @@ pred Hardening40AttackWithoutRowLayer {
     a.sel != b.sel
     donorSymdiff[a, b] = 0                 // the same people, exactly
     rowSymdiffDonors[a, b] > 0             // over different rows
-    rowSymdiffDonors[a, b] < 3             // by fewer than T donors
+    rowSymdiffDonors[a, b] < T             // by fewer than T donors
     donorOnlyAuditorAllows[a, b]           // and the pre-#40 auditor allows it
   }
 }
@@ -296,8 +309,8 @@ run V13DonorTotalOvercounts for 2 Dim, 4 Val, 4 Donor, 5 Row, 1 Cohort, 0 Releas
 pred V8ExactLegIsNotSimulatable {
   some disj a, b: Cohort {
     a.sel != b.sel
-    simBound[a, b] >= 3
-    rowSymdiffDonors[a, b] < 3
+    simBound[a, b] >= T
+    rowSymdiffDonors[a, b] < T
   }
 }
 run V8ExactLegIsNotSimulatable

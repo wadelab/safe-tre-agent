@@ -83,6 +83,21 @@ that result to a human output checker instead of publishing it. The property now
 says what the gateway actually promises — no `high` finding ever leaves, and a
 frame carrying any residual finding never auto-releases.
 
+**F5 and F6 close the formal programme's middle.** F5 stops the models
+checking one dial setting: the Alloy threshold and budget are now parameters
+over every admissible value, and Lean's `SatisfiesFloors` states what
+`policy_floor_problems` enforces, with three theorems saying what it buys —
+most usefully that under any admissible configuration a released cell's
+largest contributor holds at most half its magnitude, which is the p%-rule
+actually bounding something rather than being present. F6
+(`SafeTre/Release.lean`) proves what can reach a released value: key, payload,
+verdict and rounded count, and nothing else — so the witnesses, the donor
+count and the exact count reach the analyst only through those. That is the
+theorem behind the perturbation half of `test_release_equality.py`, which is
+the half that found #27 and #28. It is deliberately NOT value-level
+noninterference, and the file says so: an aggregate must depend on the values
+it aggregates, and the quantitative claim is the DP accountant's.
+
 **The formal side of this round closed two recommendations, and both
 found something while being written.** F4 (the vetting arithmetic, now
 `formal/lean/SafeTre/Arith.lean`) states the properties #41 and #42 violated —

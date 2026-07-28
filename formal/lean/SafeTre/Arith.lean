@@ -295,4 +295,83 @@ theorem tightening_dominance_never_releases_more
   intro h
   exact ⟨⟨⟨h.1.1.1, leRat_trans hdpos hp hq h.1.1.2 htight⟩, h.1.2⟩, h.2⟩
 
+/-! ## The configuration floors (recommendation F5)
+
+Everything above quantifies over policies, which is the point: hardening #46
+found that the shipped controls could each be set to a value that silently
+disabled them, and `config.py::policy_floor_problems` is the answer — semantic
+floors on the RESOLVED configuration rather than on the dataclass defaults.
+
+A floor is only worth having if something follows from it. These say what.
+`tests/test_hardening.py::test_the_lean_floors_are_the_configured_floors` ties
+the predicate below to the running check, so the two cannot drift.
+-/
+
+/-- `config.py::_FLOORS`, for the dials this file reasons about. -/
+structure Dials where
+  minCell : Int
+  /-- the dominance bar as a fraction `domNum / domDen` -/
+  domNum : Int
+  domDen : Int
+  roundBase : Int
+deriving Repr
+
+def SatisfiesFloors (d : Dials) : Prop :=
+  5 ≤ d.minCell ∧ 0 < d.domNum ∧ 0 < d.domDen ∧
+  2 * d.domNum ≤ d.domDen ∧          -- dom_threshold ≤ 1/2
+  5 ≤ d.roundBase
+
+/-- The policy a set of dials produces. -/
+def policyOf (d : Dials) : Policy :=
+  ⟨d.minCell, (d.domNum, d.domDen), (d.domNum, d.domDen)⟩
+
+/-- **What the dominance floor buys.** Under any configuration satisfying the
+floors, a released cell's largest contributor holds at most half the cell's
+magnitude — the p%-rule actually bounding something, which is exactly what
+`dom_threshold > 0.5` would stop it doing.
+
+Stated over the witness the cell presents, so it composes with
+`dominance_witness_is_a_share`: the witness is `MAX(abs)/SUM(abs)` and this
+says that ratio is at most one half. -/
+theorem floors_bound_the_single_donor_share {d : Dials} (hf : SatisfiesFloors d)
+    (c : Cell) (w : Int × Int) (hw : c.dominance = some w) (hwd : 0 < w.2)
+    (hrel : releases (policyOf d) c = true) :
+    2 * w.1 ≤ w.2 := by
+  obtain ⟨_, hnum, hden, hhalf, _⟩ := hf
+  simp only [releases, passesDominance, policyOf, hw, leRat, Bool.and_eq_true,
+             decide_eq_true_eq] at hrel
+  have hdom : w.1 * d.domDen ≤ d.domNum * w.2 := hrel.1.1.2
+  -- w.1/w.2 ≤ domNum/domDen ≤ 1/2, cross-multiplied twice
+  have h1 : w.1 * d.domDen * 2 ≤ d.domNum * w.2 * 2 :=
+    Int.mul_le_mul_of_nonneg_right hdom (by omega)
+  have h2 : 2 * d.domNum * w.2 ≤ d.domDen * w.2 :=
+    Int.mul_le_mul_of_nonneg_right hhalf (Int.le_of_lt hwd)
+  have e1 := mul_swap_right w.1 d.domDen 2
+  have e2 : d.domNum * w.2 * 2 = 2 * d.domNum * w.2 := by
+    rw [Int.mul_comm (d.domNum * w.2) 2, Int.mul_assoc]
+  have h3 : w.1 * 2 * d.domDen ≤ d.domDen * w.2 := by omega
+  have e3 : d.domDen * w.2 = w.2 * d.domDen := Int.mul_comm _ _
+  have h4 : w.1 * 2 * d.domDen ≤ w.2 * d.domDen := by omega
+  have := Int.le_of_mul_le_mul_right h4 hden
+  omega
+
+/-- **What the count floor buys.** A released cell describes at least five
+people, whatever the operator set — the reading of "a cell" the threshold rule
+depends on for its meaning. -/
+theorem floors_bound_the_released_cell_size {d : Dials} (hf : SatisfiesFloors d)
+    (c : Cell) (hrel : releases (policyOf d) c = true) : 5 ≤ c.n := by
+  obtain ⟨hmin, _⟩ := hf
+  simp only [releases, passesCount, policyOf, Bool.and_eq_true,
+             decide_eq_true_eq] at hrel
+  omega
+
+/-- **What the rounding floor buys.** Two counts released as the same value
+differ by at most the base, and the floor puts that at five or more — so the
+released count never pins the true one more finely than the blur the floor
+guarantees. -/
+theorem floors_keep_the_rounding_window_open {d : Dials} (hf : SatisfiesFloors d)
+    {r n m : Int} (hn : IsRounded d.roundBase r n) (hm : IsRounded d.roundBase r m) :
+    absInt (n - m) ≤ d.roundBase ∧ 5 ≤ d.roundBase :=
+  ⟨rounding_hides_within_the_base hn hm, hf.2.2.2.2⟩
+
 end SafeTre

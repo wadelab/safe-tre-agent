@@ -58,8 +58,10 @@
 //
 // `near` abstracts observe_cohort's "bound < threshold" on two cohorts'
 // symmetric difference (the bound itself is modelled in
-// disclosure_policy.als); the budget is abstracted to 3 (the code's 20), same
-// discipline as that model's threshold. The per-Session lock the web shell
+// disclosure_policy.als); the budget is a PARAMETER ranging over the values the
+// bounded scope admits rather than the code's 20, the same discipline as that
+// model's threshold — so the properties are checked for more than one dial
+// setting, which is what #46 showed matters. The per-Session lock the web shell
 // holds across the whole critical section (safetre_web/session.py, app.py;
 // hardening #18) is NOT a fact here: it is the explicit `Serialized`
 // assumption of the properties that need it, so dropping it is expressible.
@@ -140,7 +142,16 @@ one sig Replay { mode: one Accounting }
 enum Gate { GateOn, GateOff }
 one sig Deployment { gate: one Gate }
 
-fun Budget: one Int { 3 }
+// THE BUDGET IS A PARAMETER, not a constant (recommendation F5). It was the
+// literal 3, which checks the budget properties for one dial setting — and
+// #46 is the finding that a shipped control could be moved by configuration
+// without anything noticing. Ranging it over the values the bounded scope can
+// exercise means a counterexample at ANY admissible budget fails CI.
+// `config.py::_FLOORS` requires 1 <= query_budget <= 10000; the model scales
+// that down with everything else, and what matters is that it is not one.
+one sig Params { Budget: Int }
+fact AdmissibleBudget { Params.Budget >= 2 and Params.Budget <= 4 }
+fun Budget: one Int { Params.Budget }
 
 sig Request {
   cost: one Int,           // planned aggregates: 1 = plain, 2 = model
