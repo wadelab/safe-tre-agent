@@ -1,0 +1,16 @@
+{
+  "seed": 7,
+  "donors": 500,
+  "dataset": "spend",
+  "threshold": 10,
+  "cohorts": 859,
+  "pairs": 368511,
+  "counts": {
+    "both_allow": 334228,
+    "cheap_denies": 120,
+    "exact_only": 34163
+  },
+  "non_simulatable_share_of_pairs": 0.09270550946918817,
+  "non_simulatable_share_of_pairs_reaching_the_exact_leg": 0.09273570744127843,
+  "non_simulatable_share_of_all_denials": 0.9964997228947292
+}

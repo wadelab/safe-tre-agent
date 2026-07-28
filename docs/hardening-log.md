@@ -15,7 +15,10 @@ headline findings came with executable reproducers.
 
 The fixes below close the class rather than the instances, and the formal
 models were rebuilt alongside them rather than after them — which is the other
-half of this round. `docs/security2.md` is the analysis that drove that;
+half of this round. `redteam/round9_repro.py` re-runs the four headline
+findings and exits nonzero while any is open; it is gated in CI beside the
+round-8 reproducers, and it self-checks that it can still fail by replaying a
+pre-#58 chain, where the defects must still be visible (hardening #48). `docs/security2.md` is the analysis that drove that;
 `formal/README.md` records what the models now check.
 
 | # | Finding | Sev | Status | Fix | Where |
@@ -24,6 +27,8 @@ half of this round. `docs/security2.md` is the analysis that drove that;
 | 59 | **Rehydration rebuilt the security controls from rows nobody had authenticated.** `rehydrate` read `audit_log.since()` and never called `verify()`. Deleting the record of the first half of a differencing pair — which needs write access to the database, not the key — made the reconstruction skip it, and the second half was released after the restart. `verify()` returned **False** throughout: the tamper-evidence existed and was never consulted where it mattered. The `since()` docstring's safety claim contained its own refutation — "can only make the rebuilt session more restrictive **or drop a cohort**" — and dropping a cohort is the unsafe direction | High | **Fixed** | `rehydrate` verifies the chain (against the off-box head anchor when one is configured) before replaying it and raises `AuditChainUnverified`, so the app refuses to start. `SAFETRE_ALLOW_UNVERIFIED_REHYDRATE=1` overrides it loudly, for a developer with a stale database — an environment variable, not a config key, for the same reason `SAFETRE_ALLOW_UNSAFE_POLICY` is. Rehydration now runs *before* the startup policy record, because a log an operator is about to be told not to trust is not a log to write a fresh row into | `safetre_web/session.py`, `safetre_web/app.py`, `safetre/audit.py`, `tests/test_hardening.py` |
 | 60 | **Exceptions were free.** `_spent` only moved inside `observe`, which runs after a successful engine call, so a query that raised earlier — a planner failure, an engine error, a raising fit — was caught by the audited boundary and answered as a denial having spent nothing. Five failing queries left the session at `_spent=0`. Under a real planner the failing call is itself the expensive one, so this was the cheapest way to use the system, bounded only by the rate limiter | Med | **Fixed** | an error costs at least one unit, and exactly what it consumed when it failed later. With #58 the live and replayed figures are the same number by construction rather than by agreement | `safetre/disclosure.py` (`SessionAuditor.charge`), `safetre/service.py`, `tests/test_hardening.py` |
 | 61 | **The manifest announced a policy the system was not running.** `minimum_cell_size: 10` and `counts_rounded_to_nearest: 5` were literals, and so were the #39 band edges. An operator who raised `min_cell_size` to 25 served outside planners — and the UI — a manifest still claiming 10. This is #46 in a metadata surface, and a wrong number is worse than a missing one because a planner uses it to decide what to ask for | Low | **Fixed** | the release block renders from the resolved `PolicyConfig` and the band edges from the live `INTERNAL_RANGE_RULES`, pinned by tests | `safetre/manifest.py`, `tests/test_manifest.py` |
+| 62 | **The exact differencing leg's denial was justified as a bit the analyst already had, and it is not.** `row_symdiff_donors` decides where the simulatable marginal bound cannot, so its verdict is computed from live data the published marginals cannot reproduce. The code called it "the bit a direct query for the difference cell already returns" — but a difference small enough to trip the threshold IS a sub-threshold cell, so that direct query is suppressed and returns the canonical refusal. The analyst does not otherwise hold it | Med | **Accepted, priced** | measured rather than argued (`scripts/measure_exact_leg_channel.py`): across 368,511 cohort pairs the cheap leg denies **120** and the exact leg denies **34,163** the cheap leg allowed, so **99.6% of every differencing denial is non-simulatable** and 9.3% of all pairs draw one. The decision stands — the alternative is #40, which recovered twenty sub-threshold cells — but the bit is now stated at its real size and bounded by the two things that keep it one bit: the refusal carries no number, and it is byte-identical whichever leg decided | `safetre/engine.py`, `scripts/measure_exact_leg_channel.py`, `artifacts/exact_leg_channel.json`, `docs/decisions/D7`, `tests/test_hardening.py`, `formal/disclosure_policy.als` |
+| 63 | **`_donor_total` called itself the distinct-donor size, and is not one.** It sums `n_donors` across cells, so a donor with rows in several cells of the group-by is counted once per cell; on an event-level grouping the total exceeds the number of people by the number of cells each touches, and the cheap first-pass check can miss a true few-donor difference there | Low | **Stated, not fixed** | the layer is best-effort by design and the row-level lineage is the control that holds — it counts the donors behind the differing rows exactly and catches every pair this one can. What was wrong was the docstring, which is now precise about what the number is; the over-count is pinned by a test and exhibited as a model instance so it stays stated rather than rediscovered | `safetre/service.py`, `tests/test_hardening.py`, `formal/disclosure_policy.als` |
 
 ### Notes
 
@@ -73,6 +78,17 @@ is a *medium* finding judged on the released frame, and `hitl_decision` sends
 that result to a human output checker instead of publishing it. The property now
 says what the gateway actually promises — no `high` finding ever leaves, and a
 frame carrying any residual finding never auto-releases.
+
+**#62 and #63 are the same lesson from opposite ends: a model that
+disagrees with a comment.** Both came out of writing the Alloy models rather
+than out of an attack. Once `disclosure_policy.als` had rows as atoms it could
+state `V8ExactLegIsNotSimulatable` and `V13DonorTotalOvercounts` as satisfiable
+runs — and both then contradicted a docstring in the code they were modelling.
+Neither is a new vulnerability; both were places where the repository asserted
+two incompatible things about its own controls, which is worse than either
+being wrong alone, because it is the state in which a reader cannot tell which
+to trust. The measurement is what turned #62 from a retraction into a number:
+99.6% is not the "rare case" the original text implied.
 
 **What the formal work does not cover, stated plainly.** Of round 9's sixteen
 findings, this change addresses nine; six are resource-exhaustion, availability

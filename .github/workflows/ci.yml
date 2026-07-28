@@ -31,6 +31,14 @@ jobs:
         run: uv run pytest -q
       - name: Red-team (gateway off vs on)
         run: uv run python redteam/run_redteam.py
+      # The round reproducers, which the corpus cannot express: they need a
+      # process restart, a mutilated log, or a raising planner. Each exits
+      # nonzero while any finding is open, and round 9's also self-checks that
+      # it can still fail (hardening #48).
+      - name: Round-8 reproducers (differencing, granularity, audit gaps)
+        run: uv run python redteam/round8_repro.py
+      - name: Round-9 reproducers (restart accounting, log integrity, error cost)
+        run: uv run python redteam/round9_repro.py
       - name: Docs build (strict)
         run: uv run --group docs mkdocs build --strict
       - name: SAST (bandit)

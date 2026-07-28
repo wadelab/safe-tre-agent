@@ -44,11 +44,29 @@ def _withheld() -> list:
 
 
 def _donor_total(df: pd.DataFrame) -> float:
-    """The distinct-donor size of a raw engine frame, for the session auditor.
+    """The summed per-cell donor count of a raw engine frame, for the session
+    auditor's cheap first-pass total-delta check.
 
     Every engine result carries the internal `n_donors` helper (dropped by the
     gateway before release). Falling back to the row count keeps the auditor
     correct for frames that did not come through the engine.
+
+    **Not the distinct-donor size of the cohort, and the docstring used to say
+    it was** (hardening #63). It sums `n_donors` across cells, so a donor with
+    rows in several cells of the group-by is counted once per cell: on an
+    event-level grouping such as `event_type` the total exceeds the number of
+    people by the number of cells each of them touches. The first-pass check is
+    therefore weaker than its name suggests on a multi-cell group-by, and can
+    miss a true few-donor difference there.
+
+    Left as it is rather than fixed, because this layer is best-effort by
+    design and the control that holds is the row-level lineage
+    (`observe_cohort` with `service._difference_bound`), which counts the
+    donors behind the differing rows exactly and catches every pair this one
+    can. Pinned by `tests/test_hardening.py::
+    test_donor_total_overcounts_a_donor_spanning_cells` so the weakness is
+    stated rather than rediscovered, and exhibited as a model instance by
+    `formal/disclosure_policy.als::V13DonorTotalOvercounts`.
     """
     if "n_donors" in df.columns:
         return float(df["n_donors"].sum())

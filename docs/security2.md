@@ -3,10 +3,10 @@
 Status: **F1, F2 and F3 delivered** (2026-07-28, post rounds 8 and 9); F4–F10
 proposed. The delivered items landed with the round-9 code fixes they specify —
 hardening #58–#61, see the [hardening log](hardening-log.md) and
-[formal/README.md](../formal/README.md). Companion to
+[formal/README.md](https://github.com/wadelab/safe-tre-agent/blob/main/formal/README.md). Companion to
 [security.md](security.md), [FORMAL_METHODS_ANALYSIS.md](FORMAL_METHODS_ANALYSIS.md),
-[formal/README.md](../formal/README.md) and
-[redteam/round9_report.md](../redteam/round9_report.md). This document
+[formal/README.md](https://github.com/wadelab/safe-tre-agent/blob/main/formal/README.md) and
+[redteam/round9_report.md](https://github.com/wadelab/safe-tre-agent/blob/main/redteam/round9_report.md). This document
 recommends the formal-model work and records which of it has landed.
 
 ## Why now
@@ -186,8 +186,8 @@ defends against is not evidence, which is why the run is a CI requirement.
 
 `formal/disclosure_policy.als` still models only the simulatable marginal
 donor-cohort bound. Since #40 the code's strongest differencing control is
-`QueryEngine.row_symdiff_donors` ([engine.py:604](../safetre/engine.py#L604)),
-with `service._difference_bound` ([service.py:101](../safetre/service.py#L101))
+`QueryEngine.row_symdiff_donors` ([engine.py:604](https://github.com/wadelab/safe-tre-agent/blob/main/safetre/engine.py#L604)),
+with `service._difference_bound` ([service.py:101](https://github.com/wadelab/safe-tre-agent/blob/main/safetre/service.py#L101))
 taking the smaller of the row-level count and the marginal bound. The model
 describes the weaker of two live bounds.
 
@@ -238,7 +238,7 @@ separate lemmas.
 
 
 The #39 fix (`INTERNAL_RANGE_RULES`,
-[query.py:88](../safetre/query.py#L88)) snaps range filters on internal
+[query.py:88](https://github.com/wadelab/safe-tre-agent/blob/main/safetre/query.py#L88)) snaps range filters on internal
 variables to declared band edges. That rule is a finite, decidable structure
 sitting beside machinery already formalised, and it has no formal statement —
 only tests on the patched instance.

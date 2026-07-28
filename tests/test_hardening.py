@@ -22,6 +22,8 @@ Each test pins one finding from the security review so a regression fails CI:
   #58 the audit row records what a request COST and which cohorts it touched
   #59 rehydration verifies the chain first, and a deleted row is fatal
   #60 a pipeline error spends budget: an exception is not a free query
+  #62 the exact differencing leg is priced, and says nothing the cheap one does not
+  #63 the cheap total-delta layer over-counts a donor spanning cells (stated)
 """
 
 import concurrent.futures as cf
@@ -34,7 +36,9 @@ import pytest
 
 from safetre import synth
 from safetre.config import load_policy_config
-from safetre.disclosure import DisclosurePolicy, SessionAuditor, leak_detector
+from safetre.disclosure import (
+    DisclosurePolicy, SessionAuditor, leak_detector, simulatable_cohort_bound,
+)
 from safetre.engine import QueryEngine
 from safetre.query import Measure, QuerySpec
 from safetre.service import QueryService
@@ -1009,6 +1013,71 @@ def _context_for(keys):
     from safetre.disclosure import CellContext
 
     return CellContext(keys=keys)
+
+
+# --- #62: the exact differencing leg is priced, and says nothing extra ---------
+
+def test_the_two_differencing_legs_are_indistinguishable(tables):
+    """#62 (round-9 V8): the exact leg's denial is NOT simulatable — it is
+    computed from live data the published marginals cannot reproduce, and
+    99.6% of all differencing denials come from it
+    (`artifacts/exact_leg_channel.json`).
+
+    That bit is accepted, and what bounds it is that it stays one bit. The
+    refusal must be byte-identical whichever leg decided, so the analyst
+    cannot tell a denial the marginals already implied from one that only the
+    data could produce — which would turn one bit into two.
+    """
+    service = QueryService(tables)
+    threshold = service.policy.threshold
+    marginals = service.engine.marginal_donor_counts()
+    bound = service._difference_bound("spend", marginals)
+
+    auditor = SessionAuditor(threshold=threshold)
+    cheap, exact = [], []
+    for a, b in (
+        # two globally-rare categories: the published marginals alone condemn
+        # this pair, so an analyst could predict the refusal without asking
+        ((("sex", "==", "X"),), (("sex", "==", "NS"),)),
+        # a pair whose marginals look far apart (bound 252) while the rows they
+        # actually aggregate differ by fewer than T donors: only live data says so
+        ((("income_band", "==", ">150k"),),
+         (("income_band", "==", ">150k"), ("sex", "==", "F"))),
+    ):
+        auditor._cohorts = [("spend", a)]
+        findings = auditor.observe_cohort("spend", b, bound)
+        if findings:
+            (cheap if simulatable_cohort_bound(marginals, "spend", a, b)
+             < threshold else exact).append(findings[0])
+
+    assert cheap and exact, "need one denial from each leg to compare them"
+    assert cheap[0].severity == exact[0].severity
+    assert cheap[0].rule == exact[0].rule
+    assert cheap[0].detail == exact[0].detail
+    # and neither carries a number: the bound is the quantity being attacked
+    assert not any(ch.isdigit() for ch in exact[0].detail)
+
+
+def test_donor_total_overcounts_a_donor_spanning_cells(tables):
+    """#63 (round-9 V13): `_donor_total` sums the per-cell donor counts, so a
+    donor with rows in several cells of the group-by is counted once per cell.
+
+    Pinned rather than fixed, because the cheap total-delta layer is
+    best-effort by design and the row-level lineage layer is the control that
+    holds. What was wrong was the docstring calling it "the distinct-donor
+    size", which is the one thing it is not on a multi-cell group-by.
+    """
+    from safetre.service import _donor_total
+
+    engine = QueryEngine(tables)
+    # event_type is an attribute of the ROW: one donor appears in several cells
+    spec = QuerySpec(dataset="spend", measure=Measure(fn="count"),
+                     group_by=["event_type"])
+    frame = engine.run(spec)
+    distinct = engine.cohort_size("spend")
+
+    assert _donor_total(frame) > distinct, (
+        f"summed {_donor_total(frame)} against {distinct} distinct donors")
 
 
 # --- #58/#59/#60: the restart path, replayed rather than re-derived -------------

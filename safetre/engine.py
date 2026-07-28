@@ -597,8 +597,30 @@ class QueryEngine:
 
         Exact rather than simulatable, deliberately — see D7. The bound it
         replaces overstated the true difference by 13x on the attack it was
-        meant to catch, and the bit it exposes is the one a direct query for the
-        difference cell already returns.
+        meant to catch.
+
+        **The bit this leg exposes is not simulatable, and is priced rather
+        than explained away** (hardening #62). This used to claim the bit "is
+        the one a direct query for the difference cell already returns", which
+        is wrong twice over: that direct query is a sub-threshold cell, so it
+        is SUPPRESSED and the analyst never receives it, and the denial is
+        computed from live data the published marginals cannot reproduce.
+        Measured over the demo catalogue's one- and two-filter cohorts
+        (`scripts/measure_exact_leg_channel.py`,
+        `artifacts/exact_leg_channel.json`): the cheap simulatable leg denies
+        120 pairs, this leg denies 34,163 that the cheap leg allowed, so
+        **99.6% of every differencing denial the auditor issues carries a bit
+        an analyst could not have predicted** — 9.3% of all pairs. The
+        differencing control is, in practice, the non-simulatable one.
+
+        Accepted, in the same class as the primary SDC oracle the threat model
+        already accepts, and bounded by two things: the refusal is one bit and
+        never a number, and it is byte-identical to the cheap leg's, so it does
+        not even say which leg decided (pinned by
+        `tests/test_hardening.py::test_the_two_differencing_legs_are_
+        indistinguishable`). `formal/disclosure_policy.als::
+        V8ExactLegIsNotSimulatable` exhibits the same gap as a model instance.
+        Closing it needs the DP accountant (roadmap item 3), not a comment.
         """
         unit = self._unit_view(dataset)
         pa, params_a = _predicate_sql(filters_a)

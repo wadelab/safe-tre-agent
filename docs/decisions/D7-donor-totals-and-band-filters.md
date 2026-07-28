@@ -133,6 +133,36 @@ difference set is not always expressible as one query, and that genuinely is a
 new bit; it is priced with the other residuals rather than waved past, and it is
 what the DP accountant closes.
 
+**Correction, 2026-07-28 (round-9 V8, hardening #62).** The paragraph above
+understates this, and the code comment that repeated it was simply wrong. Two
+things are true that it glosses:
+
+1. The bit an analyst "obtains by asking for that cell directly" is not
+   obtained. A difference small enough to trip the threshold is a sub-threshold
+   cell, so the direct query is **suppressed** and returns the canonical
+   refusal — which is the same answer they would get for a cell that is empty,
+   or dominated, or undeclared. The denial here is therefore not a bit they
+   already hold.
+2. It is not the rare case. Measured over the demo catalogue's one- and
+   two-filter cohorts (`scripts/measure_exact_leg_channel.py`,
+   `artifacts/exact_leg_channel.json`): across 368,511 pairs the cheap
+   simulatable leg denies **120** and the exact leg denies **34,163** that the
+   cheap leg allowed. So **99.6% of every differencing denial the auditor
+   issues is non-simulatable**, and 9.3% of all pairs draw one. The
+   differencing control is, in practice, the non-simulatable one — the cheap
+   leg is an early-out, not the substance.
+
+The decision does not change: the alternative is the #40 attack, which
+recovered twenty sub-threshold cells, and a control that cannot see the attack
+is not a control. What changes is the accounting. The bit is accepted and
+bounded by the two properties that keep it *one* bit — the refusal carries no
+number, and it is byte-identical whichever leg decided, so it does not even
+disclose which one did (pinned by `tests/test_hardening.py::
+test_the_two_differencing_legs_are_indistinguishable`).
+`formal/disclosure_policy.als::V8ExactLegIsNotSimulatable` exhibits the gap as
+a model instance, so a future edit that quietly assumed simulatability would
+have to delete a satisfiable run to do it.
+
 The guard also changes from `0 < d < threshold` to `d < threshold`. Genuinely
 identical cohorts are already skipped a line earlier, so the only pairs that
 reached a zero were ones whose predicates *differ* while selecting the same
