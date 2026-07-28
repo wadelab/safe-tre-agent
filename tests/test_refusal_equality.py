@@ -24,7 +24,7 @@ import pytest
 
 from safetre import synth
 from safetre.disclosure import DisclosurePolicy, SessionAuditor
-from safetre.service import QueryService
+from safetre.service import REQUEST_STEPS, QueryService
 
 
 class NoPlanner:
@@ -52,7 +52,32 @@ def visible(result) -> dict:
         "findings": sorted((f.rule, f.detail) for f in result.findings),
         "trace": result.trace,
         "rows": None if result.output is None else len(result.output),
+        # the compiled SQL is part of the projection too (hardening #66): on a
+        # data-derived denial its presence says the spec validated and reached
+        # the engine, which is the distinction the canonical refusal erases
+        "plans": list(result.plans),
     }
+
+
+# Trace steps decided from the REQUEST alone. An analyst holds their own
+# request, so these may be explained in full (and cite clause numbers); the
+# steps below them see data and may not. The service exports the same tuple —
+# imported here rather than restated so the two cannot drift.
+_REQUEST_STEPS = REQUEST_STEPS
+
+
+def data_visible(result) -> dict:
+    """The projection this property is actually about: everything the analyst
+    sees MINUS the steps decided from their own request.
+
+    The request-decided steps legitimately differ between two different
+    requests — `validation: ok (gaussian(y~a+b))` names the terms the analyst
+    wrote. What must not differ is anything below them, because every one of
+    those steps has seen data.
+    """
+    seen = visible(result)
+    seen["trace"] = [s for s in result.trace if not s.startswith(_REQUEST_STEPS)]
+    return seen
 
 
 def probe(service, auditor, filters, group_by=("device_os",)):
@@ -113,10 +138,6 @@ def test_the_audit_log_still_gets_the_numbers(service, tables, audit_spy):
         "the audit trail lost the counts the analyst is no longer shown")
 
 
-# trace steps decided from the REQUEST alone. An analyst holds their own
-# request, so these may be explained in full (and cite clause numbers); the
-# steps below them see data and may not.
-_REQUEST_STEPS = ("vetting:", "planner:", "validation:", "grouping:", "terms:")
 
 
 def test_nothing_the_analyst_sees_on_a_refusal_contains_a_digit(service):
@@ -127,3 +148,62 @@ def test_nothing_the_analyst_sees_on_a_refusal_contains_a_digit(service):
         + [f"{f.rule} {f.detail}" for f in r.findings]
         + [s for s in r.trace if not s.startswith(_REQUEST_STEPS)])
     assert not any(ch.isdigit() for ch in shown), shown
+
+
+# --- #66: the model path answers with the same one bit ------------------------
+
+def _glm(service, auditor, **over):
+    spec = {"tool": "glm", "dataset": "donor_spend", "family": "gaussian",
+            "response": "total_spend_gbp", "terms": ["age_band"], "filters": []}
+    spec.update(over)
+    return service.handle(json.dumps(spec), NoPlanner(), auditor=auditor)
+
+
+def test_model_estimability_refusals_are_one_bit(service):
+    """#66 (round-9 V9). The estimability messages distinguished an empty
+    cohort from a single observed level from an incomplete design grid — a
+    multi-valued oracle about cohort structure, where the plain aggregate path
+    gives one bit for exactly this class (#30).
+
+    P22 permitted naming the term, reasoning that rank and separation are
+    "computable from the released cell table itself". That premise fails on
+    precisely this branch: nothing is released, so the analyst holds no table
+    to compute from. It is the same shape as V8 — a justification that assumes
+    the analyst already has something the gateway has just withheld.
+    """
+    shapes = [
+        # a cohort matching nobody: no design cells at all
+        {"filters": [{"column": "region", "op": "==", "value": "Nowhere Land"}]},
+        # a cohort narrow enough that one term has a single observed level
+        {"filters": [{"column": "region", "op": "==", "value": "Drop Rows"}]},
+        # two terms whose cross is not fully observed on this cohort
+        {"terms": ["age_band", "income_band"],
+         "filters": [{"column": "sex", "op": "==", "value": "X"}]},
+    ]
+    seen = {json.dumps(data_visible(_glm(service, SessionAuditor(budget=99), **s)),
+                       sort_keys=True) for s in shapes}
+    assert len(seen) == 1, (
+        "model refusals differ by the cohort structure they refused: "
+        f"{len(seen)} distinct answers")
+
+
+def test_a_data_derived_denial_does_not_return_the_compiled_sql(service):
+    """#66 (round-9 V10): `plans` were returned on the withheld path, where
+    they confirm the spec validated and reached the engine. Small, and not
+    nothing — the canonical refusal exists to make "nothing released" and
+    "never ran" the same answer."""
+    denied = probe(service, SessionAuditor(budget=99),
+                   [{"column": "region", "op": "==", "value": "Nowhere Land"}])
+    assert denied.status == "denied" and denied.plans == []
+
+
+def test_a_request_derived_refusal_still_explains_itself(service):
+    """The other half of the split, and the reason this is not just "return
+    less": an analyst holds their own request, so a refusal decided from it may
+    be explained in full — otherwise every typo becomes a canonical shrug."""
+    bad = service.handle(json.dumps({"dataset": "donor_spend",
+                                     "measure": {"fn": "nope"}}),
+                         NoPlanner(), auditor=SessionAuditor(budget=99))
+    assert bad.status == "denied"
+    assert "query rejected" in bad.message
+    assert [f.rule for f in bad.findings] == ["spec_rejected"]

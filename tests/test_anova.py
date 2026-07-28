@@ -21,7 +21,7 @@ from safetre import synth
 from safetre.anova import AnovaProcedure, refit_from_artifact
 from safetre.planner import MockPlanner
 from safetre.query import CATALOGUE, AnovaSpec, QuerySpec
-from safetre.service import QueryService
+from safetre.service import WITHHELD_MESSAGE, QueryService
 
 
 @pytest.fixture(scope="module")
@@ -93,16 +93,27 @@ def test_suppressed_group_cell_denies_whole_model(service):
 
 # --- estimability refusals, decided from finalized tables alone (P22) -----------
 
-def test_single_level_factor_denied_naming_factor_only(service):
-    # filtering to one region leaves a single group: nothing to compare.
+def test_single_level_factor_denied_without_naming_the_factor(service, audit_spy):
+    """Filtering to one region leaves a single group: nothing to compare.
+
+    This used to name the factor, on P22's reading that rank and separation are
+    computable from the released cell table. On THIS branch nothing is
+    released, so the analyst holds no such table — the naming was a
+    count-class fact about a withheld cohort (hardening #66). The audit log
+    keeps it, because an output checker needs exactly what the analyst may not
+    have.
+    """
     spec = {"tool": "anova", "dataset": "wellbeing", "response": "wemwbs_score",
             "factor": "region",
             "filters": [{"column": "region", "op": "==", "value": "London"}]}
     r = service.handle("one-way anova of wellbeing by region in London",
-                       _FixedModelPlanner(spec))
+                       _FixedModelPlanner(spec), audit_log=audit_spy)
     assert r.status == "denied"
-    assert "region" in r.message and "single" in r.message
+    assert r.message == WITHHELD_MESSAGE
+    assert "region" not in r.message and "single" not in r.message
     assert not re.search(r"\d", r.message)
+    assert "model_unestimable" in audit_spy.rules()
+    assert "region" in audit_spy.audit_details()
 
 
 def test_internal_variable_rejected_as_factor():

@@ -21,7 +21,7 @@ from safetre.disclosure import SessionAuditor
 from safetre.glm import GLMProcedure
 from safetre.planner import MockPlanner
 from safetre.query import GLMSpec, QuerySpec
-from safetre.service import QueryService
+from safetre.service import WITHHELD_MESSAGE, QueryService
 
 
 @pytest.fixture(scope="module")
@@ -121,13 +121,22 @@ def test_suppressed_design_cell_denies_whole_model(service, audit_spy):
     assert not re.search(r"\d", r.message)               # non-numeric refusal
 
 
-def test_separation_denied_naming_term_only(service):
+def test_separation_denied_without_naming_the_term(service, audit_spy):
+    """Separation is refused, and the refusal is the canonical one.
+
+    P22 allowed naming the separated term because rank and separation are
+    "computable from the released cell table itself" — a premise that holds
+    only when a table WAS released, and this is the branch where none is
+    (hardening #66). The term survives in the audit log.
+    """
     r = service.handle("logistic glm of lootbox availability by genre",
-                       MockPlanner())
+                       MockPlanner(), audit_log=audit_spy)
     assert r.status == "denied"
-    assert any(f.rule == "model_unestimable" for f in r.findings)
-    assert "genre" in r.message
+    assert r.message == WITHHELD_MESSAGE
+    assert "genre" not in r.message
     assert not re.search(r"\d", r.message)
+    assert "model_unestimable" in audit_spy.rules()
+    assert "genre" in audit_spy.audit_details()
 
 
 def test_internal_variable_rejected_as_term(service):

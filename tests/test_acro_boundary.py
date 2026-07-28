@@ -17,6 +17,8 @@ from __future__ import annotations
 import json
 import sys
 import textwrap
+import threading
+import time
 
 import pandas as pd
 import pytest
@@ -370,3 +372,52 @@ def test_concurrent_users_are_never_answered_about_each_others_tables(tmp_path):
         _sys.setswitchinterval(original)
         vetter.close()
     assert not bad, f"verdicts computed for another table: {bad}"
+
+
+# --- #67: one user's hang must not be everyone's ------------------------------
+
+def test_a_hanging_checker_does_not_stall_other_users(tmp_path):
+    """#67 (round-9 V7): the app builds ONE vetter, so one checker process and
+    one lock serve every user. A contribution frame that made the checker hang
+    held that lock for the whole timeout — 120 s against a 5 s response
+    ceiling — so a poisoned cell key denied the vetting path to everybody, and
+    repeating it sustained the outage.
+
+    The exchange timeout bounds one user's wait; it cannot bound the queue
+    behind them, so waiting for the pipe is bounded separately. A user who
+    cannot get it fails closed at once rather than joining the queue.
+    """
+    slow = _fake_checker(tmp_path, """
+        import sys, time
+        sys.stdin.readline()
+        time.sleep(30)
+    """)
+    vetter = _vetter(slow, timeout=5.0, lock_wait=0.2)
+
+    started = threading.Event()
+    victim: dict = {}
+
+    def hog():
+        started.set()
+        vetter.vet(CELLS, PARAMS)          # takes the lock and hangs on it
+
+    def other_user():
+        began = time.monotonic()
+        verdicts = vetter.vet(CELLS, PARAMS)
+        victim["elapsed"] = time.monotonic() - began
+        victim["deny"] = verdicts.deny
+        victim["findings"] = [f.detail for f in verdicts.findings]
+
+    t1 = threading.Thread(target=hog, daemon=True)
+    t1.start()
+    started.wait(timeout=2)
+    time.sleep(0.2)                        # let the hog reach the pipe
+    t2 = threading.Thread(target=other_user, daemon=True)
+    t2.start()
+    t2.join(timeout=10)
+
+    assert victim, "the second user never got an answer at all"
+    assert victim["deny"] is True, "an unchecked table must not release"
+    assert victim["elapsed"] < 2.0, (
+        f"the second user waited {victim['elapsed']:.1f}s behind the first")
+    assert any("busy" in d for d in victim["findings"]), victim["findings"]

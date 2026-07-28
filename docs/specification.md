@@ -129,7 +129,14 @@ allowlist on every request path, query and metadata alike.
 
 **R11** — Every release decision MUST be inspectable: the validated QuerySpec,
 the compiled SQL plan, the findings, and the ordered pipeline trace MUST all be
-available for the request.
+available for the request. *Available to whom is part of the requirement*: for
+a refusal decided from the DATA these are recorded in the audit log, where an
+output checker reviewing the session reads them, and are NOT returned to the
+analyst — the compiled plan would confirm the spec validated and reached the
+engine, and the per-step trace would say which design-cell tables passed the
+gateway, both of which are the distinctions the canonical refusal exists to
+erase (P10/P11, hardening #66). A refusal decided from the REQUEST returns all
+four, because the analyst holds the request and could reproduce them.
 
 **R12** — The project MUST provide a red-team harness that replays the attack
 suite with the gateway off and on and reports what leaked in each case. Its
@@ -337,11 +344,23 @@ exactly.)*
 
 **P22** — A model refusal MUST be decidable from the vetted cell decisions and
 released-equivalent quantities alone — the same information the equivalent
-aggregate queries would reveal — and refusal messages MUST stay non-numeric
-about any private quantity. *(P10/P11-style: a model denial discloses nothing an
-analyst could not already learn from permitted queries. Estimability refusals
-may name the aliased or separated term, because rank and separation are
-computable from the released cell table itself.)*
+aggregate queries would reveal — and a refusal decided from the data MUST be
+the canonical refusal: one message, one finding, and a trace carrying only the
+request-decided steps. *(P10/P11-style: a model denial discloses nothing an
+analyst could not already learn from permitted queries.)*
+
+*Corrected 2026-07-28 (round-9 V9, hardening #66).* This clause used to permit
+estimability refusals to name the aliased or separated term, "because rank and
+separation are computable from the released cell table itself". The premise
+holds only where a cell table WAS released, and a refusal is precisely the
+branch where none is — so the analyst had no table to compute from, and the
+messages distinguished an empty cohort from a single observed level from an
+incomplete design grid from separation. That is a multi-valued oracle about
+cohort structure where the plain aggregate path gives one bit for the same
+class (#30). It is the same error as D7's "the bit a direct query already
+returns" (#62): a justification that assumes the analyst holds something the
+gateway has just withheld. The terms are still named — in the audit log, where
+the output checker reads them.
 
 ## Non-goals — what it does NOT claim
 

@@ -82,15 +82,25 @@ def test_a_release_carries_everything_needed_to_audit_it(tables):
     assert sql.startswith("SELECT ") and "age_band" in sql
 
 
-def test_a_denial_is_inspectable_too(tables):
-    # the case that matters most: an analyst told no is owed the reason and
-    # the plan that would have run
+def test_a_denial_is_inspectable_to_the_checker_not_the_analyst(tables, audit_spy):
+    """R11, with the "to whom" made explicit (hardening #66).
+
+    A data-derived denial is fully inspectable — in the audit log, which is
+    where an output checker reviewing the session reads it. The analyst gets
+    the spec and the request-decided trace, and NOT the compiled plan: the plan
+    would confirm the spec validated and reached the engine, which is exactly
+    the distinction the canonical refusal erases.
+    """
     spec = {"dataset": "spend", "measure": {"fn": "mean", "column": "amount_gbp"},
             "group_by": ["age_band", "region", "device_os"],
             "filters": [{"column": "sex", "op": "==", "value": "X"}]}
-    result = QueryService(tables).handle(json.dumps(spec), planner=None)
-    assert result.status in ("denied", "redacted", "released")
-    assert result.spec and result.trace and result.plans
+    result = QueryService(tables).handle(json.dumps(spec), planner=None,
+                                         audit_log=audit_spy)
+    assert result.status == "denied"
+    assert result.spec and result.trace
+    assert result.plans == []
+    # the checker's half: the real findings, with their counts, are recorded
+    assert audit_spy.rules() and audit_spy.last["spec"] == result.spec
 
 
 def test_a_model_exposes_a_plan_per_design_cell_table(tables):

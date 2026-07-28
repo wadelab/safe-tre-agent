@@ -57,7 +57,23 @@ from .disclosure import (
 )
 
 PROTOCOL = 2
-DEFAULT_TIMEOUT = 120.0
+# Well under the response ceiling (`PolicyConfig.response_ceiling_ms`, 5000 ms),
+# and it used to be 120 s — twenty-four times the ceiling. The request that
+# waited on it had been abandoned by the timing boundary long before the
+# checker answered, so the only thing the remaining two minutes bought was a
+# held lock: one poisoned cell key that made the checker hang stalled EVERY
+# user's vetting for the duration, because the app builds one vetter and
+# therefore one pipe (round-9 V7, hardening #67). A checker that cannot answer
+# a design-cell table inside a couple of seconds is not going to help this
+# request, and failing closed is what the caller does with the answer anyway.
+DEFAULT_TIMEOUT = 2.0
+
+# How long a request will WAIT for the shared pipe before giving up on it.
+# Bounding the exchange is not enough on its own: with one pipe, N concurrent
+# users queue, so the worst case is N x timeout however small the timeout is.
+# Refusing to queue past this converts a shared-fate stall into a per-request
+# fail-closed, which is the posture every other unavailable-checker path takes.
+DEFAULT_LOCK_WAIT = 1.0
 RELEASE = "ok"          # the verdict string meaning "this cell may go out"
 
 # A rule NAME the checker returns is free text arriving from outside the
@@ -153,7 +169,8 @@ class ExternalCheckerVetter(CellVetter):
     def __init__(self, command: list[str], keys: list[str] | None = None,
                  aggfunc: str | None = None,
                  contributions: pd.DataFrame | None = None,
-                 timeout: float = DEFAULT_TIMEOUT, max_starts: int = 3):
+                 timeout: float = DEFAULT_TIMEOUT, max_starts: int = 3,
+                 lock_wait: float = DEFAULT_LOCK_WAIT):
         if not command:
             raise ValueError(
                 "an external checker needs a command to start it; there is no "
@@ -164,6 +181,7 @@ class ExternalCheckerVetter(CellVetter):
         self.keys = list(keys or [])
         self.aggfunc = aggfunc
         self.timeout = timeout
+        self.lock_wait = lock_wait
         self.max_starts = max_starts
         self.version: str | None = None
         self._process: subprocess.Popen | None = None
@@ -252,7 +270,15 @@ class ExternalCheckerVetter(CellVetter):
         """
         request_id = next(self._ids)
         payload = json.dumps(build_request(contributions, keys, aggfunc, request_id))
-        with self._lock:
+        # Do not queue indefinitely behind another user's exchange (#67). The
+        # caller turns a raise into a fail-closed denial, which is the right
+        # answer here: this request cannot be checked right now, and saying so
+        # costs one request rather than every request.
+        if not self._lock.acquire(timeout=self.lock_wait):
+            raise ValueError(
+                f"checker busy: no answer within {self.lock_wait}s of waiting "
+                f"for the shared pipe")
+        try:
             try:
                 process = self._start()
                 process.stdin.write(payload + "\n")
@@ -265,6 +291,8 @@ class ExternalCheckerVetter(CellVetter):
                 # abandoned would be read as the answer to the next one
                 self.close()
                 raise ValueError(str(exc)) from None
+        finally:
+            self._lock.release()
         if self.version is not None and version != self.version:
             # a restarted checker reporting a different version means the
             # release would claim checks from a version that did not run them

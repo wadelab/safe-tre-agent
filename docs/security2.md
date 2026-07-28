@@ -101,7 +101,7 @@ for why the red-team rounds continue regardless of how good the models get.
 | F3 | **Done.** Restart, replay-equivalence and log-as-input in the temporal model | V1–V4, #37, #49, #55 | Medium | `formal/temporal_session.als` |
 | F1 | **Done.** Rows, simulatability and donor arity in the disclosure model | #40 lag, V8, V13 | Small–medium | `formal/disclosure_policy.als` |
 | F2 | **Done.** Band-alignment theorem in Lean | #39, class-wide | Small | `formal/lean/SafeTre/` |
-| F10 | Denial-channel indistinguishability | V9, V10, generalises #30 | Small–medium | Lean or Alloy + tests |
+| F10 | **Done.** Denial-channel indistinguishability | V9, V10, generalises #30 | Small–medium | Lean or Alloy + tests |
 | F4 | Vetting arithmetic over ℚ in Lean | #41, #42 class | Medium | new `SafeTre/Arith.lean` |
 | F5 | Declared surfaces done (`manifest.py`, #61); model parametrisation open | #46, V12 | Medium | both toolchains + `manifest.py` |
 | F7 | Counterexample ↔ attack pipeline | the #40/V2 failure mode itself | Process + small tooling | `redteam/`, `formal/`, sync tests |
@@ -266,7 +266,24 @@ theorem available.
 `tests/test_formal_lean_sync.py` extended to pin the generated rules to
 `INTERNAL_RANGE_RULES`; `lake build` green in the `formal` CI job.
 
-### F10. Denial-channel indistinguishability
+### F10. Denial-channel indistinguishability — **delivered**
+
+*Delivered 2026-07-28 as hardening #66*, as an executable property rather than
+a Lean theorem: `tests/test_refusal_equality.py` now defines the
+analyst-observable projection (status, message, findings, trace, row count and
+`plans`) and asserts that two data-derived refusals differing only in the data
+behind them are identical, on the model path as well as the aggregate one.
+
+Two things the plan did not anticipate. The projection has to *exclude* the
+request-decided trace steps rather than compare whole traces — `validation: ok
+(gaussian(y~a+b))` legitimately differs between two different requests, and the
+property is about everything below those steps. And the leak was not only the
+message: the per-role trace lines said which design-cell tables had passed the
+gateway before the model was refused, which is "your cells cleared the
+threshold" in words. Both P22 and R11 were corrected in the specification,
+because both had licensed the behaviour in writing.
+
+### F10. Denial-channel indistinguishability — original plan
 
 New in this revision, prompted by V9 and V10. Hardening #30 canonicalised
 data-derived refusals so that a denial carries one bit rather than a

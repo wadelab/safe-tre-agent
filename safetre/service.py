@@ -37,6 +37,21 @@ WITHHELD_MESSAGE = "blocked by safe-outputs gateway: nothing from this query " \
                    "can be released"
 WITHHELD_TRACE = "gateway: nothing released"
 
+# Trace steps decided from the REQUEST alone. An analyst holds their own
+# request, so these may be shown in full; every step below them has seen data
+# and may not. On the MODEL path the difference matters more than on the plain
+# one, because the per-role steps say which design-cell tables passed the
+# gateway before the model was refused — "your cells cleared the threshold but
+# the fit is not estimable" is a count-class fact about the cohort, and it was
+# reaching the analyst as trace text (hardening #66).
+REQUEST_STEPS = ("vetting:", "planner:", "validation:", "grouping:", "terms:")
+
+
+def _public_trace(trace: list[str]) -> list[str]:
+    """What a data-derived refusal may say about how it got there: the
+    request-decided steps, and then the one canonical line."""
+    return [s for s in trace if s.startswith(REQUEST_STEPS)] + [WITHHELD_TRACE]
+
 
 def _withheld() -> list:
     return [D.Finding("high", "nothing_released", suppressable=True,
@@ -342,9 +357,15 @@ class QueryService:
                 or released is None or len(released) == 0):
             trace.append(WITHHELD_TRACE)
             record("denied", spec.model_dump(), findings, None)
+            # no `plans` here (hardening #66): on a DATA-derived denial the
+            # compiled SQL confirms the spec validated and reached the engine,
+            # which the canonical refusal is meant not to say. The plans are
+            # placeholder-only and allowlisted, so this is a small leak rather
+            # than a payload — but it is the one thing distinguishing "nothing
+            # released" from "never ran", and R11's inspectability is served by
+            # the audit log, which keeps them.
             return Result("denied", message=WITHHELD_MESSAGE,
-                          spec=spec.model_dump(), findings=_withheld(), trace=trace,
-                          plans=plans)
+                          spec=spec.model_dump(), findings=_withheld(), trace=trace)
 
         trace.append(f"auditor: {[f.rule for f in audit_findings]}")
         trace.append(f"gateway: {action} by {self.policy.vetter.describe()} "
@@ -360,8 +381,7 @@ class QueryService:
         if decision == "deny":
             record("denied", spec.model_dump(), findings, None)
             return Result("denied", message="blocked at human-in-the-loop",
-                          spec=spec.model_dump(), findings=findings, trace=trace,
-                          plans=plans)
+                          spec=spec.model_dump(), findings=findings, trace=trace)
         if decision == "human":
             record("review", spec.model_dump(), findings, None)
             return Result("review", message="escalated to human output checker",
@@ -421,11 +441,20 @@ class QueryService:
             """`findings` is the truth, for the audit log. `public` is what the
             analyst is shown: for a refusal decided from the DATA it is the one
             canonical finding, because which rule fired on which role is a fact
-            about cells that were withheld."""
+            about cells that were withheld.
+
+            Passing `public` is therefore exactly the marker "this refusal was
+            decided from data", and the compiled `plans` are withheld on the
+            same condition (hardening #66): they would confirm the spec
+            validated and reached the engine, which is the distinction the
+            canonical refusal exists to erase. A request-decided refusal keeps
+            them — the analyst holds the request and could compile it
+            themselves."""
             record("denied", spec.model_dump(), findings, None)
             return Result("denied", message=message, spec=spec.model_dump(),
                           findings=public if public is not None else findings,
-                          trace=trace, plans=list(plans))
+                          trace=_public_trace(trace) if public is not None else trace,
+                          plans=[] if public is not None else list(plans))
 
         # Fidelity gate: does the model answer the question that was asked?
         # A literal spec IS the question, so there is no fidelity to check (R17).
@@ -515,9 +544,22 @@ class QueryService:
 
         problems = proc.preconditions(finalized, spec)
         if problems:
-            trace.append(f"preconditions: {problems}")
-            f = [D.Finding("high", "model_unestimable", p) for p in problems]
-            return deny(f, "; ".join(problems))
+            # Canonical to the analyst (hardening #66). P22 allowed these to
+            # name the aliased or separated term, on the reasoning that rank
+            # and separation are "computable from the released cell table
+            # itself" — but this is the branch where NOTHING is released, so
+            # the analyst does not hold that table and cannot compute anything
+            # from it. The messages distinguished an empty cohort from a single
+            # observed level from an incomplete grid from separation: a
+            # multi-valued oracle about cohort structure, where the plain
+            # aggregate path gives one bit for exactly this class (#30). The
+            # detail goes to the audit log, which is where an output checker
+            # needs it.
+            trace.append(WITHHELD_TRACE)
+            f = [D.Finding("high", "model_unestimable",
+                           "a precondition for fitting this model is not met",
+                           audit_detail=p) for p in problems]
+            return deny(f, WITHHELD_MESSAGE, public=_withheld())
         trace.append("preconditions: ok")
 
         output, artifacts = proc.fit(finalized, spec)
