@@ -70,10 +70,35 @@ class AuditLog:
                 status TEXT, findings TEXT, output_shape TEXT,
                 prev_mac TEXT, mac TEXT
             )""")
+        # `accounting` (hardening #58) was added after the first chains were
+        # written. It is added by migration and left NULL on existing rows, and
+        # `_body` omits the key entirely when it is NULL — so every row written
+        # before this column existed still MACs to exactly what it MACed then,
+        # and an old chain keeps verifying. A column that changed the body of
+        # historical rows would fail verification everywhere, which is the
+        # constraint that shaped #55's answer too.
+        cols = {row[1] for row in self.con.execute("PRAGMA table_info(records)")}
+        if "accounting" not in cols:
+            self.con.execute("ALTER TABLE records ADD COLUMN accounting TEXT")
         self.con.commit()
 
     def _mac(self, body: dict) -> str:
         return hmac.new(self._key, _canonical(body).encode(), hashlib.sha256).hexdigest()
+
+    @staticmethod
+    def _body(*, ts, user, request, spec, status, findings, output_shape,
+              prev_mac, accounting) -> dict:
+        """The MACed body. `accounting` is included only when present, so a
+        pre-#58 row (NULL) reconstructs byte-identically to the body it was
+        signed with."""
+        body = {
+            "ts": ts, "user": user, "request": request, "spec": spec,
+            "status": status, "findings": findings,
+            "output_shape": output_shape, "prev_mac": prev_mac,
+        }
+        if accounting is not None:
+            body["accounting"] = accounting
+        return body
 
     def _head_locked(self) -> str:
         row = self.con.execute("SELECT mac FROM records ORDER BY id DESC LIMIT 1").fetchone()
@@ -84,20 +109,26 @@ class AuditLog:
             return self._head_locked()
 
     def append(self, *, user: str, request: str, spec, status: str,
-               findings, output_shape) -> str:
+               findings, output_shape, accounting: dict | None = None) -> str:
+        """`accounting` is what the request actually cost the session and which
+        cohorts it actually released over — written by the code that did the
+        live accounting, so a restart replays a record rather than re-deriving
+        one (hardening #58). It is inside the MAC: an attacker who can edit the
+        budget a row claims to have spent could reset a session's accumulation
+        controls, so it needs the same tamper-evidence as the status."""
         with self._lock:                       # head-read + insert must be atomic
             prev = self._head_locked()
-            body = {
-                "ts": time.time(), "user": user, "request": request,
-                "spec": spec, "status": status, "findings": findings,
-                "output_shape": output_shape, "prev_mac": prev,
-            }
+            body = self._body(
+                ts=time.time(), user=user, request=request, spec=spec,
+                status=status, findings=findings, output_shape=output_shape,
+                prev_mac=prev, accounting=accounting)
             mac = self._mac(body)
             self.con.execute(
-                "INSERT INTO records (ts,user,request,spec,status,findings,output_shape,prev_mac,mac)"
-                " VALUES (?,?,?,?,?,?,?,?,?)",
+                "INSERT INTO records (ts,user,request,spec,status,findings,output_shape,"
+                "prev_mac,mac,accounting) VALUES (?,?,?,?,?,?,?,?,?,?)",
                 (body["ts"], user, request, _canonical(spec), status,
-                 _canonical(findings), _canonical(output_shape), prev, mac),
+                 _canonical(findings), _canonical(output_shape), prev, mac,
+                 None if accounting is None else _canonical(accounting)),
             )
             self.con.commit()
             return mac
@@ -107,22 +138,34 @@ class AuditLog:
 
         The log is the only durable record of what a session has already been
         told, so it is also the only thing a restart can rebuild that session
-        from (hardening #49). Read-only and unauthenticated on purpose: this is
-        used to *restore* controls, and a tampered row can only ever make the
-        rebuilt session more restrictive or drop a cohort that the operator
-        should be detecting with `verify()` anyway. Callers that need the
-        stronger guarantee should verify the chain first.
+        from (hardening #49). **This method does not authenticate anything.**
+
+        It used to say that a tampered row "can only ever make the rebuilt
+        session more restrictive or drop a cohort" — but dropping a cohort *is*
+        the unsafe direction: it is precisely the differencing lineage, and
+        deleting a row needs write access to the database, not a forged MAC.
+        Round 9 measured it: delete the record of the first half of a
+        differencing pair, restart, and the second half is released, with
+        `verify()` reporting the broken chain to nobody. The tamper-evidence
+        existed and was never consulted where it mattered.
+
+        So the rule is now on the caller and enforced there: `SessionStore.
+        rehydrate` verifies the chain before replaying it and fails closed
+        (hardening #59). Any future caller that rebuilds a control from these
+        rows owes the same gate.
         """
         with self._lock:
             rows = self.con.execute(
-                "SELECT ts,user,request,spec,status,findings FROM records "
+                "SELECT ts,user,request,spec,status,findings,accounting FROM records "
                 "WHERE ts >= ? ORDER BY id", (cutoff,)).fetchall()
         out = []
-        for ts, user, request, spec, status, findings in rows:
+        for ts, user, request, spec, status, findings, accounting in rows:
             try:
                 out.append({"ts": ts, "user": user, "request": request,
                             "spec": json.loads(spec), "status": status,
-                            "findings": json.loads(findings)})
+                            "findings": json.loads(findings),
+                            "accounting": (None if accounting is None
+                                           else json.loads(accounting))})
             except (ValueError, TypeError):
                 continue                      # a corrupt row is `verify`'s problem
         return out
@@ -133,10 +176,11 @@ class AuditLog:
         prev = GENESIS
         with self._lock:
             rows = self.con.execute(
-                "SELECT ts,user,request,spec,status,findings,output_shape,prev_mac,mac"
-                " FROM records ORDER BY id"
+                "SELECT ts,user,request,spec,status,findings,output_shape,prev_mac,mac,"
+                "accounting FROM records ORDER BY id"
             ).fetchall()
-        for ts, user, request, spec, status, findings, shape, prev_mac, mac in rows:
+        for (ts, user, request, spec, status, findings, shape, prev_mac, mac,
+             accounting) in rows:
             if prev_mac != prev:
                 return False
             # A tamperer who can write the DB can corrupt a row into malformed
@@ -145,12 +189,12 @@ class AuditLog:
             # authenticated, which is exactly a verification failure (P15) — not
             # an exception that 500s the /api/audit/verify endpoint.
             try:
-                body = {
-                    "ts": ts, "user": user, "request": request,
-                    "spec": json.loads(spec), "status": status,
-                    "findings": json.loads(findings), "output_shape": json.loads(shape),
-                    "prev_mac": prev_mac,
-                }
+                body = self._body(
+                    ts=ts, user=user, request=request, spec=json.loads(spec),
+                    status=status, findings=json.loads(findings),
+                    output_shape=json.loads(shape), prev_mac=prev_mac,
+                    accounting=(None if accounting is None
+                                else json.loads(accounting)))
                 if not isinstance(mac, str) or not hmac.compare_digest(self._mac(body), mac):
                     return False
             except (ValueError, TypeError):

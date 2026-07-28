@@ -12,8 +12,8 @@ hunting).
 |---|---|
 | `skeleton.json` | The registries' finite request space exported as data (`safetre.procedures.registry_skeleton()`): the catalogue, every aggregate measure configuration, and all no-filter model skeleton points (718 GLM + 49 ANOVA). |
 | `glm_gateway.als` | Alloy model of the GLM release path: GLMSpec admissibility, nondeterministic per-cell vetting, the service rule. Checks P19/P21 over every vetting outcome and P4-admissibility over the exact catalogue atoms. |
-| `disclosure_policy.als` | Alloy model of the session auditor's cohort-lineage rule (`simulatable_cohort_bound`). Checks the marginal bound's soundness and that rare-category isolation is blocked (P11); machine-exhibits the two residuals the code documents, as satisfiable runs. |
-| `temporal_session.als` | Alloy 6 temporal model of a session: the `observe → apply → record` event order of `QueryService.handle`/`_handle_model` over the auditor's mutable state. Checks the budget invariant and exhaustion short-circuit (P17), the fail-closed gate (P7), differencing-pair serialisation under the per-Session lock (P16) and that lineage records exactly the releases; machine-exhibits the hardening #18 race when the lock assumption is dropped. |
+| `disclosure_policy.als` | Alloy model of the session auditor's cohort-lineage rule over **rows as well as donors** (`simulatable_cohort_bound`, `engine.row_symdiff_donors`, and the min-rule in `service._difference_bound`). Checks the marginal bound's soundness, that rare-category isolation is blocked (P11), that any released pair differs over at least T donors *at row level* (#40), and that the row layer subsumes the donor layer it replaced; machine-exhibits the #40 attack when the row layer is dropped, the interaction residual, the total-delta layer's over-count, and the non-simulatable bit the exact leg costs. |
+| `temporal_session.als` | Alloy 6 temporal model of a session **across restarts**: the `observe → apply → record` event order of `QueryService.handle`/`_handle_model`, the audited exception path, and the reconstruction `SessionStore.rehydrate` performs. Checks the budget invariant and exhaustion short-circuit (P17), the fail-closed gate (P7), differencing-pair serialisation under the per-Session lock (P16), that lineage records exactly the releases, that a restart is a no-op on the controls (replay equivalence), audit completeness (#37) and the policy record's position (#55); machine-exhibits the #18 race without the lock and the three round-9 restart attacks when their assumptions are dropped. |
 | `run_checks.py` | Headless runner for the Alloy models: executes every command via the Alloy CLI and turns the receipts into a CI verdict (the CLI itself exits 0 even on a counterexample). Fails on any counterexample, any unsatisfiable run, or a missing command. |
 | `lean/` | The Lean 4 package (`SafeTre`). `Types/Spec/Sql/Proofs.lean` are hand-written; `Catalogue.lean` (catalogue, DI/QI/S/R labels, live view columns) and `Cases.lean` (414 compiled-SQL pin pairs) are **generated** by `scripts/gen_lean_catalogue.py`. |
 
@@ -37,9 +37,24 @@ All in `lean/SafeTre/Proofs.lean`, `sorry`-free:
   none is DI; group-by keys are never sensitive; public measures are all
   sensitive; the engine's *live* public views (read back from DuckDB, not
   the source text) expose no DI column.
+- **Band alignment (#39)** `internal_range_cuts_no_finer_than_bands` — over
+  the whole spec space, a valid spec's predicate on an internal range column
+  cannot tell two values in the same declared band apart, so every expressible
+  cohort is a union of whole bands whose marginals are already public. Built on
+  four `decide`-checked facts about the generated rule table: only band-aligned
+  ranges are offered (no equality, negation or membership, so an exact age is
+  not expressible), the declared edges *are* the band boundaries, the bands
+  partition, and no edge falls strictly inside a band. This generalises #39
+  from the instance that was patched to the class: a new internal range column
+  without band rules, or an operator that cuts inside a band, fails the build.
 - **The engine pin** `cases_pin_engine` — for all 414 generated cases the
   Lean-rendered SQL equals `engine.compile_query`'s output byte for byte,
   with matching parameter counts.
+- **Values stay out of SQL** `compile_ignores_filter_values` — `Filter` now
+  carries an integer value (band alignment is a statement *about* the value, so
+  a value-free model could not express it). This theorem is what replaces the
+  old guarantee-by-silence: two filters differing only in their value compile
+  to the identical atom, so nothing a value carries can reach the SQL text.
 
 Trusted base: Lean's kernel plus the standard axioms (`propext`,
 `Classical.choice`, `Quot.sound`) — checked with `#print axioms`. The one
@@ -113,6 +128,22 @@ cd formal/lean && PATH=/tmp/lean/bin:$PATH lake build
 
 CI runs exactly this (both downloads sha256-pinned, Temurin 21 for Alloy)
 in the `formal` job.
+
+## Arity, declared
+
+The round-9 lesson, and the discipline every model here now follows: the
+failures that survived nine red-team rounds inside formally covered territory
+were all a *cardinality* the model assumed instead of checking. #40 — a release
+is a function of rows, and the model related a release to a donor set. V2 — a
+released request records one cohort, and a binomial GLM releases over two. V1 —
+one audit record is one unit of spend, and a model spends one per planned
+aggregate. V13 — per-cell donor counts sum to a donor total, and a donor
+spanning cells is counted once per cell.
+
+So every relation between model concepts carries an explicit cardinality and a
+comment naming the code that fixes it, and no assumption stands without a
+dropped-assumption `run` showing what it prevents. An assumption written as a
+`fact` is a place where the model cannot see the bug.
 
 ## What this deliberately does not model (yet)
 

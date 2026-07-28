@@ -7,7 +7,9 @@ whole security argument rests on.
 """
 
 import re
-import typing
+
+import pytest
+from pydantic import ValidationError
 
 from safetre import disclosure, engine, query, schema
 from safetre.schema import identifier_columns
@@ -59,11 +61,15 @@ def test_internal_analysis_columns_are_not_public_outputs():
 
 
 def test_unit_views_are_not_queryable():
-    # QuerySpec.dataset is a closed Literal; internal unit views (prefixed "_")
-    # must never be among its values.
-    allowed = set(typing.get_args(query.QuerySpec.model_fields["dataset"].annotation))
+    # The queryable datasets are exactly the ACTIVE definition's public ones
+    # (validation is a catalogue membership check, so any study can be served);
+    # internal unit views (prefixed "_") must never be among them, and
+    # proposing one must fail validation.
+    allowed = set(query.CATALOGUE)
     assert allowed == {"spend", "donor_spend", "wellbeing"}
     assert not any(d.startswith("_") for d in allowed)
+    with pytest.raises(ValidationError):
+        query.QuerySpec(dataset="_spend_u", measure={"fn": "count"})
 
 
 def test_disclosure_thresholds_have_a_floor():

@@ -23,7 +23,7 @@
 <div class="width-container">
   <div class="phase-banner">
     <strong class="tag tag--blue">Alpha</strong>
-    <span>This is a research prototype. All data are synthetic.</span>
+    <span>This is a research prototype. {{ dataset_description }}</span>
   </div>
 
   <main id="main-content" class="main-wrapper" role="main">
@@ -37,8 +37,10 @@
         <form id="qform" autocomplete="off">
           <div class="form-group">
             <label class="label" for="q">Research question</label>
-            <div id="q-hint" class="hint">For example, &ldquo;mean spend by age
-              band&rdquo; or &ldquo;correlation between age and spend&rdquo;.</div>
+            <div id="q-hint" class="hint">{% if examples %}For example,
+              &ldquo;{{ examples[0].query }}&rdquo;{% if examples | length > 2 %}
+              or &ldquo;{{ examples[2].query }}&rdquo;{% endif %}.{% else %}
+              Describe the aggregate analysis you need.{% endif %}</div>
             <textarea id="q" name="q" class="textarea" rows="3" maxlength="500"
                       aria-describedby="q-hint q-info" required></textarea>
             <div id="q-info" class="hint count-message" aria-live="polite">
@@ -47,18 +49,18 @@
           <button id="runbtn" class="button" type="submit">Run query</button>
         </form>
 
+        {% if examples %}
         <details>
           <summary>Example queries</summary>
           <div class="details-text">
             <ul>
-              <li><button type="button" class="link-button" data-query="mean spend by age band">Mean spend by age band</button></li>
-              <li><button type="button" class="link-button" data-query="mean wellbeing by region">Mean wellbeing by region</button></li>
-              <li><button type="button" class="link-button" data-query="correlation between age and spend">Correlation between age and spend</button></li>
-              <li><button type="button" class="link-button" data-query="mean spend by region and device os">Mean spend by region and device (triggers suppression)</button></li>
-              <li><button type="button" class="link-button" data-query="show mean wellbeing per donor">Wellbeing per donor (rejected by validation)</button></li>
+              {% for ex in examples %}
+              <li><button type="button" class="link-button" data-query="{{ ex.query }}">{{ ex.label }}</button></li>
+              {% endfor %}
             </ul>
           </div>
         </details>
+        {% endif %}
 
         <h2 class="heading-m">Gateway checks</h2>
         <ol class="steps" id="pipeline">
@@ -151,7 +153,7 @@
       <li>Session differencing audit</li>
       <li>Restricted channel</li>
     </ul>
-    <p>Research prototype &middot; synthetic data only &middot; not a government service</p>
+    <p>Research prototype &middot; v{{ version }} &middot; synthetic data only &middot; not a government service</p>
   </div>
 </footer>
 <script src="/static/app.js"></script>

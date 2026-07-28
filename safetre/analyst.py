@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 
 import pandas as pd
 
+from . import dataset as _dataset
 from . import disclosure as D
 from .query import CATALOGUE
 
@@ -75,14 +76,24 @@ ANALYSIS_CUES = [
     "effect of", "odds", "anova", "analysis of variance", "differ across",
     "differ between",
 ]
-DOMAIN_CUES = [
-    "spend", "spender", "spenders", "purchase", "purchases", "lootbox",
-    "lootboxes", "wellbeing", "survey", "pgsi", "igds", "wemwbs", "mental",
-    "age", "age band", "sex", "region", "income", "device", "os", "genre",
-    "price", "event", "wave", "currency", "gbp", "amount", "donor", "app",
-    "london", "south east", "north west", "scotland", "wales", "northern ireland", "free-text",
-    "free text", "comments",
-]
+# The dataset-specific vocabulary the intent filter accepts as on-topic, and
+# the synonym maps the fidelity checks resolve requests against. Mirrored from
+# the active dataset definition's `lexicon` (safetre/dataset.py).
+DOMAIN_CUES: list[str] = []
+DIMENSION_SYNONYMS: dict[str, str] = {}
+RESPONSE_SYNONYMS: dict[str, dict[str, str]] = {}
+
+
+def _apply(defn) -> None:
+    DOMAIN_CUES[:] = list(defn.lexicon.domain_cues)
+    DIMENSION_SYNONYMS.clear()
+    DIMENSION_SYNONYMS.update(defn.lexicon.dimension_synonyms)
+    RESPONSE_SYNONYMS.clear()
+    RESPONSE_SYNONYMS.update({k: dict(v) for k, v in defn.lexicon.response_synonyms.items()})
+
+
+_dataset.register_sync(_apply)
+_apply(_dataset.active())
 
 
 @dataclass
@@ -115,27 +126,9 @@ GROUPING_KEYWORDS = [
     "breakdown by", "breakdown of", "for each ", " per ", " by ", " across ",
 ]
 
-# Natural-language term -> the catalogue dimension it names. Longer, more
-# specific phrases are matched first so "age band" wins over "age", etc.
-DIMENSION_SYNONYMS = {
-    "age band": "age_band", "age group": "age_band", "age bracket": "age_band",
-    "age range": "age_band", "age": "age_band",
-    "gender": "sex", "sex": "sex",
-    "region": "region", "area": "region", "location": "region",
-    "nation": "region", "country": "region",
-    "income band": "income_band", "income bracket": "income_band",
-    "income": "income_band", "earnings": "income_band", "salary": "income_band",
-    "device os": "device_os", "operating system": "device_os",
-    "device": "device_os", "platform": "device_os", "os": "device_os",
-    "genre": "genre", "game type": "genre",
-    "lootbox": "contains_lootboxes", "lootboxes": "contains_lootboxes",
-    "loot box": "contains_lootboxes", "loot boxes": "contains_lootboxes",
-    "loot-box": "contains_lootboxes", "crate": "contains_lootboxes",
-    "price tier": "price_tier", "price": "price_tier", "pricing": "price_tier",
-    "event type": "event_type",
-    "age rating": "age_rating", "content rating": "age_rating", "pegi": "age_rating",
-    "survey wave": "wave", "wave": "wave", "timepoint": "wave",
-}
+# Natural-language term -> the catalogue dimension it names (from the active
+# dataset definition). Longer, more specific phrases are matched first so
+# "age band" wins over "age", etc.
 
 
 # Words that end a grouping clause and begin a filter/condition, so a breakdown
@@ -249,27 +242,9 @@ MODEL_TERM_KEYWORDS = [
 ]
 
 # Natural-language response name -> the model response column it names, per
-# dataset. Deliberately minimal and unambiguous: the check is lenient and only
-# fires when the request names a response we can recognise.
-RESPONSE_SYNONYMS = {
-    "spend": {
-        "in-game currency": "ingame_currency", "ingame currency": "ingame_currency",
-        "spend": "amount_gbp", "amount": "amount_gbp",
-    },
-    "donor_spend": {
-        "total spend": "total_spend_gbp", "spend": "total_spend_gbp",
-        "purchase events": "purchase_events", "purchases": "purchase_events",
-        "lootbox events": "lootbox_events", "lootbox opens": "lootbox_events",
-    },
-    "wellbeing": {
-        "wellbeing": "wemwbs_score", "wemwbs": "wemwbs_score",
-        "pgsi": "pgsi_score", "problem gambling": "pgsi_score",
-        "gambling": "pgsi_score",
-        "igds": "igds_score", "gaming disorder": "igds_score",
-        "self-reported spend": "monthly_spend_selfreport",
-        "self reported spend": "monthly_spend_selfreport",
-    },
-}
+# dataset (from the active dataset definition). Deliberately minimal and
+# unambiguous: the check is lenient and only fires when the request names a
+# response we can recognise.
 
 
 def _term_clause(request: str) -> str | None:

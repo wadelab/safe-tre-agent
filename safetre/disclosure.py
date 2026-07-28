@@ -828,6 +828,20 @@ class SessionAuditor:
         """
         return self._spent >= self.budget
 
+    def charge(self, units: int = 1) -> None:
+        """Spend budget for work that never reached `observe`.
+
+        The budget's stated job is to bound cost as well as accumulation, but
+        `_spent` only moved inside `observe`, which runs *after* a successful
+        engine call. So a request that raised earlier — a planner failure, an
+        engine error, a fit that raises — was caught by the audited boundary
+        and answered as a denial for free, and round 9 measured five failing
+        queries leaving the session at `_spent=0`. Under a real planner the
+        failing call is itself the expensive one, so that was the cheapest way
+        to use the system (hardening #60).
+        """
+        self._spent += units
+
     def observe(self, measure: str, total_n: float) -> list[Finding]:
         """`total_n` is the DISTINCT-DONOR total of the release, not a row
         count: the differencing threshold protects individuals (hardening

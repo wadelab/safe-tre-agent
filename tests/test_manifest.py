@@ -75,3 +75,30 @@ def test_manifest_says_planner_is_untrusted():
     assert security["raw_rows_available"] is False
     assert security["code_execution_available"] is False
     assert security["sql_available"] is False
+
+
+def test_release_numbers_track_the_resolved_policy():
+    """#61 (round-9 V12): the manifest is served to outside planners and shown
+    in the UI, and it used to state `minimum_cell_size: 10` as a literal. An
+    operator who raised the threshold shipped a manifest announcing a control
+    the system was not running — the #46 defect in a metadata surface."""
+    from safetre.config import PolicyConfig
+
+    tight = PolicyConfig(min_cell_size=25, round_base=10)
+    tool = next(t for t in public_manifest(tight)["tools"]
+                if t["id"] == "aggregate_query")
+    assert tool["release"]["minimum_cell_size"] == 25
+    assert tool["release"]["counts_rounded_to_nearest"] == 10
+
+
+def test_internal_filter_ops_track_the_live_rules():
+    """#61: the band edges were literals too, so a rule change shipped a
+    manifest describing the previous one."""
+    from safetre.query import INTERNAL_RANGE_RULES
+
+    tool = next(t for t in public_manifest()["tools"]
+                if t["id"] == "aggregate_query")
+    published = tool["constraints"]["internal_filter_ops"]
+    assert published == {c: dict(r["edges"])
+                         for c, r in INTERNAL_RANGE_RULES.items()}
+    assert published, "the demo dataset declares at least one range rule"

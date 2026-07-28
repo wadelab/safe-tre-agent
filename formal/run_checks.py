@@ -44,10 +44,15 @@ MODELS: dict[str, dict[str, set[str]]] = {
         "checks": {
             "MarginalBoundSound",
             "RareCategoryIsolationBlocked",
+            "RowDifferenceAlwaysBounded",
+            "RowLayerSubsumesDonorLayer",
         },
         "runs": {
             "someSession",
             "InteractionResidualExists",
+            "Hardening40AttackWithoutRowLayer",
+            "V13DonorTotalOvercounts",
+            "V8ExactLegIsNotSimulatable",
         },
     },
     "temporal_session.als": {
@@ -58,10 +63,17 @@ MODELS: dict[str, dict[str, set[str]]] = {
             "P16_DifferencingPairNeverBothReleased",
             "P7_GateFailsClosed",
             "LineageIsExactlyReleases",
+            "ReplayEquivalence",
+            "AuditCompleteness",
+            "PolicyPrecedesEveryRecord",
         },
         "runs": {
             "someTemporalSession",
+            "someRestartedSession",
             "Hardening18RaceWithoutLock",
+            "V1BudgetRefundedOnRestart",
+            "V2CohortLostOnRestart",
+            "V3DeletionDefeatsLineage",
         },
     },
 }

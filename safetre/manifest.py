@@ -13,10 +13,11 @@ import hashlib
 import json
 from typing import Any
 
+from .config import PolicyConfig, load_policy_config
 from .procedures import REGISTRY
 from .query import (
-    CATALOGUE, GLM_FAMILIES, MAX_FILTERS, MAX_GROUP_BY, MAX_IN_VALUES,
-    MAX_MODEL_TERMS,
+    CATALOGUE, GLM_FAMILIES, INTERNAL_RANGE_RULES, MAX_FILTERS, MAX_GROUP_BY,
+    MAX_IN_VALUES, MAX_MODEL_TERMS,
 )
 from .schema import ROLE_LABELS, column_description, declared_domain, role_of
 
@@ -76,8 +77,27 @@ def _catalogue_for_manifest() -> dict[str, dict[str, Any]]:
     }
 
 
-def public_manifest() -> dict[str, Any]:
-    """Return the public capability manifest safe to show outside the safepod."""
+def _internal_filter_ops() -> dict[str, Any]:
+    """The band-aligned range rules, read from the live rule table (#39).
+
+    Written out as literals once, which meant a rule change shipped a manifest
+    describing the previous one.
+    """
+    return {column: dict(rule["edges"])
+            for column, rule in sorted(INTERNAL_RANGE_RULES.items())}
+
+
+def public_manifest(policy: PolicyConfig | None = None) -> dict[str, Any]:
+    """Return the public capability manifest safe to show outside the safepod.
+
+    The disclosure numbers come from the RESOLVED policy, not from literals.
+    They used to be hard-coded, so an operator who raised `min_cell_size` to 25
+    shipped a manifest — served to outside planners and shown in the UI — still
+    announcing 10. That is the #46 defect in a metadata surface: a control that
+    reads as set and is not. A wrong number here is worse than a missing one,
+    because a planner uses it to decide what to ask for (hardening #61).
+    """
+    policy = policy if policy is not None else load_policy_config()
     return {
         "manifest_version": MANIFEST_VERSION,
         "security_model": {
@@ -109,16 +129,11 @@ def public_manifest() -> dict[str, Any]:
                     "raw_rows_allowed": False,
                     "internal_analysis_variables_returnable": False,
                     # hardening #39: internal range filters are band-aligned
-                    "internal_filter_ops": {
-                        "age_years": {
-                            ">=": [13, 16, 18, 25, 35, 50],
-                            "<=": [15, 17, 24, 34, 49, 69],
-                        },
-                    },
+                    "internal_filter_ops": _internal_filter_ops(),
                 },
                 "release": {
-                    "minimum_cell_size": 10,
-                    "counts_rounded_to_nearest": 5,
+                    "minimum_cell_size": policy.min_cell_size,
+                    "counts_rounded_to_nearest": policy.round_base,
                     "corr_outputs": ["value", "p_value", "n"],
                     "dominance_check": True,
                     "subject_to_session_audit": True,

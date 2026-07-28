@@ -223,6 +223,9 @@ This does not replace Lean/Alloy, but it gives CI a broad executable approximati
       code → `formal/skeleton.json` → model (see `formal/README.md`). The
       disclosure-policy/differencing model below remains open.
 - [x] **(2026-07-14)** Model the disclosure policy in Alloy (`formal/disclosure_policy.als`): lineage-rule soundness and rare-category isolation checked; the documented residuals found and kept as satisfiable runs. Static and pairwise — the temporal session model is the open remainder
+- [x] **(2026-07-28)** Rebuild that model over ROWS as well as donors, the arity hardening #40 turned on: `RowDifferenceAlwaysBounded` and `RowLayerSubsumesDonorLayer` checked, and the #40 attack, the total-delta over-count and the exact leg's non-simulatable bit exhibited as satisfiable runs
+- [x] **(2026-07-28)** Extend the temporal model to the RESTART path (`ReplayEquivalence`, `AuditCompleteness`, `PolicyPrecedesEveryRecord`), with the log modelled as a security-critical *input* and an attacker who can delete rows; the three round-9 restart attacks are satisfiable runs once their assumptions are dropped
+- [x] **(2026-07-28)** Prove band alignment in Lean (`internal_range_cuts_no_finer_than_bands`): over the whole spec space, an internal range predicate cannot separate two values in the same declared band, so every expressible cohort is a union of whole bands. Generalises hardening #39 from the patched instance to the class
 - [x] Extract SQL compilation into inspectable plans and add property tests for the safe public SQL shape
 - [x] **(2026-07-14)** Prove SQL generation correctness in a proof assistant — the SafeSQL type + compiler theorems in `SafeTre/Sql.lean`/`Proofs.lean`, pinned to the engine by the 414-case byte-equality check (§B update; \"declared view\" is the precise form of \"public views\")
 - [x] Formalize noninterference for the model-fitting path: the fitter is

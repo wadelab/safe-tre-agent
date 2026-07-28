@@ -68,6 +68,7 @@ nav:
       - ACRO integration design: acro-integration.md
       - GOV.UK restyle record: govuk-ui-plan.md
       - Formal methods: FORMAL_METHODS_ANALYSIS.md
+      - Formal-methods hardening plan: security2.md
       - Verifiable extensions: verifiable-extensions.md
       - Adding a statistical tool (ANOVA): adding-a-statistical-tool.md
   - Fellowship positioning: fellowship.md

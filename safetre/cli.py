@@ -16,11 +16,13 @@ from __future__ import annotations
 
 import argparse
 
+from . import dataset as _dataset
 from . import synth
 from .disclosure import SessionAuditor
 from .planner import LLMPlanner, MockPlanner
 from .service import QueryService
 
+# Fallback scripted tour when the active dataset definition declares none.
 TOUR = [
     "mean spend by age band",
     "regress total spend on age band",
@@ -60,7 +62,7 @@ def main(argv: list[str] | None = None) -> int:
 
     service = QueryService(synth.generate(seed=args.seed))
     auditor = SessionAuditor()
-    for request in (args.requests or TOUR):
+    for request in (args.requests or _dataset.active().tour or TOUR):
         show(service, planner, auditor, request)
     return 0
 

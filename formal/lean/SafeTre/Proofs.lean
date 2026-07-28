@@ -408,7 +408,7 @@ theorem filterAtom_params {ds : String} {f : Filter}
   cases hk : (filterColumnsOf ds).lookup f.column <;> rw [hk] at h
   · cases h
   · simp only [Bool.and_eq_true] at h
-    have hv := h.2
+    have hv := h.1.2          -- the value-count clause; h.2 is band alignment
     cases ho : f.op <;> rw [ho] at hv
     case isIn => simp [filterAtom, ho, WhereAtom.params]
     all_goals {
@@ -438,13 +438,147 @@ theorem compile_param_accounting {s : Spec} (h : valid s = true) :
              guards_bind_nothing, Nat.add_zero]
   exact sum_params_of_valid (valid_filters_all h)
 
+/-! ## 3b. Band alignment: internal ranges cut no finer than public bands (#39)
+
+The finest differencing channel found in nine red-team rounds was not a hole in
+the boundary — it was the filter *algebra*. `age_years` is internal-only and can
+never be grouped or returned, but it could be RANGED over freely, and a sweep of
+`age_years >= v` for v = 13..69 reads each exact-age sub-band total out of
+releases that are all individually large. No cell rule and no lineage bound can
+see that: every slice it uses is legitimately big.
+
+The fix restricted the expressible predicates to the declared band edges. These
+theorems say what that buys, as a property of the whole spec space rather than
+of the instance that was patched: every predicate a valid spec can express over
+an internal range column is CONSTANT ON EVERY DECLARED BAND. It therefore
+partitions the population into unions of whole bands, whose marginals are
+already public.
+-/
+
+/-- Only band-aligned ranges are offered: no equality, no negation, no
+membership, so an exact age is not expressible at all. -/
+theorem internal_ranges_offer_no_equality :
+    rangeRuledColumns.all (fun c =>
+      !((internalRangeOps c).contains .eq) &&
+      !((internalRangeOps c).contains .ne) &&
+      !((internalRangeOps c).contains .isIn)) = true := by decide
+
+/-- The declared edges ARE the band boundaries: the `≥` edges are exactly the
+bands' lower bounds and the `≤` edges exactly their upper bounds. This is what
+makes the pairing in `gen_lean_catalogue._bands` a fact rather than a hope. -/
+theorem edges_are_the_band_boundaries :
+    rangeRuledColumns.all (fun c =>
+      ((internalRangeEdges c).lookup .ge == some ((internalBands c).map (·.1))) &&
+      ((internalRangeEdges c).lookup .le == some ((internalBands c).map (·.2)))) = true := by
+  decide
+
+/-- The bands really do partition: each is non-empty and the next one starts
+one above the previous one's top, so no value falls between two bands. -/
+theorem bands_are_a_partition :
+    rangeRuledColumns.all (fun c =>
+      (internalBands c).all (fun b => decide (b.1 ≤ b.2)) &&
+      ((internalBands c).zip (internalBands c).tail).all
+        (fun p => decide (p.1.2 + 1 = p.2.1))) = true := by decide
+
+/-- No `≥` edge falls strictly inside a band: it is at or below the band's
+floor, or above its ceiling. So `x ≥ e` cannot separate two members of a band. -/
+theorem ge_edge_never_splits_a_band :
+    rangeRuledColumns.all (fun c =>
+      (((internalRangeEdges c).lookup .ge).getD []).all (fun e =>
+        (internalBands c).all (fun b =>
+          decide (e ≤ b.1) || decide (b.2 < e)))) = true := by decide
+
+/-- The mirror image for `≤`: an upper edge is at or above the band's ceiling,
+or below its floor. The two families need separate statements — a `≤` edge is
+the top of its OWN band, so the `≥` form is false for it, which is how this
+theorem was first written and what `decide` immediately refuted. -/
+theorem le_edge_never_splits_a_band :
+    rangeRuledColumns.all (fun c =>
+      (((internalRangeEdges c).lookup .le).getD []).all (fun e =>
+        (internalBands c).all (fun b =>
+          decide (b.2 ≤ e) || decide (e < b.1)))) = true := by decide
+
+/-- `List.all` over a membership hypothesis, the shape used repeatedly below. -/
+private theorem all_of_mem {α : Type} {l : List α} {p : α → Bool}
+    (h : l.all p = true) {x : α} (hx : x ∈ l) : p x = true :=
+  (List.all_eq_true.1 h) x hx
+
+/-- A valid spec's filter on a range-ruled column is band-aligned. -/
+theorem valid_internal_range_is_band_aligned {s : Spec} (h : valid s = true)
+    {f : Filter} (hf : f ∈ s.filters) (hr : hasRangeRule f.column = true) :
+    bandAligned f = true := by
+  have hvf := valid_filters_all h f hf
+  unfold validFilter at hvf
+  cases hk : (filterColumnsOf s.dataset).lookup f.column <;> rw [hk] at hvf
+  · cases hvf
+  · simp only [Bool.and_eq_true] at hvf
+    have := hvf.2
+    rwa [if_pos hr] at this
+
+/-- A band-aligned filter carries a value, and it is one of the edges its own
+operator declares. -/
+theorem bandAligned_value {f : Filter} (h : bandAligned f = true) :
+    ∃ e, f.value = some e ∧
+      e ∈ ((internalRangeEdges f.column).lookup f.op).getD [] := by
+  unfold bandAligned at h
+  simp only [Bool.and_eq_true] at h
+  have hval := h.2
+  cases hv : (internalRangeEdges f.column).lookup f.op <;> rw [hv] at hval
+  · cases f.value <;> simp at hval
+  · cases hvv : f.value <;> rw [hvv] at hval
+    · simp at hval
+    · exact ⟨_, rfl, by simpa using hval⟩
+
+/-- **The band-alignment theorem.** Over the WHOLE spec space: a valid spec's
+predicate on an internal range column cannot tell two values in the same
+declared band apart. Every expressible cohort is therefore a union of whole
+bands, whose donor marginals the catalogue already publishes — which is exactly
+why the sweep that read out an age histogram is no longer expressible.
+
+The operators the rule does not offer are handled by the same statement for
+free: `satisfies` is false for them on every value, because a predicate that
+cannot be written cannot separate anything. -/
+theorem internal_range_cuts_no_finer_than_bands {s : Spec} (h : valid s = true)
+    {f : Filter} (hf : f ∈ s.filters) (hr : hasRangeRule f.column = true)
+    {b : Int × Int} (hb : b ∈ internalBands f.column) {x y : Int}
+    (hx : b.1 ≤ x ∧ x ≤ b.2) (hy : b.1 ≤ y ∧ y ≤ b.2) :
+    satisfies f x = satisfies f y := by
+  have hcol : f.column ∈ rangeRuledColumns := by
+    unfold hasRangeRule at hr; simpa using hr
+  obtain ⟨e, hval, hmem⟩ :=
+    bandAligned_value (valid_internal_range_is_band_aligned h hf hr)
+  cases hop : f.op
+  case ge =>
+    rw [hop] at hmem
+    have hnb := all_of_mem (all_of_mem ge_edge_never_splits_a_band hcol) hmem
+    have hnb2 := all_of_mem hnb hb
+    simp only [Bool.or_eq_true, decide_eq_true_eq] at hnb2
+    simp only [satisfies, hop, hval, decide_eq_decide]
+    omega
+  case le =>
+    rw [hop] at hmem
+    have hnb := all_of_mem (all_of_mem le_edge_never_splits_a_band hcol) hmem
+    have hnb2 := all_of_mem hnb hb
+    simp only [Bool.or_eq_true, decide_eq_true_eq] at hnb2
+    simp only [satisfies, hop, hval, decide_eq_decide]
+    omega
+  all_goals simp [satisfies, hop]
+
+/-- The value the model now carries is inert on the compilation path: two
+filters differing only in their value compile to the same atom, so nothing a
+value could carry can reach the SQL text. The stronger, checked form of the
+claim `Types.Filter` used to make by having nowhere to put a value. -/
+theorem compile_ignores_filter_values (f : Filter) (v : Option Int) :
+    filterAtom { f with value := v } = filterAtom f := by
+  cases f <;> simp [filterAtom]
+
 /-! ## 4. The engine pin (generated cases) -/
 
 /-- The model is inhabited: a canonical spec validates (vacuity guard,
 mirroring the Alloy model's `someAdmissibleSpec`). -/
 theorem model_inhabited :
     valid ⟨"spend", ⟨.mean, some "amount_gbp", none, none⟩,
-           ["age_band"], [⟨"sex", .eq, 1⟩]⟩ = true := by decide
+           ["age_band"], [⟨"sex", .eq, 1, none⟩]⟩ = true := by decide
 
 /-- The covering enumeration is present (vacuity guard for the pin). -/
 theorem cases_nonempty : cases.isEmpty = false := by native_decide

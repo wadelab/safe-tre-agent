@@ -3,6 +3,86 @@
 A dated record of self-red-team findings and the fixes applied. New findings get
 appended; the table is the quick index, the notes below give detail.
 
+## 2026-07-28 — round 9 (a fix created a new surface, and no model followed it there)
+
+A full adversarial review of the boundary after #1–#57
+(`redteam/round9_report.md`), run on the assumption that the QuerySpec boundary
+would hold. It did, for the ninth time: no SQL injection, no identifier egress,
+no schema escape. Everything the round found is in the **state-accounting and
+restart paths hardening #49 introduced**, in the shipped deployment
+configuration, or in oracles that survived the canonical-refusal work. The four
+headline findings came with executable reproducers.
+
+The fixes below close the class rather than the instances, and the formal
+models were rebuilt alongside them rather than after them — which is the other
+half of this round. `docs/security2.md` is the analysis that drove that;
+`formal/README.md` records what the models now check.
+
+| # | Finding | Sev | Status | Fix | Where |
+|---|---|---|---|---|---|
+| 58 | **Live and replayed accounting were two implementations of one cost model, and they disagreed in opposite directions.** `SessionStore.rehydrate` inferred what a request had cost and which cohorts it had released over from the *shape* of its audit row. Live, a model charges once per planned aggregate; the replay charged one unit per record, so a released gaussian GLM left the live auditor at `_spent=2` and the rehydrated one at **1** — every restart refunded roughly half of every model a user had run, on the control that bounds accumulation. Live, a pipeline error was free; the replay charged it. And a released cohort was re-derived by re-reading the model spec, which cannot recover a cohort the PROCEDURE added: a binomial's successes cohort carries the `response == True` filter the analyst never wrote, so a restart **forgot it**, and a query differencing against it passed the lineage check | High | **Fixed** | the audit row carries an `accounting` block — what the request cost the session and which cohorts it released over — written by the code that did the live accounting, and inside the MAC, because an attacker who can edit a claimed cost can reset a session's accumulation controls. Cost is *measured*, not classified: the auditor's own spend delta over the request. Replay replays it. The column is added by migration and omitted from the MAC body when NULL, so every chain written before it still verifies | `safetre/audit.py`, `safetre/service.py`, `safetre_web/session.py`, `tests/test_hardening.py`, `formal/temporal_session.als` |
+| 59 | **Rehydration rebuilt the security controls from rows nobody had authenticated.** `rehydrate` read `audit_log.since()` and never called `verify()`. Deleting the record of the first half of a differencing pair — which needs write access to the database, not the key — made the reconstruction skip it, and the second half was released after the restart. `verify()` returned **False** throughout: the tamper-evidence existed and was never consulted where it mattered. The `since()` docstring's safety claim contained its own refutation — "can only make the rebuilt session more restrictive **or drop a cohort**" — and dropping a cohort is the unsafe direction | High | **Fixed** | `rehydrate` verifies the chain (against the off-box head anchor when one is configured) before replaying it and raises `AuditChainUnverified`, so the app refuses to start. `SAFETRE_ALLOW_UNVERIFIED_REHYDRATE=1` overrides it loudly, for a developer with a stale database — an environment variable, not a config key, for the same reason `SAFETRE_ALLOW_UNSAFE_POLICY` is. Rehydration now runs *before* the startup policy record, because a log an operator is about to be told not to trust is not a log to write a fresh row into | `safetre_web/session.py`, `safetre_web/app.py`, `safetre/audit.py`, `tests/test_hardening.py` |
+| 60 | **Exceptions were free.** `_spent` only moved inside `observe`, which runs after a successful engine call, so a query that raised earlier — a planner failure, an engine error, a raising fit — was caught by the audited boundary and answered as a denial having spent nothing. Five failing queries left the session at `_spent=0`. Under a real planner the failing call is itself the expensive one, so this was the cheapest way to use the system, bounded only by the rate limiter | Med | **Fixed** | an error costs at least one unit, and exactly what it consumed when it failed later. With #58 the live and replayed figures are the same number by construction rather than by agreement | `safetre/disclosure.py` (`SessionAuditor.charge`), `safetre/service.py`, `tests/test_hardening.py` |
+| 61 | **The manifest announced a policy the system was not running.** `minimum_cell_size: 10` and `counts_rounded_to_nearest: 5` were literals, and so were the #39 band edges. An operator who raised `min_cell_size` to 25 served outside planners — and the UI — a manifest still claiming 10. This is #46 in a metadata surface, and a wrong number is worse than a missing one because a planner uses it to decide what to ask for | Low | **Fixed** | the release block renders from the resolved `PolicyConfig` and the band edges from the live `INTERNAL_RANGE_RULES`, pinned by tests | `safetre/manifest.py`, `tests/test_manifest.py` |
+
+### Notes
+
+**#58 is the round's real finding, and its shape matters more than its
+severity.** Hardening #49 was a small, obviously-good change: make session
+state durable by rebuilding it from the audit log. What it also did, silently,
+was change what the audit log *is*. Before #49 the log was an **output** — a
+tamper-evident record of what happened. After #49 it is also an **input**, the
+authoritative source for the budget and the differencing lineage at startup. A
+component that had been downstream of every security control became upstream of
+two of them, and nothing — no model, no test, no threat-model document —
+tracked the change of role. #59 is the direct consequence: nobody verifies an
+output before reading it, because an output is not something you read.
+
+**The second implementation is the bug, not the second implementation's
+arithmetic.** #58 could have been fixed by making `rehydrate` count aggregates
+instead of records, and it would have been wrong again the next time a
+procedure planned a different number of queries. What the fix does instead is
+delete the inference: the request records what it cost, and the replay replays
+it. The general rule this round leaves behind is that a security control
+reconstructed from a log needs a replay-equivalence property, and that property
+is now machine-checked (`ReplayEquivalence` in `formal/temporal_session.als`).
+
+**The models were rebuilt in the same change, and they found something.** Every
+headline finding of rounds 8 and 9 turned out to be an *arity* the model had
+assumed rather than checked — #40 (a release is a function of rows, not of
+donors), V2 (a released request records one cohort; a binomial releases over
+two), V1 (one audit record is one unit of spend; a model spends one per
+aggregate), V13 (per-cell donor counts sum to a donor total). Two consequences.
+`temporal_session.als` had `cohort: one Cohort` written as a *fact*, so the
+model could not express V2 at all — the assumption sat exactly where the
+property should have been. And when `P17_ExhaustionShortCircuits` was restated
+over the enlarged model it produced **nine counterexamples**, because without
+authoritative accounting a restart refunds enough spend to reopen an exhausted
+budget: V1 arriving by a second route, found by the model rather than by the
+red team.
+
+**One test was corrected, not one finding.** Hypothesis sampled
+`group_by=[event_type, age_band, age_rating]` during this round and
+`test_generated_valid_queryspecs_execute_without_unsafe_release` failed on a
+released frame of 101 cells against the 100-cell bound. The failure reproduces
+identically on the previous commit, so it was latent rather than new, and it is
+the test that was wrong — too strict rather than too lax. It asserted that a
+released frame carries no `leak_detector` finding of any severity, but
+`policy.apply` is only the first half of the decision: since #56 `too_granular`
+is a *medium* finding judged on the released frame, and `hitl_decision` sends
+that result to a human output checker instead of publishing it. The property now
+says what the gateway actually promises — no `high` finding ever leaves, and a
+frame carrying any residual finding never auto-releases.
+
+**What the formal work does not cover, stated plainly.** Of round 9's sixteen
+findings, this change addresses nine; six are resource-exhaustion, availability
+and web-hygiene items (unbounded request body, the shared external-checker
+pipe, abandoned ceiling-exceeded tasks, unbounded `_cohorts`, CSRF posture, the
+tainted audit `request` field) that no model here claims, and one — the shipped
+unit keeping the audit key on the same host as the log — waits on the
+trust-zone model recommended as F8. They are the standing argument for
+continuing the red-team rounds however good the models get.
+
 ## 2026-07-28 — round 8 (the filter algebra is a differencing channel, and the harness could not see it)
 
 A full adversarial review of the query surface (`redteam/adver_report.md`),

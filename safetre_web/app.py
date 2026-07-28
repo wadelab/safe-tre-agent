@@ -23,6 +23,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 
+from safetre import __version__ as _version
+from safetre import dataset as dataset_mod
 from safetre import synth
 from safetre.audit import AuditLog
 from safetre.config import load_policy_config
@@ -43,11 +45,28 @@ app = FastAPI(title="safe-tre-agent", docs_url=None, redoc_url=None)
 templates = Jinja2Templates(directory=str(BASE / "templates"))
 app.mount("/static", StaticFiles(directory=str(BASE / "static")), name="static")
 
+# One authoritative dataset definition: SAFETRE_DATASET points at the operator's
+# YAML (docs/datasets.md); otherwise the packaged synthetic demo. Activation
+# re-mirrors the catalogue, views and lexicon package-wide, so it must happen
+# before the engine is built.
+_env_dataset = os.environ.get("SAFETRE_DATASET")
+if _env_dataset:
+    dataset_mod.activate(dataset_mod.load_dataset(_env_dataset))
+_definition = dataset_mod.active()
+
 # One authoritative disclosure policy: defaults < config.yaml < env. This is what
 # makes the thresholds in config.yaml / SAFETRE_MIN_CELL actually take effect.
 _cfg = load_policy_config()
-_data = pathlib.Path("data")
-_tables = synth.load_csvs() if _data.is_dir() and any(_data.glob("*.csv")) else synth.generate()
+if synth.csvs_present(names=_definition.table_names()):
+    _tables = synth.load_csvs(names=_definition.table_names())
+elif dataset_mod.is_packaged_demo():
+    _tables = synth.generate()
+else:
+    raise RuntimeError(
+        f"dataset {_definition.name!r} (from {dataset_mod.active_source()}): "
+        f"data/ does not hold one CSV per base table "
+        f"({', '.join(_definition.table_names())}), and only the packaged demo "
+        f"has a synthetic generator")
 _policy = DisclosurePolicy(
     threshold=_cfg.min_cell_size, max_rows=_cfg.max_output_rows,
     dom_threshold=_cfg.dom_threshold, influence_threshold=_cfg.influence_threshold,
@@ -74,6 +93,9 @@ verify_limiter = RateLimiter(
 # off before an analyst meets a wall of 403s, and a release should be traceable
 # to the thresholds that allowed it (hardening #45, #46).
 _log = logging.getLogger("safetre")
+_log.info("active dataset: %s (%d base table(s), %d public dataset(s)) from %s",
+          _definition.name, len(_definition.tables), len(_definition.datasets),
+          dataset_mod.active_source())
 _log.info("effective disclosure policy: %s", _cfg.digest())
 for _problem in configuration_problems():
     _log.warning("Safe People misconfiguration: %s", _problem)
@@ -86,16 +108,23 @@ for _problem in configuration_problems():
 # `CellVetter.describe` exists to answer. A distinguished record needs no
 # schema change and no chain migration: every row after it is attributable to
 # the policy in force at its own position in the chain.
-audit_log.append(user="system", request="policy", spec={"policy": _cfg.digest()},
-                 status="config", findings=[], output_shape=None)
-
+#
+# Rehydration runs FIRST, before this append: it verifies the chain and raises
+# on a failure (hardening #59), and a log an operator is about to be told not
+# to trust is not a log to write a fresh row into.
+#
 # Session state is a control, so it must not evaporate on a deploy. Rebuild each
 # identity's differencing lineage and query budget from the audit log before the
 # first request is served (hardening #49); without this, the two halves of a
 # differencing pair could simply be split across a restart.
-_restored = sessions.rehydrate(audit_log, _cfg.session_window_hours)
+_restored = sessions.rehydrate(audit_log, _cfg.session_window_hours,
+                               expected_head=_audit_head_anchor)
 _log.info("restored %d session(s) from the last %d hour(s) of audit history",
           _restored, _cfg.session_window_hours)
+
+audit_log.append(user="system", request="policy",
+                 spec={"policy": _cfg.digest(), "dataset": _definition.name},
+                 status="config", findings=[], output_shape=None)
 
 
 def make_planner():
@@ -207,6 +236,9 @@ def index(request: Request):
         "user": user, "allowed": allowed, "catalogue": CATALOGUE,
         "manifest": manifest, "schema": public_schema(),
         "autorun_prefill": _autorun_prefill(),
+        "examples": _definition.ui_queries,
+        "dataset_description": _definition.description,
+        "version": _version,
     })
 
 

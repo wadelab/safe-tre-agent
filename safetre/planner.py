@@ -11,7 +11,9 @@ from __future__ import annotations
 import json
 import re
 
+from . import dataset as _dataset
 from .manifest import manifest_sha256, public_manifest
+from .query import CATALOGUE, INTERNAL_RANGE_RULES
 
 
 def _manifest_text() -> str:
@@ -30,57 +32,66 @@ def _manifest_text() -> str:
     return "\n".join(lines)
 
 
-PLANNER_SYSTEM = (
-    "You translate a researcher's request into a QuerySpec JSON for a Trusted "
-    "Research Environment. You CANNOT write code or SQL and CANNOT access "
-    "individuals. Output ONLY JSON of the form:\n"
-    '{"dataset":"spend|donor_spend|wellbeing","measure":{"fn":"count|mean|sum|sum_sq|corr",'
-    '"column":<measure column or null>,"x":<corr measure column or null>,'
-    '"y":<corr measure column or null>},"group_by":[...],"filters":[{"column":...,'
-    '"op":"==|!=|<|<=|>|>=|in","value":...}]}\n'
-    "For correlation requests, use fn='corr' with x and y set to two allowed "
-    "measure columns from the same dataset, and column null. "
-    "For age-versus-spend correlation, use dataset 'donor_spend', x='age_years', "
-    "y='total_spend_gbp'. Raw age is an internal analysis variable only: never "
-    "group by it or return it. Composite criteria such as sex==M and "
-    "region==London must be emitted as separate filter objects.\n"
-    "For a regression / GLM request ('regress Y on A and B', 'does A predict "
-    "Y', 'model Y as a function of A adjusting for B'), output instead a "
-    "GLMSpec JSON of the form:\n"
-    '{"tool":"glm","dataset":...,"family":"gaussian|binomial|poisson",'
-    '"response":<allowed model response column>,"terms":[<up to 3 allowlisted '
-    'dimensions>],"filters":[...]}\n'
-    "Choose the family the manifest permits for the response (gaussian for "
-    "scores and spend amounts; binomial for boolean responses such as "
-    "contains_lootboxes; poisson for event counts). Terms must be dimensions "
-    "the request actually names; never invent or drop one. Models release only "
-    "coefficients, a summary block, and the vetted cell table — never "
-    "residuals, fitted values, or per-donor predictions.\n"
-    "Age filters on age_years must align to the declared age-band edges: "
-    ">= one of 13, 16, 18, 25, 35, 50 and <= one of 15, 17, 24, 34, 49, 69. "
-    "Exact-age equality or membership filters are rejected.\n"
-    "Examples:\n"
-    "  'regress total spend on age band and sex' -> "
-    '{"tool":"glm","dataset":"donor_spend","family":"gaussian",'
-    '"response":"total_spend_gbp","terms":["age_band","sex"],"filters":[]}\n'
-    "  'logistic model of lootbox availability by genre for purchases' -> "
-    '{"tool":"glm","dataset":"spend","family":"binomial",'
-    '"response":"contains_lootboxes","terms":["genre"],'
-    '"filters":[{"column":"event_type","op":"==","value":"purchase"}]}\n'
-    "For a one-way ANOVA request ('one-way ANOVA of Y by A', 'does mean Y "
-    "differ across A', 'analysis of variance of Y between A groups'), output an "
-    "AnovaSpec JSON of the form:\n"
-    '{"tool":"anova","dataset":...,"response":<allowed gaussian response>,'
-    '"factor":<one allowlisted dimension>,"filters":[...]}\n'
-    "ANOVA takes exactly one categorical factor and a gaussian (interval-scale) "
-    "response such as a score or spend amount. If the request names more than "
-    "one factor, use the glm tool instead. Example:\n"
-    "  'one-way anova of wellbeing by region' -> "
-    '{"tool":"anova","dataset":"wellbeing","response":"wemwbs_score",'
-    '"factor":"region","filters":[]}\n'
-    "Published tool manifest (anything else is rejected):\n" + _manifest_text() +
-    "\nNever reference identifiers, names, timestamps or free text. JSON only."
-)
+def planner_system() -> str:
+    """The planner system prompt, generated from the ACTIVE dataset definition.
+
+    The fixed parts state the security contract (JSON only, the three spec
+    shapes, what a model may release); every dataset-specific fact — the
+    dataset names, the internal-filter band edges, the model responses and
+    families, the few-shot examples and any operator hints — comes from the
+    active definition, so the same text generator serves any study.
+    """
+    defn = _dataset.active()
+    parts = [
+        "You translate a researcher's request into a QuerySpec JSON for a Trusted "
+        "Research Environment. You CANNOT write code or SQL and CANNOT access "
+        "individuals. Output ONLY JSON of the form:\n"
+        f'{{"dataset":"{"|".join(CATALOGUE)}","measure":{{"fn":"count|mean|sum|sum_sq|corr",'
+        '"column":<measure column or null>,"x":<corr measure column or null>,'
+        '"y":<corr measure column or null>},"group_by":[...],"filters":[{"column":...,'
+        '"op":"==|!=|<|<=|>|>=|in","value":...}]}\n'
+        "For correlation requests, use fn='corr' with x and y set to two allowed "
+        "measure columns from the same dataset, and column null. "
+        + (" ".join(defn.planner_hints) + " " if defn.planner_hints else "")
+        + "Composite criteria must be emitted as separate filter objects, one "
+        "criterion per object.\n"
+        "For a regression / GLM request ('regress Y on A and B', 'does A predict "
+        "Y', 'model Y as a function of A adjusting for B'), output instead a "
+        "GLMSpec JSON of the form:\n"
+        '{"tool":"glm","dataset":...,"family":"gaussian|binomial|poisson",'
+        '"response":<allowed model response column>,"terms":[<up to 3 allowlisted '
+        'dimensions>],"filters":[...]}\n'
+        "Choose the family permitted for the response. Permitted model responses "
+        f"and families: {defn.glm_responses_text()}. Terms must be dimensions "
+        "the request actually names; never invent or drop one. Models release only "
+        "coefficients, a summary block, and the vetted cell table — never "
+        "residuals, fitted values, or per-individual predictions.\n",
+    ]
+    for col, rule in INTERNAL_RANGE_RULES.items():
+        edges = " and ".join(f"{op} one of {', '.join(map(str, rule['edges'][op]))}"
+                             for op in rule["ops"])
+        parts.append(
+            f"Filters on {col} must align to the declared band edges: {edges}. "
+            f"Equality or membership filters on {col} are rejected.\n")
+    if defn.planner_examples:
+        lines = ["Examples:"]
+        for ex in defn.planner_examples:
+            lines.append(f"  '{ex.request}' -> "
+                         f"{json.dumps(ex.spec, separators=(',', ':'))}")
+        parts.append("\n".join(lines) + "\n")
+    parts.append(
+        "For a one-way ANOVA request ('one-way ANOVA of Y by A', 'does mean Y "
+        "differ across A', 'analysis of variance of Y between A groups'), output an "
+        "AnovaSpec JSON of the form:\n"
+        '{"tool":"anova","dataset":...,"response":<allowed gaussian response>,'
+        '"factor":<one allowlisted dimension>,"filters":[...]}\n'
+        "ANOVA takes exactly one categorical factor and a gaussian (interval-scale) "
+        "response. If the request names more than one factor, use the glm tool "
+        "instead.\n"
+        "Published tool manifest (anything else is rejected):\n" + _manifest_text() +
+        "\nNever reference identifiers, names, timestamps or free text. JSON only."
+    )
+    return "".join(parts)
 
 
 def _extract_json(text: str) -> str:
@@ -95,8 +106,17 @@ class LLMPlanner:
         self.client = client
 
     def plan(self, request: str) -> dict:
-        raw = self.client.complete(PLANNER_SYSTEM, request)
+        raw = self.client.complete(planner_system(), request)
         return json.loads(_extract_json(raw))
+
+
+def _band_edges(column: str) -> tuple[tuple, tuple]:
+    """(lower edges, upper edges) of an internal filter's range rule, or
+    empty tuples when the active definition declares no rule for it."""
+    rule = INTERNAL_RANGE_RULES.get(column)
+    if rule is None:
+        return (), ()
+    return rule["edges"].get(">=", ()), rule["edges"].get("<=", ())
 
 
 def _age_window_filters(lo: int, hi: int) -> list[dict]:
@@ -107,14 +127,13 @@ def _age_window_filters(lo: int, hi: int) -> list[dict]:
     start >= lo, the upper edge the largest band end <= hi. The result never
     includes an age outside the asked window.
     """
-    from .query import AGE_BAND_HI_EDGES, AGE_BAND_LO_EDGES
-
+    lo_edges, hi_edges = _band_edges("age_years")
     out: list[dict] = []
-    los = [b for b in AGE_BAND_LO_EDGES if b >= lo]
-    his = [b for b in AGE_BAND_HI_EDGES if b <= hi]
-    if los and los[0] > AGE_BAND_LO_EDGES[0]:
+    los = [b for b in lo_edges if b >= lo]
+    his = [b for b in hi_edges if b <= hi]
+    if los and lo_edges and los[0] > lo_edges[0]:
         out.append({"column": "age_years", "op": ">=", "value": los[0]})
-    if his and his[-1] < AGE_BAND_HI_EDGES[-1]:
+    if his and hi_edges and his[-1] < hi_edges[-1]:
         out.append({"column": "age_years", "op": "<=", "value": his[-1]})
     return out
 
@@ -122,21 +141,25 @@ def _age_window_filters(lo: int, hi: int) -> list[dict]:
 def _containing_band_filters(v: int) -> list[dict]:
     """Exact-age equality is not filterable (#39); answer with the band that
     contains v, which is what the request almost always means."""
-    from .query import AGE_BAND_HI_EDGES, AGE_BAND_LO_EDGES
-
+    lo_edges, hi_edges = _band_edges("age_years")
     out: list[dict] = []
-    lo_edge = max((b for b in AGE_BAND_LO_EDGES if b <= v), default=None)
-    hi_edge = min((b for b in AGE_BAND_HI_EDGES if b >= v), default=None)
-    if lo_edge is not None and lo_edge > AGE_BAND_LO_EDGES[0]:
+    lo_edge = max((b for b in lo_edges if b <= v), default=None)
+    hi_edge = min((b for b in hi_edges if b >= v), default=None)
+    if lo_edge is not None and lo_edges and lo_edge > lo_edges[0]:
         out.append({"column": "age_years", "op": ">=", "value": lo_edge})
-    if hi_edge is not None and hi_edge < AGE_BAND_HI_EDGES[-1]:
+    if hi_edge is not None and hi_edges and hi_edge < hi_edges[-1]:
         out.append({"column": "age_years", "op": "<=", "value": hi_edge})
     return out
 
 
 class MockPlanner:
-    """Deterministic planner. Some cases deliberately propose *off-allowlist*
-    specs (free_text / donor_id) to prove validation rejects them."""
+    """Deterministic offline planner double for tests/CI, keyed to the
+    packaged DEMO dataset's vocabulary. Some cases deliberately propose
+    *off-allowlist* specs (free_text / donor_id) to prove validation rejects
+    them. It is not a per-dataset component: with any other active definition
+    its proposals mostly fail validation (the safe direction); production
+    deployments plan with a real model (LLMPlanner), whose prompt IS generated
+    from the active definition."""
 
     @staticmethod
     def _filters_from_text(request: str) -> list[dict]:

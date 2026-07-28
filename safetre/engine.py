@@ -21,6 +21,8 @@ from typing import Any
 import duckdb
 import pandas as pd
 
+from . import dataset as _dataset
+from .dataset import UNIT_PERSON
 from .procedures import get_procedure
 from .query import CATALOGUE, QuerySpec
 from .schema import declared_domain
@@ -30,64 +32,27 @@ ROW_CAP = 10_000          # backstop against pathological cross-products
 MEMORY_LIMIT = "512MB"
 THREADS = 2
 
-# Public views: ONLY public allowlisted columns. donor_id/free_text/ts/raw age never appear.
-_VIEWS = {
-    "spend": """
-        CREATE VIEW spend AS
-        SELECT d.age_band, d.sex, d.region, d.income_band, d.device_os,
-               a.genre, a.contains_lootboxes, a.price_tier, a.age_rating,
-               e.event_type, e.amount_gbp, e.ingame_currency
-        FROM events e JOIN donors d ON e.donor_id = d.donor_id
-                      JOIN apps a   ON e.app_id   = a.app_id
-    """,
-    "donor_spend": """
-        CREATE VIEW donor_spend AS
-        SELECT d.age_band, d.sex, d.region, d.income_band, d.device_os,
-               SUM(CASE WHEN e.event_type IN ('purchase', 'lootbox_open')
-                        THEN e.amount_gbp ELSE 0 END) AS total_spend_gbp,
-               SUM(CASE WHEN e.event_type = 'purchase' THEN 1 ELSE 0 END) AS purchase_events,
-               SUM(CASE WHEN e.event_type = 'lootbox_open' THEN 1 ELSE 0 END) AS lootbox_events
-        FROM donors d LEFT JOIN events e ON e.donor_id = d.donor_id
-        GROUP BY d.donor_id, d.age_band, d.sex, d.region, d.income_band, d.device_os
-    """,
-    "wellbeing": """
-        CREATE VIEW wellbeing AS
-        SELECT d.age_band, d.sex, d.region, d.income_band, d.device_os,
-               s.wave, s.pgsi_score, s.igds_score, s.wemwbs_score,
-               s.monthly_spend_selfreport
-        FROM survey s JOIN donors d ON s.donor_id = d.donor_id
-    """,
-}
+# Public views: ONLY public allowlisted columns. The person key, free text, raw
+# timestamps and other high-granularity variables never appear. Generated from
+# the active dataset definition (safetre/dataset.py) and mirrored here.
+_VIEWS: dict[str, str] = {}
 
-# Internal unit views: include donor_id and internal analysis variables, used
-# ONLY for fixed tools and disclosure machinery. Not directly queryable.
-_UNIT_VIEWS = {
-    "spend": """
-        CREATE VIEW _spend_u AS
-        SELECT e.donor_id, d.age_years, d.age_band, d.sex, d.region, d.income_band, d.device_os,
-               a.genre, a.contains_lootboxes, a.price_tier, a.age_rating,
-               e.event_type, e.amount_gbp, e.ingame_currency
-        FROM events e JOIN donors d ON e.donor_id = d.donor_id
-                      JOIN apps a   ON e.app_id   = a.app_id
-    """,
-    "donor_spend": """
-        CREATE VIEW _donor_spend_u AS
-        SELECT d.donor_id, d.age_years, d.age_band, d.sex, d.region, d.income_band, d.device_os,
-               SUM(CASE WHEN e.event_type IN ('purchase', 'lootbox_open')
-                        THEN e.amount_gbp ELSE 0 END) AS total_spend_gbp,
-               SUM(CASE WHEN e.event_type = 'purchase' THEN 1 ELSE 0 END) AS purchase_events,
-               SUM(CASE WHEN e.event_type = 'lootbox_open' THEN 1 ELSE 0 END) AS lootbox_events
-        FROM donors d LEFT JOIN events e ON e.donor_id = d.donor_id
-        GROUP BY d.donor_id, d.age_years, d.age_band, d.sex, d.region, d.income_band, d.device_os
-    """,
-    "wellbeing": """
-        CREATE VIEW _wellbeing_u AS
-        SELECT s.donor_id, d.age_years, d.age_band, d.sex, d.region, d.income_band, d.device_os,
-               s.wave, s.pgsi_score, s.igds_score, s.wemwbs_score,
-               s.monthly_spend_selfreport
-        FROM survey s JOIN donors d ON s.donor_id = d.donor_id
-    """,
-}
+# Internal unit views: the public columns plus the person key — projected under
+# the machinery's fixed internal alias `UNIT_PERSON`, whatever the study calls
+# it — and any internal analysis variables. Used ONLY for fixed tools and
+# disclosure machinery. Not directly queryable.
+_UNIT_VIEWS: dict[str, str] = {}
+
+
+def _apply(defn) -> None:
+    _VIEWS.clear()
+    _VIEWS.update(defn.public_view_sql())
+    _UNIT_VIEWS.clear()
+    _UNIT_VIEWS.update(defn.unit_view_sql())
+
+
+_dataset.register_sync(_apply)
+_apply(_dataset.active())
 
 
 def _ident(name: str) -> str:
@@ -201,8 +166,8 @@ def compile_dominance_query(spec: QuerySpec) -> SQLPlan:
     gsel = ", ".join(_ident(g) for g in spec.group_by)
     gpre = (gsel + ", ") if spec.group_by else ""
     inner = (
-        f"SELECT {gpre}donor_id, SUM({contribution}) AS c FROM {unit}{where} "  # nosec
-        f"GROUP BY {gpre}donor_id"
+        f"SELECT {gpre}{UNIT_PERSON}, SUM({contribution}) AS c FROM {unit}{where} "  # nosec
+        f"GROUP BY {gpre}{UNIT_PERSON}"
     )
     # MAGNITUDE share, not signed share (hardening #41). `MAX(c)/SUM(c)` reads
     # the p%-rule as "the largest contributor's fraction of the total", which
@@ -255,10 +220,10 @@ def compile_influence_query(spec: QuerySpec) -> SQLPlan:
     # per-donor and group column names must be textually distinct (not just
     # differ in case) or they silently alias each other.
     per_donor = (
-        f"SELECT {gpre}donor_id, "  # nosec
+        f"SELECT {gpre}{UNIT_PERSON}, "  # nosec
         f"SUM({x}) AS dx, SUM({y}) AS dy, SUM({x}*{x}) AS dxx, "
         f"SUM({y}*{y}) AS dyy, SUM({x}*{y}) AS dxy, COUNT(*) AS dm "
-        f"FROM {unit}{where} GROUP BY {gpre}donor_id"
+        f"FROM {unit}{where} GROUP BY {gpre}{UNIT_PERSON}"
     )
     grp = (
         f"SELECT {gpre}SUM(dx) AS tx, SUM(dy) AS ty, SUM(dxx) AS txx, "  # nosec
@@ -323,7 +288,7 @@ def compile_donor_count_query(spec: QuerySpec) -> SQLPlan:
     gsel = ", ".join(_ident(g) for g in spec.group_by)
     gpre = (gsel + ", ") if spec.group_by else ""
     sql = (
-        f"SELECT {gpre}COUNT(DISTINCT donor_id) AS n_donors "  # nosec
+        f"SELECT {gpre}COUNT(DISTINCT {UNIT_PERSON}) AS n_donors "  # nosec
         f"FROM {unit}{where}" + (f" GROUP BY {gsel}" if spec.group_by else "")
     )
     return SQLPlan(
@@ -356,10 +321,10 @@ def compile_contribution_query(spec: QuerySpec) -> SQLPlan:
     gpre = (gsel + ", ") if spec.group_by else ""
     value = f"{contribution} AS v, " if contribution else ""
     sql = (
-        f"SELECT {gpre}{value}donor_id "                    # nosec
-        f"FROM {unit}{where} GROUP BY {gpre}donor_id"
+        f"SELECT {gpre}{value}{UNIT_PERSON} "               # nosec
+        f"FROM {unit}{where} GROUP BY {gpre}{UNIT_PERSON}"
     )
-    columns = tuple(spec.group_by) + (("v",) if contribution else ()) + ("donor_id",)
+    columns = tuple(spec.group_by) + (("v",) if contribution else ()) + (UNIT_PERSON,)
     return SQLPlan(sql=sql, params=params, output_columns=columns,
                    source_view=f"_{spec.dataset}_u")
 
@@ -374,13 +339,20 @@ class QueryEngine:
         # cursor per thread is what makes concurrent use safe. Copying the data
         # into DuckDB's own storage is what lets every thread work from its own
         # cursor over one shared catalogue.
+        # The base tables go in their own schema, the views in `main`
+        # (dataset.BASE_SCHEMA). A study may publish a dataset under the name of
+        # the table behind it, which in one namespace is a catalogue collision;
+        # and a compiled query names its view unqualified, so keeping the raw
+        # tables out of `main` means a bare name can never resolve to one.
+        self.con.execute(f"CREATE SCHEMA IF NOT EXISTS {_ident(_dataset.BASE_SCHEMA)}")
         for name, df in tables.items():
             source = f"_src_{name}"
             self.con.register(source, df)
-            # both identifiers go through `_ident`, which regex-checks against
+            # every identifier goes through `_ident`, which regex-checks against
             # a strict pattern before quoting, so nothing caller-controlled
             # reaches the statement (P9)
-            ddl = f"CREATE TABLE {_ident(name)} AS SELECT * FROM {_ident(source)}"  # nosec
+            ddl = (f"CREATE TABLE {_ident(_dataset.BASE_SCHEMA)}.{_ident(name)} "  # nosec
+                   f"AS SELECT * FROM {_ident(source)}")
             self.con.execute(ddl)
             self.con.unregister(source)
         for ddl in (*_VIEWS.values(), *_UNIT_VIEWS.values()):
@@ -520,7 +492,7 @@ class QueryEngine:
             for dim in dims:
                 col = _ident(dim)
                 rows = self.cursor.execute(
-                    f"SELECT {col} AS v, COUNT(DISTINCT donor_id) AS c "  # nosec
+                    f"SELECT {col} AS v, COUNT(DISTINCT {UNIT_PERSON}) AS c "  # nosec
                     f"FROM {unit} GROUP BY {col}"
                 ).fetchall()
                 per_dim[dim] = {v: int(c) for v, c in rows}
@@ -598,7 +570,7 @@ class QueryEngine:
         released.
         """
         where, params = _where_triples(filters)
-        sql = f"SELECT COUNT(DISTINCT donor_id) FROM {self._unit_view(dataset)}{where}"  # nosec
+        sql = f"SELECT COUNT(DISTINCT {UNIT_PERSON}) FROM {self._unit_view(dataset)}{where}"  # nosec
         return int(self.cursor.execute(sql, params).fetchone()[0])
 
     def row_symdiff_donors(self, dataset: str, filters_a, filters_b) -> int:
@@ -632,7 +604,7 @@ class QueryEngine:
         pa, params_a = _predicate_sql(filters_a)
         pb, params_b = _predicate_sql(filters_b)
         sql = (
-            f"SELECT COUNT(DISTINCT donor_id) FROM {unit} "                 # nosec
+            f"SELECT COUNT(DISTINCT {UNIT_PERSON}) FROM {unit} "            # nosec
             f"WHERE (({pa}) AND NOT ({pb})) OR (({pb}) AND NOT ({pa}))"
         )
         params = params_a + params_b + params_b + params_a
@@ -648,8 +620,8 @@ class QueryEngine:
         unit = self._unit_view(dataset)
         wa, pa = _where_triples(filters_a)
         wb, pb = _where_triples(filters_b)
-        a = f"SELECT DISTINCT donor_id FROM {unit}{wa}"  # nosec
-        b = f"SELECT DISTINCT donor_id FROM {unit}{wb}"  # nosec
+        a = f"SELECT DISTINCT {UNIT_PERSON} FROM {unit}{wa}"  # nosec
+        b = f"SELECT DISTINCT {UNIT_PERSON} FROM {unit}{wb}"  # nosec
         # EXCEPT halves are distinct and disjoint, so UNION ALL is exact.
         sql = f"SELECT COUNT(*) FROM (({a} EXCEPT {b}) UNION ALL ({b} EXCEPT {a})) t"  # nosec
         return int(self.cursor.execute(sql, pa + pb + pb + pa).fetchone()[0])

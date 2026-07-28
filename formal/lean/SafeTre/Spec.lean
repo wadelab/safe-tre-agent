@@ -38,7 +38,26 @@ def maxGroupBy : Nat := 3
 def maxFilters : Nat := 5
 def maxInValues : Nat := 50
 
-/-- query.py::check_filters + _check_filter_value (value shape only). -/
+/-- Does this column carry an internal band-aligned range rule (#39)? -/
+def hasRangeRule (c : String) : Bool := rangeRuledColumns.contains c
+
+/-- The band-alignment rule itself (query.py::check_filters, the
+`INTERNAL_RANGE_RULES` branch): the operator must be one the rule offers, and
+the value must be a declared band edge.
+
+An internal filter variable is a differencing channel exactly when it can cut
+finer than the public dimension it backs. A sweep of `age_years >= v` for
+v = 13..69 reconstructs an age histogram the catalogue publishes only as six
+bands, and neither the lineage bound nor any cell rule can see it, because
+every slice it uses is legitimately large. -/
+def bandAligned (f : Filter) : Bool :=
+  (internalRangeOps f.column).contains f.op &&
+  match (internalRangeEdges f.column).lookup f.op, f.value with
+  | some edges, some v => edges.contains v
+  | _, _ => false
+
+/-- query.py::check_filters + _check_filter_value (value shape only, except on
+a range-ruled internal column where the value is the whole point). -/
 def validFilter (ds : String) (f : Filter) : Bool :=
   match (filterColumnsOf ds).lookup f.column with
   | none => false
@@ -46,7 +65,17 @@ def validFilter (ds : String) (f : Filter) : Bool :=
       (kindOps k).contains f.op &&
       (if f.op = .isIn
        then decide (1 ≤ f.nvals) && decide (f.nvals ≤ maxInValues)
-       else decide (f.nvals = 1))
+       else decide (f.nvals = 1)) &&
+      (if hasRangeRule f.column then bandAligned f else true)
+
+/-- What a band-aligned range predicate means on a raw value. Only `≥` and `≤`
+are reachable — `satisfies` is false for everything else by construction, which
+is the negative half of the rule. -/
+def satisfies (f : Filter) (x : Int) : Bool :=
+  match f.op, f.value with
+  | .ge, some e => decide (e ≤ x)
+  | .le, some e => decide (x ≤ e)
+  | _, _ => false
 
 /-- Procedure admissibility (O1), per registered fn. -/
 def validMeasure (ds : String) (m : Measure) : Bool :=

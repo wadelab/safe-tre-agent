@@ -1,4 +1,4 @@
-"""Schema for the synthetic behavioural dataset.
+"""Schema roles and public column metadata for the ACTIVE dataset definition.
 
 Roles drive the disclosure-control rules:
   DI = direct identifier      (pseudonymous; never released)
@@ -6,69 +6,22 @@ Roles drive the disclosure-control rules:
   S  = sensitive attribute    (what min-cell-size / suppression protects)
   R  = reference / non-disclosive
 
-Modelled as a loot-box / in-app-spend + psychometrics study. All generated rows
-are synthetic and carry no real participant data.
+The facts themselves (tables, columns, declared domains) used to be literals
+in this module, binding the gateway to one study. They now live in the active
+dataset definition (safetre/dataset.py; packaged demo: demo_dataset.yaml,
+overridable via SAFETRE_DATASET) and are mirrored into the module-level
+`TABLES` / `COLUMN_META` / `_DERIVED_ROLES` here at import and on every
+`dataset.activate`, so the long-standing helper API below is unchanged. The
+mirrors are mutated IN PLACE: modules that did `from .schema import TABLES`
+before an activation keep the same objects and see the new contents.
 """
 
-# table -> {column: role}
-TABLES = {
-    "donors": {
-        "donor_id": "DI",
-        "enrolment_date": "meta",
-        "age_years": "QI",
-        "age_band": "QI",
-        "sex": "QI",
-        "region": "QI",
-        "income_band": "QI",
-        "device_os": "QI",
-    },
-    "apps": {
-        "app_id": "R",
-        "app_name": "R",
-        "developer": "R",
-        "genre": "R",
-        "contains_lootboxes": "R",
-        "age_rating": "R",
-        "price_tier": "R",
-    },
-    "events": {
-        "event_id": "meta",
-        "donor_id": "DI",          # foreign key -> a person
-        "app_id": "R",
-        "ts": "QI",                # precise timing can re-identify
-        "event_type": "R",
-        "item_name": "R",
-        "amount_gbp": "S",
-        "ingame_currency": "S",
-    },
-    "survey": {
-        "donor_id": "DI",
-        "wave": "meta",
-        "pgsi_score": "S",         # problem-gambling severity index
-        "igds_score": "S",         # internet gaming disorder scale
-        "wemwbs_score": "S",       # mental wellbeing
-        "monthly_spend_selfreport": "S",
-        "free_text": "S",          # unstructured + prompt-injection vector
-    },
-}
+from __future__ import annotations
 
+from . import dataset as _dataset
 
-# Human-readable role labels for the public data dictionary.
-ROLE_LABELS = {
-    "DI": "direct identifier",
-    "QI": "quasi-identifier",
-    "S": "sensitive",
-    "R": "reference",
-    "meta": "structural",
-}
-
-# Some catalogue columns are DERIVED per-donor rollups in the engine views, so
-# they are not in any base table; give them an explicit disclosure role here.
-_DERIVED_ROLES = {
-    "total_spend_gbp": "S",
-    "purchase_events": "S",
-    "lootbox_events": "S",
-}
+# table -> {column: role} (mirrored from the active definition)
+TABLES: dict[str, dict[str, str]] = {}
 
 # Public column metadata for the data dictionary (safe to disclose): a plain
 # description and, for categorical columns, the DECLARED value domain — the set
@@ -79,48 +32,33 @@ _DERIVED_ROLES = {
 # the disclosure-safe projection of the observed marginals: a value outside its
 # declared domain — e.g. a hostile string smuggled into a field — was never a
 # real category and is dropped from any published table, not merely count-nulled.
-COLUMN_META: dict[str, dict] = {
-    # donor quasi-identifiers
-    "age_band": {"desc": "Age band at enrolment.",
-                 "domain": ["13-15", "16-17", "18-24", "25-34", "35-49", "50+"]},
-    "sex": {"desc": "Self-reported sex / gender.",
-            "domain": ["F", "M", "X", "NS", "Other"]},
-    "region": {"desc": "UK ITL1 region or nation of residence.",
-               "domain": ["North East", "North West", "Yorkshire and The Humber",
-                          "East Midlands", "West Midlands", "East of England",
-                          "London", "South East", "South West", "Scotland",
-                          "Wales", "Northern Ireland"]},
-    "income_band": {"desc": "Household income band (GBP per year).",
-                    "domain": ["<40k", "40-70k", "70-100k", "100-150k", ">150k"]},
-    "device_os": {"desc": "Mobile operating system.",
-                  "domain": ["Android", "iOS"]},
-    # app reference dimensions
-    "genre": {"desc": "App genre.",
-              "domain": ["RPG", "Strategy", "Casino", "Puzzle", "Shooter",
-                         "Sports", "Card"]},
-    "contains_lootboxes": {"desc": "Whether the app sells loot boxes / random-reward crates.",
-                           "domain": [False, True]},
-    "price_tier": {"desc": "App monetisation model.",
-                   "domain": ["free", "freemium", "paid"]},
-    "age_rating": {"desc": "App age rating (PEGI-style).",
-                   "domain": [3, 7, 12, 16, 18]},
-    # event / survey structural dimensions
-    "event_type": {"desc": "Behavioural event type.",
-                   "domain": ["session", "purchase", "lootbox_open", "ad_view"]},
-    "wave": {"desc": "Survey wave (1 = baseline, 2 = six-month follow-up).",
-             "domain": [1, 2]},
-    # internal high-granularity filter (never grouped/returned)
-    "age_years": {"desc": "Exact age in years (internal analysis variable)."},
-    # measures
-    "amount_gbp": {"desc": "Spend on a purchase or loot-box event (GBP)."},
-    "ingame_currency": {"desc": "In-game currency granted by the event."},
-    "total_spend_gbp": {"desc": "Per-donor total spend across purchase and loot-box events (GBP)."},
-    "purchase_events": {"desc": "Per-donor count of purchase events."},
-    "lootbox_events": {"desc": "Per-donor count of loot-box openings."},
-    "pgsi_score": {"desc": "Problem Gambling Severity Index (0-27)."},
-    "igds_score": {"desc": "Internet Gaming Disorder Scale (0-45)."},
-    "wemwbs_score": {"desc": "Warwick-Edinburgh Mental Wellbeing Scale (14-70)."},
-    "monthly_spend_selfreport": {"desc": "Self-reported monthly spend (GBP)."},
+COLUMN_META: dict[str, dict] = {}
+
+# Catalogue columns DERIVED per-person rollups in the engine views are not in
+# any base table; they take an explicit disclosure role here.
+_DERIVED_ROLES: dict[str, str] = {}
+
+
+def _apply(defn) -> None:
+    TABLES.clear()
+    TABLES.update(defn.tables_as_dict())
+    COLUMN_META.clear()
+    COLUMN_META.update(defn.column_meta_as_dict())
+    _DERIVED_ROLES.clear()
+    _DERIVED_ROLES.update(dict(defn.derived_roles))
+
+
+_dataset.register_sync(_apply)
+_apply(_dataset.active())
+
+
+# Human-readable role labels for the public data dictionary.
+ROLE_LABELS = {
+    "DI": "direct identifier",
+    "QI": "quasi-identifier",
+    "S": "sensitive",
+    "R": "reference",
+    "meta": "structural",
 }
 
 

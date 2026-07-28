@@ -6,6 +6,7 @@ from pydantic import ValidationError
 
 from safetre import synth
 from safetre.audit import AuditLog
+from safetre.dataset import BASE_SCHEMA
 from safetre.disclosure import DisclosurePolicy, SessionAuditor
 from safetre.engine import QueryEngine
 from safetre.stats import pearson_p_value
@@ -214,8 +215,11 @@ def test_filter_value_is_not_sql_injectable(tables):
                            group_by=["region"],
                            filters=[Filter(column="region", op="==", value=evil)]))
     assert len(df) == 0                              # no region matches the literal
-    # the events table is untouched -> injection did nothing
-    assert eng.con.execute("SELECT COUNT(*) FROM events").fetchone()[0] > 0
+    # The events table is untouched -> injection did nothing. Named through its
+    # schema because the base tables no longer sit in `main`: a bare `events`
+    # resolves to nothing at all, which is the point of putting them there.
+    assert eng.con.execute(
+        f"SELECT COUNT(*) FROM {BASE_SCHEMA}.events").fetchone()[0] > 0
 
 
 # --- end-to-end service ------------------------------------------------------

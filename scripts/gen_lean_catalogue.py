@@ -30,7 +30,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from safetre import synth                                     # noqa: E402
 from safetre.engine import QueryEngine, compile_query         # noqa: E402
 from safetre.procedures import REGISTRY                       # noqa: E402
-from safetre.query import CATALOGUE, Filter, Measure, QuerySpec  # noqa: E402
+from safetre.query import (                                       # noqa: E402
+    CATALOGUE, INTERNAL_RANGE_RULES, Filter, Measure, QuerySpec,
+)
 from safetre.schema import declared_domain, identifier_columns, role_of  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -83,6 +85,23 @@ def _match_fn(name: str, result_type: str, arms: dict[str, str],
     return lines
 
 
+def _bands(rule: dict) -> list[tuple[int, int]]:
+    """The declared bands, as (lower, upper) pairs.
+
+    Derived by pairing the `>=` edges with the `<=` edges in order — the
+    pairing IS the claim that the rule is band-aligned, and Lean checks it
+    (`bands_are_a_partition`, `edges_are_the_band_boundaries`). A rule whose
+    edge lists disagree in length is refused here rather than emitted as a
+    band structure the proofs would then have to accommodate.
+    """
+    ge, le = rule["edges"][">="], rule["edges"]["<="]
+    if len(ge) != len(le):
+        raise SystemExit(
+            f"internal range rule has {len(ge)} '>=' edges and {len(le)} '<=' "
+            "edges: they cannot describe the same bands")
+    return list(zip(ge, le, strict=True))
+
+
 def catalogue_lean() -> str:
     public, unit = _view_columns()
     columns: set[str] = set()
@@ -123,6 +142,34 @@ def catalogue_lean() -> str:
     lines.append("/-- Never-referencable columns: direct identifiers (role DI), free")
     lines.append("text, and raw timestamps — absent from every allowlist by construction. -/")
     lines.append(f"def forbiddenColumns : List String := {_str_list(forbidden_columns())}")
+    lines.append("")
+    lines.append("/-- Columns carrying an internal band-aligned range rule")
+    lines.append("(query.py::INTERNAL_RANGE_RULES; hardening #39). -/")
+    lines.append("def rangeRuledColumns : List String := "
+                 + _str_list(sorted(INTERNAL_RANGE_RULES)))
+    lines.append("")
+    lines.append("/-- The operators offered on such a column: band-aligned ranges only.")
+    lines.append("Equality and membership on the raw value are not expressible. -/")
+    lines += _match_fn(
+        "internalRangeOps", "List Op",
+        {c: "[" + ", ".join(_OP[o] for o in rule["ops"]) + "]"
+         for c, rule in INTERNAL_RANGE_RULES.items()}, "[]")
+    lines.append("")
+    lines.append("/-- The permitted edge values, per operator. -/")
+    lines += _match_fn(
+        "internalRangeEdges", "List (Op × List Int)",
+        {c: "[" + ", ".join(
+            f"({_OP[o]}, [" + ", ".join(str(v) for v in vs) + "])"
+            for o, vs in rule["edges"].items()) + "]"
+         for c, rule in INTERNAL_RANGE_RULES.items()}, "[]")
+    lines.append("")
+    lines.append("/-- The public bands the rule is aligned to, as closed intervals:")
+    lines.append("the `>=` edges are their lower bounds, the `<=` edges their upper")
+    lines.append("bounds. Proofs.lean checks that pairing really does partition. -/")
+    lines += _match_fn(
+        "internalBands", "List (Int × Int)",
+        {c: "[" + ", ".join(f"({lo}, {hi})" for lo, hi in _bands(rule)) + "]"
+         for c, rule in INTERNAL_RANGE_RULES.items()}, "[]")
     lines.append("")
     lines.append("/-- The engine's PUBLIC view columns (DuckDB `DESCRIBE`, live views). -/")
     lines += _match_fn("publicViewColumns", "List String",
@@ -211,7 +258,13 @@ def _lean_opt(value: str | None) -> str:
 
 def _lean_filter(f: Filter) -> str:
     nvals = len(f.value) if f.op == "in" else 1
-    return f"⟨{json.dumps(f.column)}, {_OP[f.op]}, {nvals}⟩"
+    # The model carries an integer filter value ONLY so the band-alignment rule
+    # (#39) is statable; `Proofs.compile_ignores_filter_values` proves nothing
+    # downstream can read it, which is what keeps "values never reach SQL" true.
+    scalar_int = (f.op != "in" and isinstance(f.value, int)
+                  and not isinstance(f.value, bool))
+    value = f"some {f.value}" if scalar_int else "none"
+    return f"⟨{json.dumps(f.column)}, {_OP[f.op]}, {nvals}, {value}⟩"
 
 
 def _lean_spec(s: QuerySpec) -> str:

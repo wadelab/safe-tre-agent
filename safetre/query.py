@@ -18,53 +18,27 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
-# Fixed catalogue of pre-joined, read-only datasets. dim type -> allowed ops.
+from . import dataset as _dataset
+
+# Fixed catalogue of pre-joined, read-only datasets, mirrored from the ACTIVE
+# dataset definition (safetre/dataset.py — the facts are not literals here, so
+# the gateway can serve any study an operator describes). dim type -> allowed
+# ops.
 # - dims: public dimensions; may be filtered, grouped, and returned as group keys
 # - measures: public numeric measures; may be aggregated and used in corr
 # - internal_filters: internal-only predicates; may filter but never group/output
 # - internal_measures: internal-only numeric variables for fixed tools such as corr
-CATALOGUE: dict[str, dict[str, Any]] = {
-    "spend": {
-        "dims": {
-            "age_band": "cat", "sex": "cat", "region": "cat", "income_band": "cat",
-            "device_os": "cat", "genre": "cat", "contains_lootboxes": "bool",
-            "price_tier": "cat", "event_type": "cat", "age_rating": "int",
-        },
-        "measures": {"amount_gbp", "ingame_currency"},
-        "internal_filters": {"age_years": "int"},
-        "internal_measures": set(),
-        "glm_responses": {
-            "amount_gbp": {"gaussian"}, "ingame_currency": {"gaussian"},
-            "contains_lootboxes": {"binomial"},
-        },
-    },
-    "donor_spend": {
-        "dims": {
-            "age_band": "cat", "sex": "cat", "region": "cat", "income_band": "cat",
-            "device_os": "cat",
-        },
-        "measures": {"total_spend_gbp", "purchase_events", "lootbox_events"},
-        "internal_filters": {"age_years": "int"},
-        "internal_measures": {"age_years"},
-        "glm_responses": {
-            "total_spend_gbp": {"gaussian"},
-            "purchase_events": {"poisson"}, "lootbox_events": {"poisson"},
-        },
-    },
-    "wellbeing": {
-        "dims": {
-            "age_band": "cat", "sex": "cat", "region": "cat", "income_band": "cat",
-            "device_os": "cat", "wave": "int",
-        },
-        "measures": {"pgsi_score", "igds_score", "wemwbs_score", "monthly_spend_selfreport"},
-        "internal_filters": {"age_years": "int"},
-        "internal_measures": set(),
-        "glm_responses": {
-            "pgsi_score": {"gaussian"}, "igds_score": {"gaussian"},
-            "wemwbs_score": {"gaussian"}, "monthly_spend_selfreport": {"gaussian"},
-        },
-    },
-}
+CATALOGUE: dict[str, dict[str, Any]] = {}
+
+
+def _apply(defn) -> None:
+    CATALOGUE.clear()
+    CATALOGUE.update(defn.catalogue())
+    INTERNAL_RANGE_RULES.clear()
+    INTERNAL_RANGE_RULES.update(defn.range_rules())
+
+
+_dataset.register_sync(_apply)
 
 CAT_OPS = {"==", "!=", "in"}
 NUM_OPS = {"==", "!=", "<", "<=", ">", ">=", "in"}
@@ -79,16 +53,15 @@ MAX_IN_VALUES = 50      # cap `in` lists to bound query cost (DoS)
 # publishes only as bands; an exact-age equality pinpoints a sub-band cohort;
 # and two such slices combined with two common narrowing dimensions recover a
 # 1-3 donor cell from two large, individually safe releases. Range filters on
-# `age_years` must therefore align to the declared age-band edges — every such
-# predicate selects a union of whole bands, whose marginals are public — and
-# equality/membership on exact age is not offered at all. The edges mirror the
-# declared `age_band` domain (tests/test_invariants.py keeps them in sync).
-AGE_BAND_LO_EDGES = (13, 16, 18, 25, 35, 50)      # ">=" must take one of these
-AGE_BAND_HI_EDGES = (15, 17, 24, 34, 49, 69)      # "<=" must take one of these
-INTERNAL_RANGE_RULES: dict[str, dict] = {
-    "age_years": {"ops": (">=", "<="),
-                  "edges": {">=": AGE_BAND_LO_EDGES, "<=": AGE_BAND_HI_EDGES}},
-}
+# an internal variable must therefore align to the declared band edges — every
+# such predicate selects a union of whole bands, whose marginals are public —
+# and equality/membership on the raw value is not offered at all. The edges
+# mirror the declared public-band domain (tests/test_invariants.py keeps them
+# in sync for the demo) and come from the active dataset definition's
+# `internal_range_rules`.
+INTERNAL_RANGE_RULES: dict[str, dict] = {}
+
+_apply(_dataset.active())
 
 GLM_FAMILIES = ("gaussian", "binomial", "poisson")
 # terms bound == MAX_GROUP_BY so every design-cell query is a legal group-by
@@ -152,8 +125,8 @@ def check_filters(dataset: str, filters: list[Filter]) -> None:
             if f.value not in edges:
                 raise ValueError(
                     f"filter on internal variable {f.column!r} must align to "
-                    f"the declared age-band edges ({', '.join(map(str, edges))} "
-                    f"for {f.op!r}); exact ages are internal-only")
+                    f"the declared band edges ({', '.join(map(str, edges))} "
+                    f"for {f.op!r}); the raw values are internal-only")
 
 
 def _normalized_filters(filters: list[Filter]) -> tuple:
@@ -170,12 +143,26 @@ def _normalized_filters(filters: list[Filter]) -> tuple:
     return tuple(sorted(norm, key=repr))
 
 
+def _known_dataset(v: str) -> str:
+    """The dataset allowlist is the ACTIVE definition's, so it is a runtime
+    membership check rather than a static `Literal`: the same code validates
+    any study an operator describes."""
+    if v not in CATALOGUE:
+        raise ValueError(f"unknown dataset {v!r} (known: {sorted(CATALOGUE)})")
+    return v
+
+
 class QuerySpec(BaseModel):
     model_config = ConfigDict(extra="forbid")   # reject unknown fields from the model
-    dataset: Literal["spend", "donor_spend", "wellbeing"]
+    dataset: str
     measure: Measure
     group_by: list[str] = []
     filters: list[Filter] = []
+
+    @field_validator("dataset")
+    @classmethod
+    def _dataset_known(cls, v):
+        return _known_dataset(v)
 
     @field_validator("group_by")
     @classmethod
@@ -243,11 +230,16 @@ class GLMSpec(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
     tool: Literal["glm"] = "glm"
-    dataset: Literal["spend", "donor_spend", "wellbeing"]
+    dataset: str
     family: Literal["gaussian", "binomial", "poisson"]
     response: str
     terms: list[str]
     filters: list[Filter] = []
+
+    @field_validator("dataset")
+    @classmethod
+    def _dataset_known(cls, v):
+        return _known_dataset(v)
 
     @field_validator("terms")
     @classmethod
@@ -314,10 +306,15 @@ class AnovaSpec(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
     tool: Literal["anova"] = "anova"
-    dataset: Literal["spend", "donor_spend", "wellbeing"]
+    dataset: str
     response: str
     factor: str
     filters: list[Filter] = []
+
+    @field_validator("dataset")
+    @classmethod
+    def _dataset_known(cls, v):
+        return _known_dataset(v)
 
     @field_validator("filters")
     @classmethod

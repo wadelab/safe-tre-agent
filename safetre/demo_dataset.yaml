@@ -1,0 +1,404 @@
+# The packaged DEMO dataset definition — a synthetic loot-box / in-app-spend +
+# psychometrics study. This file is the single source of every dataset-specific
+# fact the gateway serves by default; the machinery in safetre/ contains none.
+# Swap it with your own definition via SAFETRE_DATASET (see docs/datasets.md).
+#
+# All generated rows are synthetic and carry no real participant data.
+
+name: demo-lootbox-study
+description: >-
+  Synthetic loot-box / in-app-spend and psychometrics study.
+  All data are synthetic.
+
+# The unit of privacy: the person whose distinct count the frequency threshold
+# protects. Base tables name it here; internal unit views project it under the
+# machinery's fixed internal alias (safetre.dataset.UNIT_PERSON).
+person_key: donor_id
+
+# table -> {column: disclosure role}
+#   DI = direct identifier (never released)   QI = quasi-identifier
+#   S  = sensitive attribute                  R  = reference / non-disclosive
+#   meta = structural
+tables:
+  donors:
+    donor_id: DI
+    enrolment_date: meta
+    age_years: QI
+    age_band: QI
+    sex: QI
+    region: QI
+    income_band: QI
+    device_os: QI
+  apps:
+    app_id: R
+    app_name: R
+    developer: R
+    genre: R
+    contains_lootboxes: R
+    age_rating: R
+    price_tier: R
+  events:
+    event_id: meta
+    donor_id: DI          # foreign key -> a person
+    app_id: R
+    ts: QI                # precise timing can re-identify
+    event_type: R
+    item_name: R
+    amount_gbp: S
+    ingame_currency: S
+  survey:
+    donor_id: DI
+    wave: meta
+    pgsi_score: S         # problem-gambling severity index
+    igds_score: S         # internet gaming disorder scale
+    wemwbs_score: S       # mental wellbeing
+    monthly_spend_selfreport: S
+    free_text: S          # unstructured + prompt-injection vector
+
+# Public column metadata (safe to disclose): a plain description and, for
+# categorical columns, the DECLARED value domain — design-time knowledge,
+# independent of any participant.
+columns:
+  age_band:
+    desc: Age band at enrolment.
+    domain: ["13-15", "16-17", "18-24", "25-34", "35-49", "50+"]
+  sex:
+    desc: Self-reported sex / gender.
+    domain: ["F", "M", "X", "NS", "Other"]
+  region:
+    desc: UK ITL1 region or nation of residence.
+    domain: ["North East", "North West", "Yorkshire and The Humber",
+             "East Midlands", "West Midlands", "East of England",
+             "London", "South East", "South West", "Scotland",
+             "Wales", "Northern Ireland"]
+  income_band:
+    desc: Household income band (GBP per year).
+    domain: ["<40k", "40-70k", "70-100k", "100-150k", ">150k"]
+  device_os:
+    desc: Mobile operating system.
+    domain: ["Android", "iOS"]
+  genre:
+    desc: App genre.
+    domain: ["RPG", "Strategy", "Casino", "Puzzle", "Shooter", "Sports", "Card"]
+  contains_lootboxes:
+    desc: Whether the app sells loot boxes / random-reward crates.
+    domain: [false, true]
+  price_tier:
+    desc: App monetisation model.
+    domain: ["free", "freemium", "paid"]
+  age_rating:
+    desc: App age rating (PEGI-style).
+    domain: [3, 7, 12, 16, 18]
+  event_type:
+    desc: Behavioural event type.
+    domain: ["session", "purchase", "lootbox_open", "ad_view"]
+  wave:
+    desc: Survey wave (1 = baseline, 2 = six-month follow-up).
+    domain: [1, 2]
+  age_years:
+    desc: Exact age in years (internal analysis variable).
+  amount_gbp:
+    desc: Spend on a purchase or loot-box event (GBP).
+  ingame_currency:
+    desc: In-game currency granted by the event.
+  total_spend_gbp:
+    desc: Per-donor total spend across purchase and loot-box events (GBP).
+  purchase_events:
+    desc: Per-donor count of purchase events.
+  lootbox_events:
+    desc: Per-donor count of loot-box openings.
+  pgsi_score:
+    desc: Problem Gambling Severity Index (0-27).
+  igds_score:
+    desc: Internet Gaming Disorder Scale (0-45).
+  wemwbs_score:
+    desc: Warwick-Edinburgh Mental Wellbeing Scale (14-70).
+  monthly_spend_selfreport:
+    desc: Self-reported monthly spend (GBP).
+
+# Disclosure roles for view-DERIVED columns (not present in any base table).
+derived_roles:
+  total_spend_gbp: S
+  purchase_events: S
+  lootbox_events: S
+
+# The public, pre-joined, read-only datasets an analyst may query, each with
+# its allowlists. `columns` are qualified table.column references (or derived
+# rollups); dims/measures/internal_* name the unqualified output columns.
+datasets:
+  spend:
+    base: events
+    joins:
+      - {table: donors, key: donor_id}
+      - {table: apps, key: app_id}
+    columns:
+      - donors.age_band
+      - donors.sex
+      - donors.region
+      - donors.income_band
+      - donors.device_os
+      - apps.genre
+      - apps.contains_lootboxes
+      - apps.price_tier
+      - apps.age_rating
+      - events.event_type
+      - events.amount_gbp
+      - events.ingame_currency
+    unit_columns: [donors.age_years]
+    dims:
+      age_band: cat
+      sex: cat
+      region: cat
+      income_band: cat
+      device_os: cat
+      genre: cat
+      contains_lootboxes: bool
+      price_tier: cat
+      event_type: cat
+      age_rating: int
+    measures: [amount_gbp, ingame_currency]
+    internal_filters:
+      age_years: int
+    glm_responses:
+      amount_gbp: [gaussian]
+      ingame_currency: [gaussian]
+      contains_lootboxes: [binomial]
+
+  donor_spend:
+    base: donors
+    joins:
+      - {table: events, key: donor_id, how: left}
+    group_by:
+      - donors.donor_id
+      - donors.age_band
+      - donors.sex
+      - donors.region
+      - donors.income_band
+      - donors.device_os
+    unit_group_by: [donors.age_years]
+    columns:
+      - donors.age_band
+      - donors.sex
+      - donors.region
+      - donors.income_band
+      - donors.device_os
+      - name: total_spend_gbp
+        sum_if: {column: events.amount_gbp, when: events.event_type,
+                 in: [purchase, lootbox_open]}
+      - name: purchase_events
+        count_if: {column: events.event_type, equals: purchase}
+      - name: lootbox_events
+        count_if: {column: events.event_type, equals: lootbox_open}
+    unit_columns: [donors.age_years]
+    dims:
+      age_band: cat
+      sex: cat
+      region: cat
+      income_band: cat
+      device_os: cat
+    measures: [total_spend_gbp, purchase_events, lootbox_events]
+    internal_filters:
+      age_years: int
+    internal_measures: [age_years]
+    glm_responses:
+      total_spend_gbp: [gaussian]
+      purchase_events: [poisson]
+      lootbox_events: [poisson]
+
+  wellbeing:
+    base: survey
+    joins:
+      - {table: donors, key: donor_id}
+    columns:
+      - donors.age_band
+      - donors.sex
+      - donors.region
+      - donors.income_band
+      - donors.device_os
+      - survey.wave
+      - survey.pgsi_score
+      - survey.igds_score
+      - survey.wemwbs_score
+      - survey.monthly_spend_selfreport
+    unit_columns: [donors.age_years]
+    dims:
+      age_band: cat
+      sex: cat
+      region: cat
+      income_band: cat
+      device_os: cat
+      wave: int
+    measures: [pgsi_score, igds_score, wemwbs_score, monthly_spend_selfreport]
+    internal_filters:
+      age_years: int
+    glm_responses:
+      pgsi_score: [gaussian]
+      igds_score: [gaussian]
+      wemwbs_score: [gaussian]
+      monthly_spend_selfreport: [gaussian]
+
+# Internal high-granularity filters may be ranged only at edges that select
+# whole public bands (hardening #39). These edges mirror the declared age_band
+# domain; tests/test_invariants.py keeps them in sync.
+internal_range_rules:
+  age_years:
+    ops: [">=", "<="]
+    edges:
+      ">=": [13, 16, 18, 25, 35, 50]
+      "<=": [15, 17, 24, 34, 49, 69]
+
+# Natural-language vocabulary for the intent filter and the request<->spec
+# fidelity checks.
+lexicon:
+  dimension_synonyms:
+    age band: age_band
+    age group: age_band
+    age bracket: age_band
+    age range: age_band
+    age: age_band
+    gender: sex
+    sex: sex
+    region: region
+    area: region
+    location: region
+    nation: region
+    country: region
+    income band: income_band
+    income bracket: income_band
+    income: income_band
+    earnings: income_band
+    salary: income_band
+    device os: device_os
+    operating system: device_os
+    device: device_os
+    platform: device_os
+    os: device_os
+    genre: genre
+    game type: genre
+    lootbox: contains_lootboxes
+    lootboxes: contains_lootboxes
+    loot box: contains_lootboxes
+    loot boxes: contains_lootboxes
+    loot-box: contains_lootboxes
+    crate: contains_lootboxes
+    price tier: price_tier
+    price: price_tier
+    pricing: price_tier
+    event type: event_type
+    age rating: age_rating
+    content rating: age_rating
+    pegi: age_rating
+    survey wave: wave
+    wave: wave
+    timepoint: wave
+  response_synonyms:
+    spend:
+      in-game currency: ingame_currency
+      ingame currency: ingame_currency
+      spend: amount_gbp
+      amount: amount_gbp
+    donor_spend:
+      total spend: total_spend_gbp
+      spend: total_spend_gbp
+      purchase events: purchase_events
+      purchases: purchase_events
+      lootbox events: lootbox_events
+      lootbox opens: lootbox_events
+    wellbeing:
+      wellbeing: wemwbs_score
+      wemwbs: wemwbs_score
+      pgsi: pgsi_score
+      problem gambling: pgsi_score
+      gambling: pgsi_score
+      igds: igds_score
+      gaming disorder: igds_score
+      self-reported spend: monthly_spend_selfreport
+      self reported spend: monthly_spend_selfreport
+  domain_cues:
+    - spend
+    - spender
+    - spenders
+    - purchase
+    - purchases
+    - lootbox
+    - lootboxes
+    - wellbeing
+    - survey
+    - pgsi
+    - igds
+    - wemwbs
+    - mental
+    - age
+    - age band
+    - sex
+    - region
+    - income
+    - device
+    - os
+    - genre
+    - price
+    - event
+    - wave
+    - currency
+    - gbp
+    - amount
+    - donor
+    - app
+    - london
+    - south east
+    - north west
+    - scotland
+    - wales
+    - northern ireland
+    - free-text
+    - free text
+    - comments
+
+# Extra operator-authored guidance lines for the planner system prompt.
+planner_hints:
+  - "For age-versus-spend correlation, use dataset 'donor_spend', x='age_years', y='total_spend_gbp'. Raw age is an internal analysis variable only: never group by it or return it."
+
+# Few-shot examples rendered into the planner system prompt.
+planner_examples:
+  - request: regress total spend on age band and sex
+    spec:
+      tool: glm
+      dataset: donor_spend
+      family: gaussian
+      response: total_spend_gbp
+      terms: [age_band, sex]
+      filters: []
+  - request: logistic model of lootbox availability by genre for purchases
+    spec:
+      tool: glm
+      dataset: spend
+      family: binomial
+      response: contains_lootboxes
+      terms: [genre]
+      filters:
+        - {column: event_type, op: "==", value: purchase}
+  - request: one-way anova of wellbeing by region
+    spec:
+      tool: anova
+      dataset: wellbeing
+      response: wemwbs_score
+      factor: region
+      filters: []
+
+# Example queries on the web index page.
+ui_queries:
+  - {label: "Mean spend by age band", query: "mean spend by age band"}
+  - {label: "Mean wellbeing by region", query: "mean wellbeing by region"}
+  - {label: "Correlation between age and spend", query: "correlation between age and spend"}
+  - {label: "Mean spend by region and device (triggers suppression)",
+     query: "mean spend by region and device os"}
+  - {label: "Wellbeing per donor (rejected by validation)",
+     query: "show mean wellbeing per donor"}
+
+# The `safetre-demo` scripted tour.
+tour:
+  - mean spend by age band
+  - regress total spend on age band
+  - logistic glm of lootbox availability by price tier
+  - regress total spend on age band and sex          # denied: suppressed cell
+  - poisson glm of purchase events on device os      # denied: hostile value cell

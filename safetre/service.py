@@ -57,6 +57,28 @@ def _donor_total(df: pd.DataFrame) -> float:
     return float(len(df))
 
 
+def _accounting(cost: int, cohorts) -> dict:
+    """What this request cost the session, and which cohorts it released over.
+
+    Written into the audit row so a restart can *replay* the accounting rather
+    than re-derive it. Round 9 found two independent implementations of one
+    cost model disagreeing in opposite directions — live charged a model once
+    per planned aggregate while the replay charged one unit per record, and
+    live treated a pipeline error as free while the replay charged it — so a
+    restart refunded roughly half of every model a user had run. The cure is
+    not a better heuristic on the replay side: it is to stop having a second
+    implementation at all (hardening #58).
+
+    `cohorts` matters for the same reason. A binomial GLM releases over TWO
+    cohorts — the trials cohort and the successes cohort, whose extra filter
+    the procedure adds and the analyst never wrote — so the model spec alone
+    does not determine them and re-deriving from it silently lost one.
+    """
+    return {"cost": int(cost),
+            "cohorts": [[dataset, [list(f) for f in filters]]
+                        for dataset, filters in cohorts]}
+
+
 def _literal_spec(request: str) -> dict | None:
     """A request that is a single JSON object is an analyst-authored spec
     (R17): it bypasses the planner and the natural-language gates, and is
@@ -143,6 +165,7 @@ class QueryService:
         withheld response, so a crash is neither an audit gap nor an oracle.
         """
         auditor = auditor or D.SessionAuditor()
+        spent_before = auditor.spent
         try:
             return self._handle_inner(request, planner, auditor=auditor,
                                       audit_log=audit_log, user=user)
@@ -151,10 +174,17 @@ class QueryService:
                 "high", "pipeline_error",
                 "the query pipeline failed before a release decision",
                 audit_detail=type(exc).__name__)]
+            # An error is never free (hardening #60). It costs at least one
+            # unit; if the exception happened after some aggregates were
+            # already observed, it costs what those cost, because that is what
+            # the session actually spent.
+            if auditor.spent == spent_before:
+                auditor.charge()
             if audit_log is not None:
                 audit_log.append(
                     user=user, request=request, spec=None, status="error",
-                    findings=[f.__dict__ for f in findings], output_shape=None)
+                    findings=[f.__dict__ for f in findings], output_shape=None,
+                    accounting=_accounting(auditor.spent - spent_before, ()))
             return Result("denied", message=WITHHELD_MESSAGE,
                           findings=_withheld(), trace=[WITHHELD_TRACE])
 
@@ -162,13 +192,18 @@ class QueryService:
                       audit_log=None, user: str = "anon") -> Result:
         auditor = auditor or D.SessionAuditor()
         trace: list[str] = []
+        spent_before = auditor.spent
 
-        def record(status, spec, findings, output):
+        def record(status, spec, findings, output, cohorts=()):
+            """`cost` is measured, not classified: the auditor's own spend
+            delta over this request, so the log records what the session
+            actually paid however the request went (hardening #58)."""
             if audit_log is not None:
                 audit_log.append(
                     user=user, request=request, spec=spec, status=status,
                     findings=[f.__dict__ for f in findings],
-                    output_shape=(list(output.shape) if output is not None else None))
+                    output_shape=(list(output.shape) if output is not None else None),
+                    accounting=_accounting(auditor.spent - spent_before, cohorts))
 
         try:
             literal = _literal_spec(request)
@@ -321,7 +356,8 @@ class QueryService:
         # number is a function of numbers already released (hardening #26).
         released = get_procedure(spec.measure.fn).postprocess(released, spec)
         status = "redacted" if action == "redacted" else "released"
-        record(status, spec.model_dump(), findings, released)
+        record(status, spec.model_dump(), findings, released,
+               cohorts=[(spec.dataset, cohort)])
         return Result(status, output=released, spec=spec.model_dump(),
                       findings=findings, trace=trace, plans=plans)
 
@@ -487,6 +523,10 @@ class QueryService:
             auditor.record_cohort(dataset, cohort)
         spec_dict = spec.model_dump() | {
             "aggregates": [a.measure_key() for a in aggregates]}
-        record("released", spec_dict, notes, output)
+        # every cohort the model released over, including the ones the
+        # PROCEDURE added (a binomial's successes filter) — the model spec
+        # cannot be re-read to recover those, which is how a restart used to
+        # forget one (hardening #58)
+        record("released", spec_dict, notes, output, cohorts=cohorts)
         return Result("released", output=output, spec=spec_dict, plans=plans,
                       findings=notes, trace=trace, artifacts=artifacts)

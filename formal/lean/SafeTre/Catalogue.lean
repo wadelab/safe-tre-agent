@@ -71,6 +71,28 @@ def roleOf? : String → Option Role
 text, and raw timestamps — absent from every allowlist by construction. -/
 def forbiddenColumns : List String := ["donor_id", "free_text", "ts"]
 
+/-- Columns carrying an internal band-aligned range rule
+(query.py::INTERNAL_RANGE_RULES; hardening #39). -/
+def rangeRuledColumns : List String := ["age_years"]
+
+/-- The operators offered on such a column: band-aligned ranges only.
+Equality and membership on the raw value are not expressible. -/
+def internalRangeOps : String → List Op
+  | "age_years" => [.ge, .le]
+  | _ => []
+
+/-- The permitted edge values, per operator. -/
+def internalRangeEdges : String → List (Op × List Int)
+  | "age_years" => [(.ge, [13, 16, 18, 25, 35, 50]), (.le, [15, 17, 24, 34, 49, 69])]
+  | _ => []
+
+/-- The public bands the rule is aligned to, as closed intervals:
+the `>=` edges are their lower bounds, the `<=` edges their upper
+bounds. Proofs.lean checks that pairing really does partition. -/
+def internalBands : String → List (Int × Int)
+  | "age_years" => [(13, 15), (16, 17), (18, 24), (25, 34), (35, 49), (50, 69)]
+  | _ => []
+
 /-- The engine's PUBLIC view columns (DuckDB `DESCRIBE`, live views). -/
 def publicViewColumns : String → List String
   | "donor_spend" => ["age_band", "sex", "region", "income_band", "device_os", "total_spend_gbp", "purchase_events", "lootbox_events"]

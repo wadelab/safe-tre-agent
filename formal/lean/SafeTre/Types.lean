@@ -49,11 +49,22 @@ inductive Op
 deriving DecidableEq, Repr
 
 /-- A filter shape: column, operator, and how many `?` parameters it binds
-(an `in`-list's length; exactly 1 for every scalar operator). -/
+(an `in`-list's length; exactly 1 for every scalar operator), and — for a
+scalar integer comparison only — the value itself.
+
+`value` is the one place this model holds a datum, and it is here for exactly
+one reason: the band-alignment rule of hardening #39 is a statement ABOUT the
+value, so a model that abstracts values away cannot express the property that
+closed the finest differencing channel found so far. It is inert everywhere
+else: `Sql.filterAtom` does not read it, and
+`Proofs.compile_ignores_filter_values` proves the compiled statement is
+identical for any two values — the theorem form of "values never appear in
+SQL text", stronger than the silence it replaces. -/
 structure Filter where
   column : String
   op : Op
   nvals : Nat
+  value : Option Int
 deriving DecidableEq, Repr
 
 /-- A measure: `count` uses no column, `mean`/`sum`/`sum_sq` use `column`,

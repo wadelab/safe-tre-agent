@@ -10,7 +10,10 @@ from pydantic import ValidationError
 
 from safetre import synth
 from safetre.analyst import _dims_mentioned, check_grouping_coherence
-from safetre.disclosure import COUNT_COLUMNS, ROUND_BASE, DisclosurePolicy, leak_detector
+from safetre.disclosure import (
+    COUNT_COLUMNS, ROUND_BASE, DisclosurePolicy, hitl_decision, is_suppressable,
+    leak_detector,
+)
 from safetre.engine import ROW_CAP, QueryEngine, compile_dominance_query, compile_query
 from safetre.query import (
     CATALOGUE, CAT_OPS, INTERNAL_RANGE_RULES, MAX_FILTERS, MAX_GROUP_BY, NUM_OPS,
@@ -146,7 +149,25 @@ def test_generated_valid_queryspecs_execute_without_unsafe_release(raw):
         return
 
     assert released is not None
-    assert not leak_detector(released)
+
+    # A `high` finding is a leak, and nothing may carry one out. A `medium` one
+    # is an escalation, not a release: since hardening #56 `too_granular` is
+    # judged on the RELEASED frame and sends the result to a human output
+    # checker rather than denying it, so the pipeline's answer to a 101-cell
+    # three-way cross-tab is "escalate", not "publish".
+    #
+    # This used to assert zero findings of any severity, which asserted
+    # something the gateway has never promised — `policy.apply` is only the
+    # first half of the decision, and `hitl_decision` is the half that stops a
+    # medium finding auto-releasing. Hypothesis found the gap by sampling
+    # `group_by=[event_type, age_band, age_rating]`, whose released frame is
+    # 101 cells against the 100-cell bound; the failure reproduces identically
+    # on the commit before this round, so it was latent rather than new.
+    residual = leak_detector(released)
+    assert not [f for f in residual if f.severity == "high"]
+    if residual:
+        assert hitl_decision([f for f in residual
+                              if not is_suppressable(f)]) != "auto"
 
     cols = {str(c) for c in released.columns}
     assert not (cols & identifier_columns())

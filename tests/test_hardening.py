@@ -19,6 +19,9 @@ Each test pins one finding from the security review so a regression fails CI:
   #46 the RESOLVED policy has safety floors, not just syntactic ones
   #49 session lineage and budget survive a restart
   #51 concurrent users get their own frames, from their own cursor
+  #58 the audit row records what a request COST and which cohorts it touched
+  #59 rehydration verifies the chain first, and a deleted row is fatal
+  #60 a pipeline error spends budget: an exception is not a free query
 """
 
 import concurrent.futures as cf
@@ -1006,3 +1009,182 @@ def _context_for(keys):
     from safetre.disclosure import CellContext
 
     return CellContext(keys=keys)
+
+
+# --- #58/#59/#60: the restart path, replayed rather than re-derived -------------
+
+_REPLAY_BATTERY = [
+    # (label, request) — one of every shape that reaches the accounting code
+    ("plain count",
+     {"dataset": "spend", "measure": {"fn": "count"}, "group_by": ["age_band"]}),
+    ("plain sum with filters",
+     {"dataset": "spend", "measure": {"fn": "sum", "column": "amount_gbp"},
+      "filters": [{"column": "region", "op": "==", "value": "South West"}]}),
+    ("gaussian glm (2 aggregates)",
+     {"tool": "glm", "dataset": "donor_spend", "family": "gaussian",
+      "response": "total_spend_gbp", "terms": ["age_band"]}),
+    ("binomial glm (2 cohorts, one procedure-added)",
+     {"tool": "glm", "dataset": "spend", "family": "binomial",
+      "response": "contains_lootboxes", "terms": ["price_tier"]}),
+    ("anova",
+     {"tool": "anova", "dataset": "donor_spend",
+      "response": "total_spend_gbp", "factor": "age_band"}),
+    ("spec rejected before the engine",
+     {"dataset": "spend", "measure": {"fn": "nope"}}),
+    ("denied: cohort too narrow",
+     {"dataset": "spend", "measure": {"fn": "sum", "column": "amount_gbp"},
+      "filters": [{"column": "region", "op": "==", "value": "South West"},
+                  {"column": "sex", "op": "==", "value": "F"},
+                  {"column": "age_rating", "op": ">=", "value": 18}],
+      "group_by": ["device_os", "genre"]}),
+]
+
+
+@pytest.mark.parametrize("label,request_spec", _REPLAY_BATTERY,
+                         ids=[c[0] for c in _REPLAY_BATTERY])
+def test_replayed_accounting_equals_live_accounting(label, request_spec,
+                                                    tmp_path, monkeypatch, tables):
+    """#58: live and replayed accounting are ONE cost model, not two.
+
+    Round 9 measured them disagreeing in opposite directions — a gaussian GLM
+    left the live auditor at `_spent=2` and the rehydrated one at 1, so every
+    restart refunded roughly half of every model a user had run; a binomial's
+    successes cohort (the procedure's `response == True` filter, which the
+    model spec cannot express) was lost entirely. This is the general form of
+    both, and it is the anti-drift guard: a new release path that forgets to
+    declare what it cost or what it released over fails here.
+    """
+    from safetre_web.session import SessionStore
+
+    log = _audit_log(tmp_path, monkeypatch)
+    service = QueryService(tables)
+    live = SessionStore(threshold=10, budget=20)
+    live_auditor = live.get("analyst@org").auditor
+    service.handle(json.dumps(request_spec), planner=None, auditor=live_auditor,
+                   audit_log=log, user="analyst@org")
+
+    after = SessionStore(threshold=10, budget=20)
+    after.rehydrate(log, window_hours=24)
+    restored = after.get("analyst@org").auditor
+
+    assert restored.spent == live_auditor.spent, (
+        f"{label}: live spent {live_auditor.spent}, replayed {restored.spent}")
+    assert restored._cohorts == live_auditor._cohorts, (
+        f"{label}: live cohorts {live_auditor._cohorts}, "
+        f"replayed {restored._cohorts}")
+
+
+def test_a_binomial_keeps_its_successes_cohort_across_a_restart(tmp_path,
+                                                                monkeypatch,
+                                                                tables):
+    """#58 (V2), stated concretely: the successes cohort carries a filter the
+    PROCEDURE added, so re-reading the model spec cannot recover it."""
+    from safetre_web.session import SessionStore
+
+    log = _audit_log(tmp_path, monkeypatch)
+    service = QueryService(tables)
+    live = SessionStore(threshold=10, budget=20)
+    r = service.handle(json.dumps(
+        {"tool": "glm", "dataset": "spend", "family": "binomial",
+         "response": "contains_lootboxes", "terms": ["price_tier"]}),
+        planner=None, auditor=live.get("analyst@org").auditor, audit_log=log,
+        user="analyst@org")
+    assert r.status == "released"
+
+    after = SessionStore(threshold=10, budget=20)
+    after.rehydrate(log, window_hours=24)
+    cohorts = after.get("analyst@org").auditor._cohorts
+    assert ("spend", (("contains_lootboxes", "==", True),)) in cohorts, cohorts
+
+
+def test_rehydration_refuses_a_chain_that_does_not_verify(tmp_path, monkeypatch,
+                                                          tables):
+    """#59 (V3): deleting a row needs write access, not the key. It drops a
+    cohort from the lineage — the unsafe direction — and `verify()` detected it
+    all along without anyone asking."""
+    from safetre_web.session import AuditChainUnverified, SessionStore
+
+    log = _audit_log(tmp_path, monkeypatch)
+    service = QueryService(tables)
+    store = SessionStore(threshold=10, budget=20)
+    auditor = store.get("analyst@org").auditor
+    for spec in ({"dataset": "spend", "measure": {"fn": "count"},
+                  "group_by": ["age_band"]},
+                 {"dataset": "spend", "measure": {"fn": "sum", "column": "amount_gbp"},
+                  "filters": [{"column": "region", "op": "==", "value": "South West"}]}):
+        assert service.handle(json.dumps(spec), planner=None, auditor=auditor,
+                              audit_log=log, user="analyst@org").status == "released"
+    assert log.verify() and len(auditor._cohorts) == 2
+
+    # delete the first half of the pair — no forged MAC, just write access
+    log.con.execute("DELETE FROM records WHERE id = (SELECT MIN(id) FROM records)")
+    log.con.commit()
+    assert not log.verify()
+
+    with pytest.raises(AuditChainUnverified):
+        SessionStore(threshold=10, budget=20).rehydrate(log, window_hours=24)
+
+    # The override is the only way through, and it exhibits what the gate is
+    # for: replaying the mutilated log silently forgets a cohort.
+    monkeypatch.setenv("SAFETRE_ALLOW_UNVERIFIED_REHYDRATE", "1")
+    forced = SessionStore(threshold=10, budget=20)
+    forced.rehydrate(log, window_hours=24)
+    assert len(forced.get("analyst@org").auditor._cohorts) == 1
+
+
+def test_a_pipeline_error_spends_budget(tmp_path, monkeypatch, tables):
+    """#60 (V4): `_spent` only moved inside `observe`, which runs after a
+    successful engine call, so every failing query was free — and under a real
+    planner the failing call is the expensive one."""
+    from safetre_web.session import SessionStore
+
+    class Exploding:
+        def plan(self, request):
+            raise RuntimeError("planner is down")
+
+    log = _audit_log(tmp_path, monkeypatch)
+    service = QueryService(tables)
+    store = SessionStore(threshold=10, budget=20)
+    auditor = store.get("analyst@org").auditor
+    for _ in range(5):
+        assert service.handle("mean spend by age band", planner=Exploding(),
+                              auditor=auditor, audit_log=log,
+                              user="analyst@org").status == "denied"
+    assert auditor.spent == 5
+
+    after = SessionStore(threshold=10, budget=20)
+    after.rehydrate(log, window_hours=24)
+    assert after.get("analyst@org").auditor.spent == 5
+
+
+def test_accounting_is_inside_the_mac(tmp_path, monkeypatch, tables):
+    """#58: the recorded cost drives a control, so editing it must break the
+    chain exactly as editing the status does."""
+    log = _audit_log(tmp_path, monkeypatch)
+    QueryService(tables).handle(
+        json.dumps({"dataset": "spend", "measure": {"fn": "count"},
+                    "group_by": ["age_band"]}),
+        planner=None, auditor=SessionAuditor(), audit_log=log, user="analyst@org")
+    assert log.verify()
+    log.con.execute("UPDATE records SET accounting = ? WHERE id = 1",
+                    ('{"cost":0,"cohorts":[]}',))
+    log.con.commit()
+    assert not log.verify()
+
+
+def test_a_chain_written_before_the_accounting_column_still_verifies(tmp_path,
+                                                                     monkeypatch):
+    """#58: `accounting` is NULL on every pre-existing row, and the MAC body
+    omits the key entirely when it is NULL — so an operator's existing log
+    keeps verifying across the upgrade. A column that changed the body of
+    historical rows would fail verification everywhere."""
+    from safetre.audit import AuditLog
+
+    monkeypatch.setenv("SAFETRE_AUDIT_KEY", "0" * 64)
+    path = str(tmp_path / "legacy.db")
+    log = AuditLog(path)
+    log.append(user="analyst@org", request="q", spec={"dataset": "spend"},
+               status="released", findings=[], output_shape=[3, 2])
+    log.con.execute("UPDATE records SET accounting = NULL")   # as a pre-#58 row
+    log.con.commit()
+    assert AuditLog(path).verify()
