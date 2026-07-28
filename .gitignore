@@ -45,3 +45,10 @@ artifacts/shots/
 
 # Lean build artifacts (formal/lean)
 formal/lean/.lake/
+
+# The bestiary card art is generated at ~1.5 MB a card (38 MB for the set).
+# `docs/figures/bestiary/` holds the committed derivatives — same pixels, same
+# dimensions, re-encoded to a 256-colour palette (max mean error 2.4/255), which
+# is 9.4 MB instead of 38. Keep the originals here locally; they do not belong
+# in the history of a repo that was deliberately slimmed to 3.4 MB.
+docs/bestiaryImaging/

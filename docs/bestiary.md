@@ -77,6 +77,24 @@ belongs to none. The grammar is the point; the names are decoration.
 | **The Stampede** | 🐂🐂🐂 A thousand queries in a trench coat | To exhaust the shared resource every control serialises on | DoS: rate limits, budget, the audit-chain rescan |
 | **The Doppelgänger** | 👥 Two requests that are one request | To make a check-then-act control decide on a world that no longer exists | Concurrency: TOCTOU on session state, shared per-call state |
 
+Each family has a card. They are mnemonics, not documentation — the specimen
+tables below are what you check a diff against.
+
+![The Subtractor](figures/bestiary/01_the_subtractor.png){ width="180" }
+![The Whale](figures/bestiary/02_the_whale.png){ width="180" }
+![The Masker](figures/bestiary/03_the_masker.png){ width="180" }
+![The Nixie](figures/bestiary/04_the_nixie.png){ width="180" }
+![The Sphinx](figures/bestiary/05_the_sphinx.png){ width="180" }
+![The White Rabbit](figures/bestiary/06_the_white_rabbit.png){ width="180" }
+![The Ghost](figures/bestiary/07_the_ghost.png){ width="180" }
+![The Hydra](figures/bestiary/08_the_hydra.png){ width="180" }
+![The Mirror](figures/bestiary/09_the_mirror.png){ width="180" }
+![The Imp](figures/bestiary/10_the_imp.png){ width="180" }
+![The Parrot](figures/bestiary/11_the_parrot.png){ width="180" }
+![The Stampede](figures/bestiary/12_the_stampede.png){ width="180" }
+![The Doppelganger](figures/bestiary/13_the_doppelganger.png){ width="180" }
+
+
 ### Cage and keeper attributes
 
 Every specimen entry names four things:
@@ -272,6 +290,7 @@ request has a hole exactly where an attacker wants one.
 | **The Chain Forger** | unkeyed hash chain: rewrite and recompute passes `verify()` | #1 (r1) | `audit.py` | 🧮 HMAC-SHA256 chain; off-box key and head anchor | `test_audit_tamper_with_wrong_key_still_fails` |
 | **The Nameless Policy** | a release recorded the request, the spec and the status — but nothing about the *thresholds* that allowed it, so a clean release under `min_cell=1` was byte-schema-identical to one under the shipped policy | #55 (r8) | `app.py`, `config.py` | 🧮 a distinguished `status=config` record puts the resolved policy digest **inside** the chain at the point it takes effect; every later row is attributable by position. No schema change, no migration | `test_hardening.py` |
 | **The Keeper's Own Ghost** | #55 turned "import the web app" into "write to the audit log", and four harness scripts imported it unpinned: 578 junk rows in the developer's own log. #36 recurring by a new route — that fix lived in `conftest.py` and never covered the scripts | #57 (r8) | `redteam/`, `scripts/` | 🧮 every harness pins a throwaway `SAFETRE_AUDIT_DB` *before* the import; the polluted log archived, not re-MACed | the habit that caught it: check `audit.db`'s mtime after every run |
+<!-- card 23: drawn while this one was still in the wild; caged as #50 -->
 | **The Planted Row** | the prefill link *ran on load*, writing an attacker-chosen request into the chain under whoever opened it — and, being answered, recorded as `released` with a shape | #50 (r8) | `static/app.js`, `app.py` | 🧮 the link fills the box and stops; a click is the consent. Auto-run survives only as an off-by-default capture sentinel | `test_web.py`. Still treat `request` as untrusted text in any log viewer: the chain proves authenticity, never authorship |
 
 ### 🐍 The Hydra — the shape that survives its instance
@@ -341,9 +360,12 @@ HMAC-chained log) without ever reading them.
 |---|---|---|---|---|---|
 | **The Racing Twins** | fire both halves of a differencing pair concurrently: both pass `observe` before either `record`s | #18 (r3) | `session.py`, `app.py` | 🚧 per-session lock across `observe → apply → record_cohort` | `test_concurrent_differencing_serialised_by_session_lock`; Alloy `temporal_session.als` |
 | **The Borrowed Table** | the external vetter kept per-call state on the shared instance; a second thread swapped the table mid-flight — verdicts returned matching, about another table (2 in 240 under preemption) | #33 (r7) | `external_checker.py` | 🧮 no per-call state on the instance; lock on the instance not the class | `test_acro_boundary.py` |
+<!-- card 24: drawn while this one was still in the wild; caged as #51 -->
 | **The Shared Connection** | one DuckDB connection driven concurrently by many users; a wrong frame here attaches one analyst's vetting to another's cells, so an integrity bug is a disclosure bug | #51 (r8) | `engine.py` | 🧮 a cursor per thread over one shared catalogue — which needed the tables *materialised*, because a registered pandas frame is connection-scoped and invisible to a cursor | `test_hardening.py`: 300 queries across 12 threads, every response matched to its own request |
 
 ### The sleeping dials — configuration as a habitat
+
+![The sleeping dials](figures/bestiary/15_the_sleeping_dials.png){ width="420" }
 
 Not creatures so much as unlocked cage doors with labels on them. Bagged in
 round 8:
@@ -370,6 +392,8 @@ round 8:
 These are the entries a reviewer should be able to retell from memory,
 because each one generalises:
 
+![The Nixie and the Rabbit](figures/bestiary/16_pack_hunt_nixie_rabbit.png){ width="260" align=right }
+
 1. **The Nixie and the Rabbit (#29 + #30).** The marginals endpoint said
    *which* age was unique without saying who held it; the refusal oracle
    answered yes/no questions about a cohort without saying which cohort was
@@ -378,11 +402,15 @@ because each one generalises:
    band and device recovered. **Lesson: treat the explanation path — traces,
    finding text, the status word itself — as an output with the same
    disclosure budget as the data path.**
+![The Subtractor and the Hydra](figures/bestiary/19_pack_hunt_subtractor_hydra.png){ width="260" align=right }
+
 2. **The Subtractor needs two broken links (#38 + #39).** The round-8
    headline attack worked only because row-count totals hid the donor delta
    *and* off-band range values let slices cut anywhere. Either fix alone left
    a working variant. **Lesson: some cages are load-bearing pairs; review
    them as one structure (that is what D7 does).**
+![The Masker and the Subtractor](figures/bestiary/17_pack_hunt_masker_subtractor.png){ width="260" align=right }
+
 3. **The Masker mints the Subtractor's alibi (#45).** Session controls were
    keyed on the login header, so forging identities did not just impersonate
    a victim — rotating the header minted a *fresh differencing lineage and
@@ -393,6 +421,8 @@ because each one generalises:
    audit log recorded everything and was never replayed. The differencing
    pair split across a restart completed. **Lesson: a control whose state
    evaporates on deploy is a control with a scheduled outage.**
+![The Ghost and the Rabbit](figures/bestiary/18_pack_hunt_ghost_rabbit.png){ width="260" align=right }
+
 5. **The Ghost feeds the Rabbit (#37).** An unaudited 500 is also a
    data-dependent crashability bit — one more oracle. **Lesson: failure
    paths are outputs too.**
@@ -404,6 +434,8 @@ because each one generalises:
    specimens share a shape, build the trap for the shape.**
 
 And the meta-specimen that explains eleven others:
+
+![The Blind Zookeeper](figures/bestiary/14_the_blind_zookeeper.png){ width="300" align=right }
 
 > **The Blind Zookeeper (#48).** For seven rounds the red-team harness asked
 > the gateway's own findings whether the final frame leaked — a question
@@ -424,6 +456,11 @@ And the meta-specimen that explains eleven others:
 Honesty section — creatures seen, measured, priced, not yet caged. Each is
 documented where the security model keeps its residuals; the map would be a
 lie without them.
+
+![The Straddler](figures/bestiary/20_the_straddler.png){ width="200" }
+![The Colluder](figures/bestiary/21_the_colluder.png){ width="200" }
+![The Residual Head](figures/bestiary/22_the_residual_head.png){ width="200" }
+
 
 | Creature | Shape | Price stated where |
 |---|---|---|
@@ -491,5 +528,22 @@ security boundary — the bestiary is the mnemonic; these are the habits:
 - **Found a new beast?** Name it, give it a specimen account with habitat /
   cage / keepers, and append to the hardening log. If it belongs to no
   family, say so loudly — a new family is the most important find there is.
+
+### Cards for creatures that were caged after they were drawn
+
+Two of the set were painted while their subjects were still at large, and round
+8 caged both before the ink dried. They are kept because a bestiary that quietly
+deletes yesterday's monsters is a worse record than one that dates them.
+
+![The Planted Row, caged as #50](figures/bestiary/23_the_planted_row.png){ width="200" }
+![The Shared Connection, caged as #51](figures/bestiary/24_the_shared_connection.png){ width="200" }
+
+
+*The Planted Row* — the prefill link that ran on load — is caged at #50: the
+link fills the box and stops. *The Shared Connection* is caged at #51: a cursor
+per thread over one shared catalogue. Their specimen rows above carry the
+detail.
+
+---
 
 *The reserve is never finished. The keepers are the point.*
