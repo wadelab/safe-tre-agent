@@ -90,7 +90,7 @@ def _donor_total(df: pd.DataFrame) -> float:
     return float(len(df))
 
 
-def _accounting(cost: int, cohorts) -> dict:
+def _accounting(cost: int, cohorts, totals=()) -> dict:
     """What this request cost the session, and which cohorts it released over.
 
     Written into the audit row so a restart can *replay* the accounting rather
@@ -106,10 +106,33 @@ def _accounting(cost: int, cohorts) -> dict:
     cohorts — the trials cohort and the successes cohort, whose extra filter
     the procedure adds and the analyst never wrote — so the model spec alone
     does not determine them and re-deriving from it silently lost one.
+
+    `totals` closes the last thing a restart still lost (hardening #74). The
+    cheap first-pass check compares a release's DISTINCT-DONOR total against
+    every prior release of the same measure, and the audit row recorded an
+    output *shape* rather than that total — so the lineage layer came back
+    whole and this one came back empty. Narrow, because every pair it catches
+    between two different cohorts is also a pair the lineage layer sees, but
+    it was the one part of the restart path that did not survive a restart.
+
+    The totals are data-derived and stay where every other data-derived number
+    already lives: inside the MAC, in the log, never in a response.
+
+    Only RELEASED observations are recorded, and the asymmetry is deliberate.
+    `observe` runs before the release decision, so a query that is denied
+    afterwards still leaves its total in the live history — which makes the
+    live layer more conservative than the control it implements, not less.
+    The totals layer exists to compare totals that were RELEASED: a denied
+    query put nothing out, so it cannot be half of a differencing pair, and
+    restoring its observation would restore an artefact of the observe-then-
+    decide ordering rather than a control. Replay therefore restores the
+    control's semantics rather than the live object's contents, which is the
+    one place in this block where those two differ.
     """
     return {"cost": int(cost),
             "cohorts": [[dataset, [list(f) for f in filters]]
-                        for dataset, filters in cohorts]}
+                        for dataset, filters in cohorts],
+            "totals": [[measure, float(total)] for measure, total in totals]}
 
 
 def _literal_spec(request: str) -> dict | None:
@@ -233,7 +256,7 @@ class QueryService:
         trace: list[str] = []
         spent_before = auditor.spent
 
-        def record(status, spec, findings, output, cohorts=()):
+        def record(status, spec, findings, output, cohorts=(), totals=()):
             """`cost` is measured, not classified: the auditor's own spend
             delta over this request, so the log records what the session
             actually paid however the request went (hardening #58)."""
@@ -242,7 +265,8 @@ class QueryService:
                     user=user, request=request, spec=spec, status=status,
                     findings=[f.__dict__ for f in findings],
                     output_shape=(list(output.shape) if output is not None else None),
-                    accounting=_accounting(auditor.spent - spent_before, cohorts))
+                    accounting=_accounting(auditor.spent - spent_before, cohorts,
+                                           totals))
 
         try:
             literal = _literal_spec(request)
@@ -338,6 +362,7 @@ class QueryService:
         # differencing pair exploits (hardening #38; completes D4's
         # individuals-not-rows reading in the auditor, not just the threshold).
         total = _donor_total(df)
+        observed = [(spec.measure_key(), total)]
         audit_findings = auditor.observe(spec.measure_key(), total)
         # lineage: does this release differ from an earlier one by too few
         # people? The published marginals decide it where they can, and the
@@ -401,7 +426,7 @@ class QueryService:
         released = get_procedure(spec.measure.fn).postprocess(released, spec)
         status = "redacted" if action == "redacted" else "released"
         record(status, spec.model_dump(), findings, released,
-               cohorts=[(spec.dataset, cohort)])
+               cohorts=[(spec.dataset, cohort)], totals=observed)
         return Result(status, output=released, spec=spec.model_dump(),
                       findings=findings, trace=trace, plans=plans)
 
@@ -490,6 +515,7 @@ class QueryService:
         optional = proc.optional_roles(spec)
         finalized: dict[str, pd.DataFrame] = {}
         cohorts: list[tuple[str, tuple]] = []
+        observed: list[tuple[str, float]] = []
         notes: list[D.Finding] = []
         for role, agg in zip(roles, aggregates, strict=True):
             df = self.engine.run(agg)
@@ -503,6 +529,7 @@ class QueryService:
             # models (or two hand-issued counts on the plain path) still
             # compare role-for-role as before.
             total = _donor_total(df)
+            observed.append((f"{agg.measure_key()}#{role}", total))
             audit_findings = auditor.observe(f"{agg.measure_key()}#{role}", total)
             cohort = agg.normalized_filters()
             audit_findings += auditor.observe_cohort(
@@ -593,6 +620,7 @@ class QueryService:
         # PROCEDURE added (a binomial's successes filter) — the model spec
         # cannot be re-read to recover those, which is how a restart used to
         # forget one (hardening #58)
-        record("released", spec_dict, notes, output, cohorts=cohorts)
+        record("released", spec_dict, notes, output, cohorts=cohorts,
+               totals=observed)
         return Result("released", output=output, spec=spec_dict, plans=plans,
                       findings=notes, trace=trace, artifacts=artifacts)

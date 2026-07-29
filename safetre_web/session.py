@@ -153,15 +153,14 @@ class SessionStore:
         variable rather than a config key for the same reason
         `SAFETRE_ALLOW_UNSAFE_POLICY` is.
 
-        **What this does and does not restore.** The cohort lineage — the
-        stronger control since hardening #40, which decides on the row-level
-        difference between two releases — is rebuilt exactly. The cheap
-        total-delta layer is not: it compares distinct-donor totals, and the
-        audit row records an output *shape*, not that total. So after a restart
-        the lineage layer is whole and the first-pass layer starts empty. That
-        is a narrow residual, because every pair the totals layer catches
-        between two different cohorts is also a pair the lineage layer sees,
-        but it is a residual and not a rounding error.
+        **Both layers now restore.** The cohort lineage — the stronger control
+        since hardening #40 — was rebuilt exactly from the start. The cheap
+        total-delta layer was not, because it compares distinct-donor totals
+        and the audit row recorded an output *shape* rather than that total, so
+        it came back empty. #49 documented that as a narrow residual and #58
+        left it; the accounting block now carries the observed totals, so a
+        restart restores it too (hardening #74). It was the last thing in the
+        restart path that did not survive a restart.
         """
         if not audit_log.verify(expected_head=expected_head):
             if not _allow_unverified_rehydrate():
@@ -190,6 +189,11 @@ class SessionStore:
                 for entry in accounting.get("cohorts") or []:
                     dataset, filters = entry
                     session.auditor.record_cohort(dataset, _restore_filters(filters))
+                # the cheap total-delta layer, which used to come back empty
+                # (hardening #74). Rows written before this carry no `totals`
+                # key and simply restore nothing, exactly as they did.
+                for measure, total in accounting.get("totals") or []:
+                    session.auditor.restore_observation(measure, float(total))
                 continue
 
             # Pre-#58 rows carry no accounting, so they are replayed by the

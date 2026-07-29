@@ -26,6 +26,7 @@ Each test pins one finding from the security review so a regression fails CI:
   #63 the cheap total-delta layer over-counts a donor spanning cells (stated)
   #65 production refuses an audit key generated beside the log it signs
   #69 the cohort lineage is bounded by the budget, and must not be capped
+  #74 the cheap total-delta layer survives a restart too
 """
 
 import concurrent.futures as cf
@@ -1395,3 +1396,81 @@ def test_the_budget_ceiling_keeps_the_lineage_scan_inside_the_response_ceiling()
     assert any("query_budget" in p
                for p in policy_floor_problems(PolicyConfig(query_budget=10_000)))
     assert not policy_floor_problems(PolicyConfig(query_budget=1_000))
+
+
+# --- #74: the cheap total-delta layer survives a restart too ------------------
+
+def test_the_totals_layer_survives_a_restart(tmp_path, monkeypatch, tables):
+    """#74, closing the residual #49 documented and #58 left open.
+
+    The lineage layer was rebuilt exactly from the start; the cheap first-pass
+    check was not, because it compares distinct-donor TOTALS and the audit row
+    recorded an output shape instead. So one of the two differencing layers
+    came back empty after every restart.
+    """
+    from safetre_web.session import SessionStore
+
+    log = _audit_log(tmp_path, monkeypatch)
+    service = QueryService(tables)
+    live = SessionStore(threshold=10, budget=20)
+    auditor = live.get("analyst@org").auditor
+    assert service.handle(json.dumps(
+        {"dataset": "spend", "measure": {"fn": "count"}, "group_by": ["age_band"]}),
+        planner=None, auditor=auditor, audit_log=log,
+        user="analyst@org").status == "released"
+    assert list(auditor._history), "nothing was observed live"
+
+    after = SessionStore(threshold=10, budget=20)
+    after.rehydrate(log, window_hours=24)
+    restored = after.get("analyst@org").auditor
+    assert list(restored._history) == list(auditor._history)
+
+
+def test_a_totals_differencing_pair_is_still_caught_after_a_restart(tmp_path,
+                                                                    monkeypatch,
+                                                                    tables):
+    """The property the restored history is for: two releases of the same
+    measure whose donor totals sit within the threshold must still be caught
+    when the pair is split across a restart."""
+    from safetre_web.session import SessionStore
+
+    log = _audit_log(tmp_path, monkeypatch)
+    service = QueryService(tables)
+    spec = {"dataset": "spend", "measure": {"fn": "count"},
+            "group_by": ["age_band"]}
+
+    first = SessionStore(threshold=10, budget=20)
+    service.handle(json.dumps(spec), planner=None,
+                   auditor=first.get("analyst@org").auditor, audit_log=log,
+                   user="analyst@org")
+
+    after = SessionStore(threshold=10, budget=20)
+    after.rehydrate(log, window_hours=24)
+    restored = after.get("analyst@org").auditor
+    measure, total = list(restored._history)[0]
+
+    # A delta of ZERO is not flagged by this layer and should not be: two
+    # different cohorts of the same size say nothing about any individual.
+    # (The cohort layer is the opposite — #40 made zero deny there, because
+    # identical cohorts are skipped first, so a zero means different predicates
+    # selecting the same rows.) A delta INSIDE the threshold is the signal, and
+    # it is only visible because the restart restored the history.
+    findings = restored.observe(measure, total + 1)
+    assert any(f.rule == "differencing" for f in findings), findings
+
+
+def test_a_pre_74_row_restores_what_it_always_did(tmp_path, monkeypatch):
+    """Rows written before `totals` existed carry no key and restore nothing —
+    the same behaviour they had, not an error."""
+    from safetre_web.session import SessionStore
+
+    log = _audit_log(tmp_path, monkeypatch)
+    log.append(user="analyst@org", request="q",
+               spec={"dataset": "spend", "measure": {"fn": "count"}},
+               status="released", findings=[], output_shape=[3, 2],
+               accounting={"cost": 1, "cohorts": []})
+    store = SessionStore(threshold=10, budget=20)
+    store.rehydrate(log, window_hours=24)
+    auditor = store.get("analyst@org").auditor
+    assert auditor.spent == 1
+    assert not list(auditor._history)

@@ -854,6 +854,16 @@ class SessionAuditor:
         """
         return self._spent >= self.budget
 
+    def restore_observation(self, measure: str, total_n: float) -> None:
+        """Put a prior release's donor total back into the history on replay.
+
+        Deliberately NOT `observe`: that charges budget and evaluates the
+        differencing rule, both of which already happened when the release was
+        live. This only restores the memory, which is what a restart lost
+        (hardening #74, closing the residual #49 documented and #58 left).
+        """
+        self._history.append((measure, total_n))
+
     def charge(self, units: int = 1) -> None:
         """Spend budget for work that never reached `observe`.
 

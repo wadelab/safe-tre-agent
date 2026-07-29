@@ -86,7 +86,15 @@
 //                                  assumption);
 //   ReplayEquivalence            — a restart does not change the controls:
 //                                  replayed spend and lineage equal live
-//                                  spend and lineage (V1, V2, V4);
+//                                  spend and lineage (V1, V2, V4). The auditor
+//                                  also restores its cheap total-delta history
+//                                  since hardening #74; that layer is NOT
+//                                  modelled here, deliberately, because every
+//                                  pair it catches between two different
+//                                  cohorts is also a pair the lineage layer
+//                                  sees — it is a cheaper subsumed check, and
+//                                  modelling it would grow the state without
+//                                  adding a property;
 //   AuditCompleteness            — every request that reaches a terminal
 //                                  phase, exceptions included, is in the log
 //                                  (hardening #37);
