@@ -34,6 +34,15 @@ What this still does NOT do, stated because it would be easy to over-claim: the
 abandoned work keeps its thread. The clock stops talking; the resource cost
 stays. The ceiling is a disclosure control and is not also a compute cap — the
 row, memory and thread limits in the engine are what bound cost.
+
+What it now DOES do is stop that admission being unbounded (round-9 V11,
+hardening #68). Abandoned tasks used to accumulate without limit, so an
+attacker who could reliably exceed the ceiling could hold arbitrarily many
+threads doing work nobody would ever read, at a cost of one cheap request
+each. `MAX_ABANDONED` caps them: once that many are still running, further
+requests are refused at the door rather than started. The refusal is padded
+like every other answer, and it is a LOAD signal rather than a data one — it
+says other work is in flight, which is not a fact about anybody's records.
 """
 
 from __future__ import annotations
@@ -57,6 +66,14 @@ def sleep_to_boundary(elapsed: float, quantum: float) -> float:
     return (math.floor(elapsed / quantum) + 1) * quantum - elapsed
 
 
+# How many ceiling-exceeded requests may still be running before new ones are
+# refused at the door. Each one holds a thread doing work no client will ever
+# read, so this is the bound on that waste (round-9 V11). Generous relative to
+# a safepod's concurrency, and small enough that a flood cannot turn the
+# response ceiling into a compute amplifier.
+MAX_ABANDONED = 16
+
+
 class ResponseTimeBoundary:
     """Pad every response to the next quantum; refuse anything past the ceiling.
 
@@ -65,7 +82,7 @@ class ResponseTimeBoundary:
     path that skipped the padding would become the channel this exists to close.
     """
 
-    def __init__(self, app, settings):
+    def __init__(self, app, settings, max_abandoned: int = MAX_ABANDONED):
         """`settings()` returns `(quantum_ms, ceiling_ms)` and is called PER
         REQUEST, not captured here.
 
@@ -77,6 +94,7 @@ class ResponseTimeBoundary:
         """
         self.app = app
         self.settings = settings
+        self.max_abandoned = max_abandoned
         self._abandoned: set[asyncio.Task] = set()
 
     def _refusal(self, ceiling_ms: int) -> list[dict]:
@@ -96,6 +114,17 @@ class ResponseTimeBoundary:
             return await self.app(scope, receive, send)
 
         quantum_ms, ceiling_ms = self.settings()
+        # Refuse before starting work when the abandoned pool is full (#68).
+        # Starting it would add another orphan thread to a set that is already
+        # at its limit, which is the unbounded growth this cap exists to stop.
+        if len(self._abandoned) >= self.max_abandoned:
+            started = time.monotonic()
+            await asyncio.sleep(
+                max(0.0, sleep_to_boundary(time.monotonic() - started,
+                                           quantum_ms / 1000.0)))
+            for message in self._refusal(ceiling_ms):
+                await send(message)
+            return
         quantum, ceiling = quantum_ms / 1000.0, ceiling_ms / 1000.0
         started = time.monotonic()
         buffered: list[dict] = []

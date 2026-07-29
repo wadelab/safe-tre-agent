@@ -364,9 +364,16 @@ _FLOORS: tuple[tuple, ...] = (
     (lambda c: c.round_base >= 5,
      "round_base must be >= 5: finer rounding publishes counts at a precision "
      "hardenings #26 to #28 exist to blur"),
-    (lambda c: 1 <= c.query_budget <= 10_000,
-     "query_budget must be between 1 and 10000: an unbounded budget is not a "
-     "budget, and every released aggregate is individually differencable"),
+    (lambda c: 1 <= c.query_budget <= 1_000,
+     "query_budget must be between 1 and 1000: an unbounded budget is not a "
+     "budget, and every released aggregate is individually differencable. The "
+     "upper bound is measured, not chosen (round-9 V14, hardening #69): the "
+     "differencing lineage compares a new cohort against every cohort already "
+     "released, at ~1.2 ms each on the demo data, and the number of recorded "
+     "cohorts is bounded by the budget. At 10000 that is ~12 s of lineage "
+     "checking per request against a 5 s response ceiling — the control could "
+     "not finish inside the deadline, so the ceiling would refuse every query "
+     "and effectively replace it. At 1000 it is ~1.2 s, which fits"),
     (lambda c: c.differencing_delta >= 5,
      "differencing_delta must be >= 5: it is the number of individuals two "
      "releases may differ over, and it should not sit below the cell floor"),

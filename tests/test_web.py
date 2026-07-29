@@ -214,3 +214,57 @@ def test_a_normal_query_is_unaffected_by_the_ceiling():
     """The ceiling must not be a control that also refuses real work."""
     r = client.post("/api/query", json={"q": "mean spend by age band"})
     assert r.status_code == 200
+
+
+# --- #70: a state-changing request must not come from another origin ----------
+
+def test_a_cross_site_post_is_refused():
+    """#70 (round-9 V15). There is no session cookie to steal, but the proxy
+    header is an ambient credential: a page the analyst visits could try to
+    make their browser spend it. Today the JSON content type happens to stop
+    that via preflight — an accident that lasts until someone adds a
+    form-encoded route."""
+    for site in ("cross-site", "same-site"):
+        r = client.post("/api/query", json={"q": "mean spend by age band"},
+                        headers={"sec-fetch-site": site})
+        assert r.status_code == 403, site
+        assert "cross-origin" in r.json()["detail"]
+
+
+def test_a_same_origin_post_is_allowed():
+    r = client.post("/api/query", json={"q": "mean spend by age band"},
+                    headers={"sec-fetch-site": "same-origin"})
+    assert r.status_code == 200
+
+
+def test_a_non_browser_client_is_unaffected():
+    """curl, the CLI and the test client send no `Sec-Fetch-*` at all, and an
+    absent header is not evidence of anything — refusing it would break every
+    non-browser caller to no benefit."""
+    r = client.post("/api/query", json={"q": "mean spend by age band"})
+    assert r.status_code == 200
+
+
+# --- #71: the stored request is untrusted content ----------------------------
+
+def test_no_template_renders_the_audit_request_unescaped():
+    """#71 (round-9 V16). The audit log stores the request verbatim, because a
+    sanitised record of a hostile request is a worse record. That makes it a
+    stored-content sink for any future log viewer, so the invariant worth
+    pinning is that nothing renders it today — and that the day something
+    does, this test is where the requirement is written down.
+
+    Jinja autoescapes by default; what this catches is the `| safe` filter or
+    an `{% autoescape false %}` block arriving next to audit content.
+    """
+    import pathlib
+
+    templates_dir = pathlib.Path(__file__).resolve().parent.parent \
+        / "safetre_web" / "templates"
+    for template in templates_dir.rglob("*.html"):
+        text = template.read_text()
+        assert "autoescape false" not in text, template.name
+        for line in text.splitlines():
+            if "| safe" in line or "|safe" in line:
+                assert "request" not in line and "audit" not in line, (
+                    f"{template.name} renders audit content unescaped: {line.strip()}")

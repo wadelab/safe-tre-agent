@@ -211,6 +211,35 @@ async def rate_limit(request: Request, call_next):
 
 
 @app.middleware("http")
+async def same_site_only(request: Request, call_next):
+    """Refuse a state-changing request that a browser says came from elsewhere
+    (round-9 V15, hardening #70).
+
+    There is no session cookie here — identity arrives as a header the proxy
+    injects — so the classic CSRF token has nothing to protect. The ambient
+    credential is the proxy itself: a page the analyst visits could try to make
+    their browser issue a request through it, and the header would be attached
+    for them. Today that fails anyway, because the only state-changing route
+    takes JSON and a cross-origin JSON POST needs a preflight this app never
+    answers. That is a defence by accident of content type, and it lasts
+    exactly until someone adds a form-encoded endpoint.
+
+    `Sec-Fetch-Site` is the browser's own account of where the request came
+    from, so it cannot be forged by the page — and a non-browser client (curl,
+    the CLI, the test client) simply does not send it, which is why an absent
+    header is allowed. This refuses `cross-site` and `same-site` explicitly
+    rather than allowlisting: those are the two values that mean "another
+    origin caused this".
+    """
+    if request.method not in ("GET", "HEAD", "OPTIONS"):
+        site = request.headers.get("sec-fetch-site", "")
+        if site in ("cross-site", "same-site"):
+            return JSONResponse(
+                {"detail": "cross-origin request refused"}, status_code=403)
+    return await call_next(request)
+
+
+@app.middleware("http")
 async def restricted_channel(request: Request, call_next):
     allowed, reason = channel_allowed(request)
     if not allowed:

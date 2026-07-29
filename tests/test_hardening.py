@@ -25,6 +25,7 @@ Each test pins one finding from the security review so a regression fails CI:
   #62 the exact differencing leg is priced, and says nothing the cheap one does not
   #63 the cheap total-delta layer over-counts a donor spanning cells (stated)
   #65 production refuses an audit key generated beside the log it signs
+  #69 the cohort lineage is bounded by the budget, and must not be capped
 """
 
 import concurrent.futures as cf
@@ -1352,3 +1353,45 @@ def test_the_lean_floors_are_the_configured_floors():
     assert shipped.min_cell_size >= 5
     assert 0 < shipped.dom_threshold <= 0.5
     assert shipped.round_base >= 5
+
+
+# --- #69: the cohort lineage is bounded by the budget, not capped -------------
+
+def test_the_cohort_lineage_is_bounded_by_the_budget(tables):
+    """#69 (round-9 V14). The finding called `_cohorts` unbounded; it is not.
+    A cohort is recorded only on a release and every release spends budget, so
+    the list cannot outgrow the budget.
+
+    It also must not be capped the way `_history` is: dropping an entry from
+    the cheap total-delta layer costs a little sensitivity, dropping a COHORT
+    is how the second half of a differencing pair gets released (#59). The
+    bound is therefore the budget's job, and the budget's own ceiling is set
+    from the measured cost of the scan.
+    """
+    service = QueryService(tables)
+    auditor = SessionAuditor(threshold=10, budget=12)
+    regions = ["London", "Scotland", "Wales", "North East", "North West",
+               "South East", "South West", "East Midlands"]
+    for i, region in enumerate(regions * 3):
+        service.handle(json.dumps(
+            {"dataset": "spend", "measure": {"fn": "count"},
+             "group_by": ["age_band"],
+             "filters": [{"column": "region", "op": "==", "value": region},
+                         {"column": "sex", "op": "==", "value": ["F", "M"][i % 2]}]}),
+            planner=None, auditor=auditor, audit_log=None)
+
+    assert len(auditor._cohorts) <= auditor.spent
+    assert auditor.spent <= auditor.budget
+
+
+def test_the_budget_ceiling_keeps_the_lineage_scan_inside_the_response_ceiling():
+    """#69: the upper bound on `query_budget` is measured, not chosen. The
+    lineage compares a new cohort against every recorded one, so the scan is
+    linear in the budget; at the old ceiling of 10000 it could not finish
+    inside the response deadline, which would have left the timing ceiling
+    refusing every query in place of the control."""
+    from safetre.config import PolicyConfig, policy_floor_problems
+
+    assert any("query_budget" in p
+               for p in policy_floor_problems(PolicyConfig(query_budget=10_000)))
+    assert not policy_floor_problems(PolicyConfig(query_budget=1_000))

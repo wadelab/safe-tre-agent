@@ -134,7 +134,18 @@ class AuditLog:
 
     def append(self, *, user: str, request: str, spec, status: str,
                findings, output_shape, accounting: dict | None = None) -> str:
-        """`accounting` is what the request actually cost the session and which
+        """**`request` is stored verbatim and is UNTRUSTED CONTENT.** It is
+        whatever the caller typed, up to 500 characters, and the chain proves
+        only that it is the string that was submitted — not that a human
+        composed it (hardening #50) and not that it is safe to render. Any
+        future audit-log viewer that puts it on a page must escape it, and any
+        tool that feeds it to a model must treat it as data rather than
+        instruction: a stored prompt-injection payload is exactly the shape
+        that fits here (round-9 V16, hardening #71). It is stored rather than
+        sanitised on purpose — the log's job is to record what happened, and a
+        cleaned-up record of a hostile request is a worse record.
+
+        `accounting` is what the request actually cost the session and which
         cohorts it actually released over — written by the code that did the
         live accounting, so a restart replays a record rather than re-deriving
         one (hardening #58). It is inside the MAC: an attacker who can edit the
@@ -177,6 +188,11 @@ class AuditLog:
         rehydrate` verifies the chain before replaying it and fails closed
         (hardening #59). Any future caller that rebuilds a control from these
         rows owes the same gate.
+
+        **The `request` field of every row returned here is untrusted content**
+        — see `append`. Verifying the chain establishes that a row is authentic,
+        which is a different claim from its contents being safe to render or to
+        act on (hardening #71).
         """
         with self._lock:
             rows = self.con.execute(

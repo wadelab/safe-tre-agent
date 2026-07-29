@@ -812,6 +812,16 @@ class SessionAuditor:
     threshold: int = 10
     budget: int = 20
     _history: deque = field(default_factory=lambda: deque(maxlen=MAX_HISTORY))
+    # Bounded by the BUDGET, not capped separately, and the difference matters
+    # (round-9 V14, hardening #69). A cohort is recorded only when something is
+    # released, and every release spends at least one budget unit, so
+    # `len(_cohorts) <= _spent <= budget` — the list is not unbounded, which is
+    # what the finding supposed. It must NOT be capped like `_history` either:
+    # `_history` is the cheap total-delta layer and forgetting an entry costs
+    # little, whereas forgetting a COHORT is precisely the unsafe direction #59
+    # is about — it is how a differencing pair gets released. What the budget
+    # bound leaves is a cost question, and that is answered where the budget's
+    # own ceiling is set (`config.py::_FLOORS`).
     _cohorts: list[tuple[str, tuple]] = field(default_factory=list)
     _spent: int = 0
 
