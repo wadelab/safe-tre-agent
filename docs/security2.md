@@ -1,7 +1,10 @@
 # Formal-methods hardening recommendations
 
-Status: **F1–F7 and F10 delivered** (2026-07-28/29, post rounds 8 and 9); F8
-and F9 remain. The delivered items landed with the round-9 code fixes they
+Status: **F1–F7 and F10 delivered** (2026-07-28/29, post rounds 8 and 9). **F8
+is withdrawn as specified** and replaced by something smaller and more direct;
+**F9 is parked** until the policy question it depends on has an owner. Both
+decisions are recorded below with the reasoning, because a recommendation that
+quietly stops being worked on is indistinguishable from one nobody got to. The delivered items landed with the round-9 code fixes they
 specify — hardening #58–#67, see the [hardening log](hardening-log.md) and
 [formal/README.md](https://github.com/wadelab/safe-tre-agent/blob/main/formal/README.md). Companion to
 [security.md](security.md), [FORMAL_METHODS_ANALYSIS.md](FORMAL_METHODS_ANALYSIS.md),
@@ -105,9 +108,9 @@ for why the red-team rounds continue regardless of how good the models get.
 | F4 | **Done.** Vetting arithmetic in Lean (exact integers, not ℚ) | #41, #42 class | Medium | `SafeTre/Arith.lean` |
 | F5 | **Done.** Declared surfaces (#61) and models parametrised over the dials | #46, V12 | Medium | both toolchains + `manifest.py` |
 | F7 | **Done.** Counterexample ↔ attack pipeline | the #40/V2 failure mode itself | Process + small tooling | `formal/correspondence.yaml` |
-| F8 | Trust-zone model of the deployment | #45, #50, V6 | Medium | new `formal/trust_zones.als` |
+| F8 | **Withdrawn.** Replaced by a shipped-unit conformance test | #45, #50, V6 | Small | `tests/` + `deploy/safetre-web.service` |
 | F6 | **Done** at the column/cell level; the value level is F9's | #41–#44 structurally | Large | `SafeTre/Release.lean` |
-| F9 | DP accountant | value-level guarantee as a theorem | Large (roadmap item 3) | new |
+| F9 | **Parked.** Needs a policy owner before any code | value-level guarantee as a theorem | Large (roadmap item 3) | new |
 
 **Recommended first slice: F3, then F1 + F2.** F3 moves to the front because
 round 9's three HIGHs live there, and because of a sequencing point that matters
@@ -421,7 +424,32 @@ directions:
 Process plus small tooling rather than proof, but it targets the actual failure
 mode of both rounds: models that verify yesterday's code.
 
-### F8. Trust-zone model of the deployment
+### F8. Trust-zone model — **withdrawn, and replaced**
+
+*Decided 2026-07-29.* The model is the wrong tool for this, and the reason is
+the same one that motivates the rest of this document.
+
+Every failure F8 was meant to catch is either an assumption in
+[security.md](security.md) that was not enforced, or the shipped unit not
+setting something — and the enforcement half is now done, as fail-closed
+startup checks that refuse to run (#45, #65). A trust-zone model would prove
+things about a configuration the code already declines to start under.
+
+Worse, it would have no correspondence hop. Every model here is pinned to
+running code — `skeleton.json`, `Catalogue.lean`, the temporal event order —
+so it fails when it stops describing reality. A trust-zone model would be a
+restatement of the zone table with nothing tying it to the actual deployment,
+and it would therefore pass forever regardless of what `deploy/safetre-web.service`
+said. That is precisely the #40 failure mode, rebuilt on purpose.
+
+**What replaces it.** Nothing currently tests the shipped unit at all —
+verified, not assumed. A conformance test that parses
+`deploy/safetre-web.service` and asserts every production-required setting is
+present and mutually consistent would have caught **#45 and #65 directly**, in
+about thirty lines, with no Alloy and no Java. Unlike the model, the artifact
+under test *is* the thing that ships.
+
+The original reasoning, kept because the finding it responds to is real:
 
 Raised in priority by V6. #45 (loopback treated as a trust boundary), #50 (a
 link writing into the chain under whoever opened it) and V6 (the shipped
@@ -471,7 +499,28 @@ The largest single piece, and the one that subsumes the #41–#44 class
 structurally rather than case by case. F4 is a natural stepping stone and
 becomes its lemma library; F10 is its counterpart on the refusal channel.
 
-### F9. DP accountant
+### F9. DP accountant — **parked, pending an owner**
+
+*Decided 2026-07-29.* Not deferred for effort: deferred because the hard part
+is not code. OpenDP integration is a sprint. The decisions it needs are ones no
+repository can make — what counts as neighbouring datasets, what the per-donor
+contribution bound is, whether ε is spent per query, per session or per
+project, and above all **who owns the number**. In Five Safes terms ε is a Safe
+Outputs parameter an information-governance committee sets, not a developer.
+
+It also changes what the product is. Released values become randomised, which
+breaks the bit-for-bit reproducibility this system currently *proves* — a
+released model is reconstructible from its released artifacts alone (P21,
+machine-checked) — and means an analyst can no longer replicate their own
+result exactly. Somebody has to agree that trade is acceptable before any of
+the code is worth writing.
+
+So F9 stays the honest name for the gap F6 does not close, and stays unstarted
+until there is a person or committee attached to the ε question.
+
+The original sketch:
+
+### F9. DP accountant, original sketch
 
 Roadmap item 3, unchanged in position: the only route to value-level
 insensitivity to any one donor as a theorem rather than a control description.
@@ -479,6 +528,28 @@ Everything above hardens the deterministic pathway; this replaces "insensitive
 up to the controls" with an ε. Prefer a vetted library (OpenDP or equivalent)
 over a bespoke mechanism proof, per FORMAL_METHODS_ANALYSIS.md §E —
 deterministic rounding is not DP and should never be described as such.
+
+## What is actually next, now that F1–F7 and F10 are in
+
+Ranked, and none of it is a model:
+
+1. **The shipped-unit conformance test** (F8's replacement, above). Small, and
+   it has two findings already behind it.
+2. **The "they could get it anyway" audit.** Three findings — #62, #66, and
+   D7's original text — turned out to be the same mistake: a justification of
+   the form *the analyst could obtain this anyway*, written on the branch where
+   they could not. It is a bounded, greppable review of the specification and
+   the code comments, and a form that has produced three findings will probably
+   produce a fourth.
+3. **Round 10.** The red-team rounds have found essentially everything, and
+   round 9's own tally — six of sixteen findings outside any model's scope — is
+   the argument that the models push failures up a level rather than replacing
+   the rounds.
+4. **The last restart residual.** Hardening #49's cheap total-delta layer still
+   restarts empty, because the audit row records an output *shape* rather than
+   the donor total. Narrow, since every pair it catches is also seen by the
+   lineage layer, but it is the one thing in the restart path that still does
+   not survive a restart.
 
 ## What this list deliberately leaves alone
 
