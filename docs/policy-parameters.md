@@ -169,7 +169,7 @@ Dominance for second-moment cells (sums of squares), which back a model's standa
 
 The interval every response is rounded up to at the deployment boundary.
 
-**What the value means.** a response is held until the next multiple of this many milliseconds, so requests doing similar work become indistinguishable by latency. It does not need to hide everything: cells at or above the frequency threshold have their counts published anyway, so the quantum only has to exceed the spread of work done on the SUB-threshold cohorts whose counts are withheld. Measured, those sit within a few milliseconds of each other, so 50 puts them all in one bucket. Set to 0 to disable, which reopens the channel.
+**What the value means.** a response is held until the next multiple of this many milliseconds, so requests doing similar work become indistinguishable by latency. What it has to cover is every cohort whose EXACT size is withheld — which is not only the sub-threshold ones (hardening #72). A released count is published ROUNDED, so two released cohorts inside one rounding bucket also have exact sizes the analyst does not hold, and latency separating them would refine a released count past the blur #26 to #28 exist to keep. The sizing argument used to say supra-threshold counts were 'published anyway', which is true only up to that rounding. Measured, the spread across every such cohort sits within a few milliseconds, so 50 puts them in one bucket with room; the number is unchanged, the reason for it is now the right one. Set to 0 to disable, which reopens the channel.
 
 | | |
 |---|---|

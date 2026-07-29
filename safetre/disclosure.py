@@ -763,9 +763,25 @@ def simulatable_cohort_bound(marginals: dict, dataset: str,
     group through the *interaction* of a common category with an otherwise-narrow
     cohort (e.g. the over-50s within one small region): the marginal is then
     large even though the real symmetric difference is small. That residual is
-    the price of simulatability; it is largely covered by the per-cell donor
-    threshold (a narrow cohort's cells are suppressed anyway) and fully by a DP
-    accountant.
+    the price of simulatability.
+
+    It used to say the residual was "largely covered by the per-cell donor
+    threshold (a narrow cohort's cells are suppressed anyway)", and that was
+    wrong on the branch it mattered (hardening #72). The threshold suppresses
+    small CELLS, and this attack never asks for one: it differences two
+    releases that are each legitimately large, which is the whole shape of #39
+    and #40. Assuming the analyst takes the path where a control fires, when
+    the attack is defined by taking the path where it does not, is the same
+    error as D7's "the bit a direct query already returns" (#62) and P22's
+    "computable from the released cell table" (#66).
+
+    What actually closes it is the EXACT row-level leg added by #40
+    (`engine.row_symdiff_donors`, taken as the smaller bound in
+    `service._difference_bound`): it counts the donors behind the differing
+    rows rather than bounding them from published marginals, so the small true
+    difference is seen whatever the marginals look like. The price of that is
+    a denial the marginals cannot reproduce, measured and accepted as #62. A DP
+    accountant would close the class rather than this instance.
     """
     dmap = marginals.get(dataset, {})
 

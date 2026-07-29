@@ -143,8 +143,14 @@ class Result:
     # the compiled SQL the request would run — one entry, or one per design
     # cell table for a model. R11 requires a decision to be inspectable, and
     # the plan is the part of it the caller could not otherwise reconstruct.
-    # Safe to show: the SafeSQL shape carries no values, only bound-parameter
-    # placeholders, and every identifier in it is already public catalogue.
+    #
+    # Its CONTENT is safe to show — the SafeSQL shape carries no values, only
+    # bound-parameter placeholders, and every identifier in it is already
+    # published in the manifest. Its PRESENCE is not, on a data-derived
+    # denial, and that is a different question the old comment did not ask
+    # (hardening #72, and the fix is #66): returning it there confirms the spec
+    # validated and reached the engine, which is the distinction the canonical
+    # refusal exists to erase. Empty on those paths; see `_handle_model.deny`.
     plans: list[str] = field(default_factory=list)
 
 

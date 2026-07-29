@@ -533,9 +533,16 @@ deterministic rounding is not DP and should never be described as such.
 
 Ranked, and none of it is a model:
 
-1. **The shipped-unit conformance test** (F8's replacement, above). Small, and
-   it has two findings already behind it.
-2. **The "they could get it anyway" audit.** Three findings — #62, #66, and
+1. ~~**The shipped-unit conformance test** (F8's replacement, above).~~
+   **Done 2026-07-29** as `tests/test_deploy_unit.py` (hardening #73). The
+   required-variable list is read out of `identity.configuration_problems()`
+   rather than restated, so a new production requirement in the code fails the
+   test until the unit answers it — verified by adding one and watching it
+   fail.
+2. ~~**The "they could get it anyway" audit.**~~ **Done 2026-07-29**
+   (hardening #72): three more claims of that form found and corrected, and
+   what was cleared is recorded in the hardening log so the next pass starts
+   from a list. Original reasoning: Three findings — #62, #66, and
    D7's original text — turned out to be the same mistake: a justification of
    the form *the analyst could obtain this anyway*, written on the branch where
    they could not. It is a bounded, greppable review of the specification and
