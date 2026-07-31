@@ -126,10 +126,17 @@ def test_auditor_cohort_lineage_allows_separated_and_identical():
     # and the (possibly costly) bound is never even computed
     assert a.observe_cohort("spend", london,
                             bound=lambda pd_, a_, d_, b_: 1 / 0) == []
-    # a DIFFERENT view of the same people IS compared now (#95): the catalogue
-    # publishes several views over one donor population, and a differencing
-    # pair with one leg in each used to be skipped entirely
-    assert a.observe_cohort("wellbeing", (("region", "==", "London"),),
+    # the SAME predicate through a different view selects the same people, so
+    # it is the same cohort asked a second question — skipped, and the bound is
+    # not computed. Denying here would refuse an analyst a second MEASURE over
+    # a cohort they have already released, which is ordinary analysis
+    assert a.observe_cohort("wellbeing", london,
+                            bound=lambda pd_, a_, d_, b_: 1 / 0) == []
+    # a DIFFERING predicate through a different view IS compared now (#95).
+    # This is the shape that recovered an individual's exact annual spend from
+    # two individually safe releases, and it used to be skipped entirely
+    assert a.observe_cohort("wellbeing",
+                            (("region", "==", "London"), ("sex", "!=", "X")),
                             bound=lambda pd_, a_, d_, b_: 3) != []
     assert a.observe_cohort("wellbeing", (("region", "==", "Wales"),),
                             bound=lambda pd_, a_, d_, b_: 200) == []

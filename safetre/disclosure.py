@@ -937,7 +937,14 @@ class SessionAuditor:
         # population unless a definition ever declares otherwise. Comparing too
         # much costs availability; comparing too little is this finding.
         for prev_dataset, prev_filters in self._cohorts:
-            if prev_dataset == dataset and prev_filters == filters:
+            # Identical predicates select identical PEOPLE, whichever view they
+            # were asked through, so this is the same cohort queried again — it
+            # reveals nothing new about who is in it, and the (possibly costly)
+            # bound is not computed. Skipping on the dataset as well would undo
+            # #95; skipping on neither denies an analyst who asks for a second
+            # MEASURE over a cohort they have already released, which is
+            # ordinary analysis and not differencing.
+            if prev_filters == filters:
                 continue
             if bound(prev_dataset, prev_filters, dataset, filters) < self.threshold:
                 return [Finding(

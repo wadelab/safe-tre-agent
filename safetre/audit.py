@@ -238,7 +238,13 @@ class AuditLog:
         path = self._mark_path()
         if path is None:
             return
-        tmp = path + ".tmp"
+        # A per-writer temp name (round 11 CI): a fixed `.tmp` is a shared
+        # path, so two writers on one database raced — one renamed it and the
+        # other's `os.replace` raised FileNotFoundError out of `append`. #81
+        # refuses that configuration, but the mark must not be the thing that
+        # detects it, and a crash mid-write must not leave a name a later
+        # writer trips over.
+        tmp = f"{path}.{os.getpid()}.{threading.get_ident()}.tmp"
         # fsync both the file and its directory: the rows are written under
         # `PRAGMA synchronous=FULL`, so without this a power cut can leave
         # durable rows beside a mark that never reached the platter, and a
