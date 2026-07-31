@@ -80,7 +80,7 @@ See [Safepod model](safepod.md) for the physical controls and failure modes.
 | 6 | Prompt injection via data | planted `free_text` tells model to exfiltrate | model can only emit a QuerySpec; `free_text` is unqueryable | `query.py` |
 | 7 | Hostile intent | "give me row-level records…" | intent vetting rejects pre-planning *(defence in depth only — the allowlist is the real boundary)* | `analyst.py` |
 | 8 | Header spoofing (identity) | forge `Tailscale-User-Login` from any local process — including the untrusted model runtime, which shares loopback | binds `127.0.0.1`; only canonical header trusted (`X-` dropped); a repeated or comma-joined header is **refused, not resolved**; `SAFETRE_PROXY_SHARED_SECRET` is **required** wherever `SAFETRE_REQUIRE_IDENTITY=1`, because loopback is a shared trust domain and not a boundary; an empty allowlist admits nobody in production; a widened channel still needs an explicit `SAFETRE_TRUST_FORWARDED_IDENTITY` opt-in | `identity.py`, `channel.py`, `deploy/safetre-web.service` |
-| 9 | Tamper with the record | edit/delete/**recompute** audit rows | **HMAC-keyed** chain (off-box key); `verify(expected_head)` checks an off-box anchor | `audit.py` |
+| 9 | Tamper with the record | edit/delete/**recompute** audit rows; **truncate** the tail; restore a copy taken without the write-ahead log | **HMAC-keyed** chain (off-box key); a `<db>.head` high-water mark, so removing rows from the database alone stops verifying (#75); the WAL checkpointed after every append, so the database file is self-contained (#78); `verify(expected_head)` checks that an off-box anchor is still **in** the chain | `audit.py` |
 | 10 | XSS in the UI | hostile content rendered | strict CSP (`script-src 'self'`), Jinja autoescape, pandas `escape=True` | `app.py`, templates |
 | 11 | DoS / LLM cost amplification | request flood; huge `in` list; pathological group-by; repeated full-chain audit verification | per-identity rate limit on **every** route (429), padded like any other response, with a tighter budget for the chain scan; `in`≤50, group-by≤3; DuckDB memory/thread + row caps | `rate.py`, `app.py`, `query.py`, `engine.py` |
 | 12 | Bypass the safepod channel | accidental public bind, direct LAN access, spoofed proxy headers | restricted-channel middleware checks real peer address; uvicorn binds localhost; systemd/network firewall deny non-channel traffic | `safetre_web/channel.py`, deployment |
@@ -348,7 +348,16 @@ D1–D7). After the [first hardening round](hardening-log.md), what remains:
   access to `/var/lib` — but on one host it does not defeat root. The control
   that survives that is the off-box **anchor**
   (`SAFETRE_AUDIT_HEAD_ANCHOR`), against which a wholesale rewrite fails
-  however well it is forged; a missing anchor is now reported at startup.
+  however well it is forged; a missing anchor is now reported at startup, and
+  since #75 `/api/audit/verify` returns the current head so an operator has
+  something to record. **A chain cannot detect its own truncation** — deleting
+  the tail leaves a valid chain from GENESIS — so `verify()` also consults a
+  high-water mark written beside the database on every append. That mark shares
+  a host with the log and is not proof against an attacker who can write the
+  directory: what it does is turn a one-row `DELETE` into a two-file forgery
+  and make the default deployment refuse rather than accept silently. **Back up
+  the log with `sqlite3 .backup` or copy `audit.db*`, not `audit.db`** — the
+  latter was #78.
 - Remote-LLM mode to a non-local endpoint still egresses the *research
   questions*. The code now requires `SAFETRE_ALLOW_REMOTE_LLM=1`, but that flag
   remains synthetic-data-only and must not be enabled for real safepod data.

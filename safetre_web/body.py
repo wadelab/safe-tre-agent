@@ -33,6 +33,8 @@ from __future__ import annotations
 
 import json
 
+from .headers import SECURITY_HEADERS
+
 # Enough for `{"q": "<500 chars>"}` many times over, and far below anything
 # that costs memory to hold.
 DEFAULT_MAX_BODY_BYTES = 8 * 1024
@@ -53,7 +55,7 @@ class RequestSizeLimit:
             {"type": "http.response.start", "status": 413,
              "headers": [(b"content-type", b"application/json"),
                          (b"content-length", str(len(body)).encode()),
-                         (b"connection", b"close")]},
+                         (b"connection", b"close")] + SECURITY_HEADERS},
             {"type": "http.response.body", "body": body},
         ]
 

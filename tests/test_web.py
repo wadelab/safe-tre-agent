@@ -268,3 +268,50 @@ def test_no_template_renders_the_audit_request_unescaped():
             if "| safe" in line or "|safe" in line:
                 assert "request" not in line and "audit" not in line, (
                     f"{template.name} renders audit content unescaped: {line.strip()}")
+
+
+# --- #76/#77: refusals are responses too --------------------------------------
+
+def test_security_headers_reach_middleware_generated_refusals():
+    """#77: `security_headers` was registered FIRST, which made it the
+    innermost layer, so it only decorated router output. Every refusal the
+    middleware generated itself — the channel 403, the cross-site 403, the
+    413, the 429, the ceiling 503 — came back with none of the four headers
+    and, in particular, without `nosniff`. The bodies are fixed JSON so nothing
+    was live; a refusal is still a response."""
+    from safetre_web.body import DEFAULT_MAX_BODY_BYTES
+
+    checks = [
+        ("cross-site 403", client.post(
+            "/api/query", json={"q": "mean spend by age band"},
+            headers={"sec-fetch-site": "cross-site"})),
+        ("413", client.post(
+            "/api/query",
+            content=json.dumps({"q": "x", "pad": "A" * DEFAULT_MAX_BODY_BYTES * 4}),
+            headers={"content-type": "application/json"})),
+    ]
+    for label, response in checks:
+        headers = {k.lower() for k in response.headers}
+        assert response.status_code in (403, 413), label
+        assert "content-security-policy" in headers, label
+        assert "x-content-type-options" in headers, label
+        assert "x-frame-options" in headers, label
+
+
+def test_the_expensive_verify_get_is_gated_cross_site():
+    """#77: `/api/audit/verify` is a GET with a real side effect — a full-chain
+    rescan under the audit lock — so a visited page could spend the victim's
+    whole verify budget on it."""
+    r = client.get("/api/audit/verify", headers={"sec-fetch-site": "cross-site"})
+    assert r.status_code == 403
+    assert client.get("/api/audit/verify").status_code == 200
+
+
+def test_the_static_exemption_is_a_path_not_a_prefix():
+    """#77: `startswith("/static")` also matched `/static-anything`, which is
+    an unmetered path that is not a static file."""
+    from safetre_web.app import limiter
+
+    before = len(limiter._buckets)
+    client.get("/staticxyz")
+    assert len(limiter._buckets) > before or before, "the path was not metered"

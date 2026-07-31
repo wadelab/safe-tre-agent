@@ -38,11 +38,22 @@ row, memory and thread limits in the engine are what bound cost.
 What it now DOES do is stop that admission being unbounded (round-9 V11,
 hardening #68). Abandoned tasks used to accumulate without limit, so an
 attacker who could reliably exceed the ceiling could hold arbitrarily many
-threads doing work nobody would ever read, at a cost of one cheap request
-each. `MAX_ABANDONED` caps them: once that many are still running, further
-requests are refused at the door rather than started. The refusal is padded
-like every other answer, and it is a LOAD signal rather than a data one — it
-says other work is in flight, which is not a fact about anybody's records.
+threads doing work nobody would ever read, at a cost of one cheap request each.
+
+**The cap is PER CALLER, and #68's first version was not** (round 10, #76).
+A single process-wide pool checked at the outermost layer meant sixteen cheap
+requests from one identity returned 503 to everybody, on every route including
+`/healthz` and `/static` — so a liveness probe would declare the app dead and
+restart it. That trades an unbounded compute pool for a global kill switch,
+which is a worse bargain: the thing being bounded is one caller's waste, so
+that is what the bound has to be keyed on. A global backstop remains, an order
+of magnitude higher, for the case where many callers overrun at once.
+
+It also stopped being a cross-user oracle in the process. With one shared pool
+an attacker could hold it one slot below the limit and read, from a cheap
+probe, exactly when somebody else's query crossed the ceiling and when it
+finished — the wall-clock duration of another user's over-ceiling work,
+unpadded. Per-caller pools do not move when anybody else runs a query.
 """
 
 from __future__ import annotations
@@ -51,6 +62,8 @@ import asyncio
 import json
 import math
 import time
+
+from .headers import SECURITY_HEADERS
 
 
 def sleep_to_boundary(elapsed: float, quantum: float) -> float:
@@ -66,12 +79,19 @@ def sleep_to_boundary(elapsed: float, quantum: float) -> float:
     return (math.floor(elapsed / quantum) + 1) * quantum - elapsed
 
 
-# How many ceiling-exceeded requests may still be running before new ones are
-# refused at the door. Each one holds a thread doing work no client will ever
-# read, so this is the bound on that waste (round-9 V11). Generous relative to
-# a safepod's concurrency, and small enough that a flood cannot turn the
-# response ceiling into a compute amplifier.
-MAX_ABANDONED = 16
+# How many ceiling-exceeded requests ONE CALLER may have still running before
+# their next request is refused at the door. Each holds a thread doing work no
+# client will ever read, so this is the bound on that waste (round-9 V11).
+MAX_ABANDONED_PER_CALLER = 4
+
+# A backstop for everyone together, an order of magnitude higher, so that many
+# callers overrunning at once still cannot grow the pool without limit. Reached
+# only when the per-caller bound has already failed to contain things.
+MAX_ABANDONED_TOTAL = 64
+
+# Never refused, whatever the pool looks like: a liveness probe that fails
+# under load gets the service restarted, and static assets cost nothing.
+ALWAYS_ADMITTED = ("/healthz",)
 
 
 class ResponseTimeBoundary:
@@ -82,7 +102,25 @@ class ResponseTimeBoundary:
     path that skipped the padding would become the channel this exists to close.
     """
 
-    def __init__(self, app, settings, max_abandoned: int = MAX_ABANDONED):
+    @staticmethod
+    def _caller(scope) -> str:
+        """Who to charge an abandoned task to.
+
+        The presented identity where there is one, the peer otherwise. This is
+        a RESOURCE bucket, not an authorisation decision, so an unverified
+        header is fine to key on: rotating it buys more slots but stays inside
+        the global backstop, and every other control still refuses the forged
+        identity itself.
+        """
+        for name, value in scope.get("headers", ()):
+            if name == b"tailscale-user-login" and value:
+                return "user:" + value.decode("latin-1", "replace")[:200]
+        client = scope.get("client")
+        return "peer:" + (client[0] if client else "?")
+
+    def __init__(self, app, settings,
+                 max_abandoned: int = MAX_ABANDONED_PER_CALLER,
+                 max_abandoned_total: int = MAX_ABANDONED_TOTAL):
         """`settings()` returns `(quantum_ms, ceiling_ms)` and is called PER
         REQUEST, not captured here.
 
@@ -95,7 +133,10 @@ class ResponseTimeBoundary:
         self.app = app
         self.settings = settings
         self.max_abandoned = max_abandoned
+        self.max_abandoned_total = max_abandoned_total
         self._abandoned: set[asyncio.Task] = set()
+        # caller key -> that caller's still-running abandoned tasks
+        self._abandoned_by: dict[str, set[asyncio.Task]] = {}
 
     def _refusal(self, ceiling_ms: int) -> list[dict]:
         body = json.dumps({
@@ -105,7 +146,8 @@ class ResponseTimeBoundary:
         return [
             {"type": "http.response.start", "status": 503,
              "headers": [(b"content-type", b"application/json"),
-                         (b"content-length", str(len(body)).encode())]},
+                         (b"content-length", str(len(body)).encode())]
+                        + SECURITY_HEADERS},
             {"type": "http.response.body", "body": body},
         ]
 
@@ -114,10 +156,16 @@ class ResponseTimeBoundary:
             return await self.app(scope, receive, send)
 
         quantum_ms, ceiling_ms = self.settings()
-        # Refuse before starting work when the abandoned pool is full (#68).
-        # Starting it would add another orphan thread to a set that is already
-        # at its limit, which is the unbounded growth this cap exists to stop.
-        if len(self._abandoned) >= self.max_abandoned:
+        # Refuse before starting work when THIS CALLER's pool is full (#68,
+        # corrected in #76). Starting it would add another orphan thread to a
+        # set already at its limit, which is the unbounded growth this cap
+        # exists to stop — but the bound is on one caller's waste, so a caller
+        # who has not overrun anything is never refused for someone else's.
+        caller = self._caller(scope)
+        mine = self._abandoned_by.get(caller, ())
+        if (scope.get("path") not in ALWAYS_ADMITTED
+                and (len(mine) >= self.max_abandoned
+                     or len(self._abandoned) >= self.max_abandoned_total)):
             started = time.monotonic()
             await asyncio.sleep(
                 max(0.0, sleep_to_boundary(time.monotonic() - started,
@@ -149,7 +197,14 @@ class ResponseTimeBoundary:
             # keep a reference so the orphan is not garbage-collected mid-flight,
             # and swallow its eventual result or error
             self._abandoned.add(task)
+            bucket = self._abandoned_by.setdefault(caller, set())
+            bucket.add(task)
             task.add_done_callback(self._abandoned.discard)
+            task.add_done_callback(bucket.discard)
+            # do not let the per-caller map grow without bound
+            task.add_done_callback(
+                lambda _t, k=caller: self._abandoned_by.pop(k, None)
+                if not self._abandoned_by.get(k) else None)
             task.add_done_callback(lambda t: t.cancelled() or t.exception())
             await hold()
             for message in self._refusal(ceiling_ms):

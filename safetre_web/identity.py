@@ -185,6 +185,25 @@ def configuration_problems() -> list[str]:
     return problems
 
 
+def rate_limit_key(request: Request) -> str:
+    """The bucket a request's rate limit is charged to.
+
+    The login ONLY when the header is trustworthy in this deployment — that is,
+    when the proxy secret checks out. In production that is already true, but
+    in the default/demo posture there is no secret and no allowlist, so
+    `current_user` returns `(login, True)` for any string the caller invents
+    and every rotation of the header minted a fresh bucket: the limiter was
+    keyed on something the caller chooses (round 10, #77, the same root as
+    #45). Falling back to the peer address costs nothing where identity is
+    real and is the only sound key where it is not.
+    """
+    login = _presented_login(request)
+    if login and _header_trustworthy(request) and _allowed(login):
+        return login
+    client = request.client
+    return f"peer:{client.host if client else '?'}"
+
+
 def current_user(request: Request) -> tuple[str, bool]:
     """Return (login, allowed)."""
     login = _presented_login(request)

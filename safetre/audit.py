@@ -9,7 +9,26 @@ Two further requirements for real tamper-resistance (see docs/security.md):
   1. The key must live OFF the box that holds the log — e.g. provided via
      `SAFETRE_AUDIT_KEY` from a systemd `LoadCredential=`, never on disk.
   2. The chain head should be anchored off-box periodically; `verify(expected_head)`
-     checks the recomputed head against that external anchor.
+     checks that the anchored head is still IN the chain.
+
+**A chain cannot detect its own truncation.** Walking rows and checking that
+each `prev_mac` matches the last MAC proves the rows present are consistent —
+it says nothing about rows that are no longer there. Deleting the TAIL leaves a
+perfectly valid chain from GENESIS, and hardening #59's verify-before-replay
+gate therefore did not catch it: an attacker who released the first half of a
+differencing pair, deleted that one row and waited for a restart got the second
+half released, with `verify()` reporting the chain intact (round 10, #75).
+
+Two answers, and only the second is a real control:
+
+  * the HIGH-WATER MARK below — a sidecar file holding the head as of the last
+    append, consulted by `verify()`. It lives on the same host, so an attacker
+    who can write the database can usually write this too; what it does is turn
+    a one-row DELETE into a two-file forgery, and make the DEFAULT deployment
+    notice rather than accept it silently.
+  * the off-box ANCHOR, which is the control that survives a host compromise
+    and the reason `head()` is now reachable from the API: an operator cannot
+    record a head they have no way to read.
 """
 
 from __future__ import annotations
@@ -84,6 +103,7 @@ class AuditLog:
         #65); the CLI and the tests do not, because a throwaway log with a
         throwaway key is exactly what they want."""
         self._key = key if key is not None else _load_key(path, require_external_key)
+        self._path = path
         self.con = sqlite3.connect(path, check_same_thread=False)
         self._lock = threading.Lock()
         self.con.execute("PRAGMA journal_mode=WAL")
@@ -123,6 +143,35 @@ class AuditLog:
         if accounting is not None:
             body["accounting"] = accounting
         return body
+
+    # --- the high-water mark ---------------------------------------------
+    #
+    # A single small file beside the database holding the head as of the last
+    # append. It is not a secret (a MAC discloses nothing) and it is not the
+    # off-box anchor; it exists so that removing rows from the DATABASE alone
+    # stops verifying.
+
+    def _mark_path(self) -> str | None:
+        return None if self._path in (":memory:", "") else self._path + ".head"
+
+    def _write_mark(self, head: str) -> None:
+        path = self._mark_path()
+        if path is None:
+            return
+        tmp = path + ".tmp"
+        with open(tmp, "w") as fh:
+            fh.write(head)
+        os.replace(tmp, path)          # atomic: never a half-written mark
+
+    def _read_mark(self) -> str | None:
+        path = self._mark_path()
+        if path is None or not os.path.exists(path):
+            return None
+        try:
+            with open(path) as fh:
+                return fh.read().strip() or None
+        except OSError:
+            return None
 
     def _head_locked(self) -> str:
         row = self.con.execute("SELECT mac FROM records ORDER BY id DESC LIMIT 1").fetchone()
@@ -166,6 +215,16 @@ class AuditLog:
                  None if accounting is None else _canonical(accounting)),
             )
             self.con.commit()
+            # Fold the WAL back into the database file after every append
+            # (round 10, #78). WAL keeps committed rows in `audit.db-wal` until
+            # a checkpoint, so copying, restoring or backing up `audit.db`
+            # alone — the classic SQLite mistake, and the exact scenario #65's
+            # note describes — produced a log with ZERO rows that verified
+            # happily. Measured: 5 rows live, 0 in the copy, `verify()` True.
+            # This log is written once per request, so a checkpoint per append
+            # is affordable and makes the file self-contained.
+            self.con.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            self._write_mark(mac)
             return mac
 
     def since(self, cutoff: float) -> list[dict]:
@@ -210,15 +269,45 @@ class AuditLog:
                 continue                      # a corrupt row is `verify`'s problem
         return out
 
+    def head_is_reachable(self) -> str:
+        """The current head, for an operator to record off-box.
+
+        Public because the anchor was unusable without it: the shipped unit
+        told an operator to set `SAFETRE_AUDIT_HEAD_ANCHOR` to "the chain head
+        from /api/audit/verify", and no route, script or command in the
+        repository ever returned one (round 10, #75). A MAC discloses nothing
+        about the rows it covers, so publishing it costs nothing.
+        """
+        return self.head()
+
     def verify(self, expected_head: str | None = None) -> bool:
-        """Recompute the keyed chain. If `expected_head` (an off-box anchor) is
-        given, the recomputed head must also equal it."""
+        """Recompute the keyed chain, and check it has not been truncated.
+
+        Three separate questions, and the original only asked the first:
+
+        1. **Are the rows present consistent?** Each `prev_mac` must equal the
+           previous row's MAC and every MAC must recompute.
+        2. **Are any rows MISSING from the end?** A chain cannot answer this
+           about itself — deleting the tail leaves a valid chain from GENESIS —
+           so it is answered against the high-water mark written beside the
+           database on every append. Same host, so not proof against an
+           attacker who can write the directory; it turns a one-row DELETE into
+           a two-file forgery, and makes the default deployment notice.
+        3. **Is this the chain the operator anchored?** `expected_head` must
+           still appear IN the chain. It used to have to EQUAL the head, which
+           made an anchor go stale on the very next append — including the
+           app's own startup policy record — so the check was red for the whole
+           life of every process after the first. An anchor names a point the
+           chain must still contain; everything after it is growth, everything
+           missing before it is tampering.
+        """
         prev = GENESIS
         with self._lock:
             rows = self.con.execute(
                 "SELECT ts,user,request,spec,status,findings,output_shape,prev_mac,mac,"
                 "accounting FROM records ORDER BY id"
             ).fetchall()
+        seen_macs: list[str] = []
         for (ts, user, request, spec, status, findings, shape, prev_mac, mac,
              accounting) in rows:
             if prev_mac != prev:
@@ -240,6 +329,16 @@ class AuditLog:
             except (ValueError, TypeError):
                 return False
             prev = mac
-        if expected_head is not None and not hmac.compare_digest(prev, expected_head):
-            return False
+            seen_macs.append(mac)
+
+        # (2) truncation, against the mark written on the last append
+        mark = self._read_mark()
+        if mark is not None and not any(
+                hmac.compare_digest(m, mark) for m in seen_macs):
+            return prev == GENESIS and mark == GENESIS
+
+        # (3) the off-box anchor: still present, not necessarily last
+        if expected_head is not None and expected_head != GENESIS:
+            if not any(hmac.compare_digest(m, expected_head) for m in seen_macs):
+                return False
         return True

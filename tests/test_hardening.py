@@ -1474,3 +1474,140 @@ def test_a_pre_74_row_restores_what_it_always_did(tmp_path, monkeypatch):
     auditor = store.get("analyst@org").auditor
     assert auditor.spent == 1
     assert not list(auditor._history)
+
+
+# --- #75: a chain cannot detect its own truncation ---------------------------
+
+def test_a_truncated_chain_no_longer_verifies(tmp_path, monkeypatch, tables):
+    """#75 (round 10). Walking rows and checking each `prev_mac` proves the
+    rows PRESENT are consistent and says nothing about rows that are gone.
+    Deleting the TAIL leaves a valid chain from GENESIS, so #59's
+    verify-before-replay gate passed it: release the first half of a
+    differencing pair, delete that one row, wait for a restart, and the second
+    half is released with `verify()` reporting the chain intact.
+
+    Measured before the fix: A released 261.69, B released 258.71 after the
+    truncation — the pair completing, over ~15 donors.
+    """
+    from safetre_web.session import AuditChainUnverified, SessionStore
+
+    log = _audit_log(tmp_path, monkeypatch)
+    service = QueryService(tables)
+    base = [{"column": "region", "op": "==", "value": "South West"},
+            {"column": "sex", "op": "==", "value": "F"}]
+
+    def ask(auditor, rating, target=None):
+        return service.handle(json.dumps(
+            {"dataset": "spend", "measure": {"fn": "sum", "column": "amount_gbp"},
+             "filters": base + [{"column": "age_rating", "op": ">=", "value": rating}]}),
+            planner=None, auditor=auditor, audit_log=target or log,
+            user="analyst@org")
+
+    store = SessionStore(threshold=10, budget=20)
+    assert ask(store.get("analyst@org").auditor, 7).status == "released"
+    assert log.verify()
+
+    log.con.execute("DELETE FROM records WHERE id = (SELECT MAX(id) FROM records)")
+    log.con.commit()
+    assert not log.verify(), "a truncated chain must not verify"
+    with pytest.raises(AuditChainUnverified):
+        SessionStore(threshold=10, budget=20).rehydrate(log, window_hours=24)
+
+
+def test_an_anchor_survives_the_chain_growing(tmp_path, monkeypatch):
+    """#75: `expected_head` had to EQUAL the head, so an anchor went stale on
+    the very next append — including the app's own startup policy record, which
+    made the check red for the whole life of every process after the first. An
+    anchor names a point the chain must still CONTAIN."""
+    from safetre.audit import AuditLog
+
+    monkeypatch.setenv("SAFETRE_AUDIT_KEY", "0" * 64)
+    log = AuditLog(str(tmp_path / "anchor.db"))
+    anchor = log.append(user="u", request="q1", spec=None, status="released",
+                        findings=[], output_shape=None)
+    log.append(user="u", request="q2", spec=None, status="released",
+               findings=[], output_shape=None)
+    assert log.verify(expected_head=anchor), "growth must not invalidate an anchor"
+    assert not log.verify(expected_head="deadbeef")
+
+
+def test_the_chain_head_is_reachable(tmp_path, monkeypatch):
+    """#75: the shipped unit told an operator to anchor "the chain head from
+    /api/audit/verify", and nothing in the repository ever returned one."""
+    from safetre.audit import AuditLog
+
+    monkeypatch.setenv("SAFETRE_AUDIT_KEY", "0" * 64)
+    log = AuditLog(str(tmp_path / "head.db"))
+    mac = log.append(user="u", request="q", spec=None, status="released",
+                     findings=[], output_shape=None)
+    assert log.head_is_reachable() == mac and len(mac) == 64
+
+
+def test_a_copy_of_the_database_alone_is_complete(tmp_path, monkeypatch):
+    """#78 (round 10): WAL kept committed rows in `audit.db-wal`, so copying
+    or restoring `audit.db` on its own — the classic SQLite mistake, and the
+    scenario #65's own note describes — produced a log with zero rows that
+    verified happily. Measured before the fix: 5 rows live, 0 in the copy,
+    `verify()` True."""
+    import shutil
+
+    from safetre.audit import AuditLog
+
+    monkeypatch.setenv("SAFETRE_AUDIT_KEY", "0" * 64)
+    path = str(tmp_path / "live.db")
+    log = AuditLog(path)
+    for i in range(5):
+        log.append(user="u", request=f"q{i}", spec=None, status="released",
+                   findings=[], output_shape=None)
+
+    copy = str(tmp_path / "copy.db")
+    shutil.copy(path, copy)                       # the database file ONLY
+    restored = AuditLog(copy)
+    rows = restored.con.execute("SELECT COUNT(*) FROM records").fetchone()[0]
+    assert rows == 5, f"the copy lost rows to the WAL: {rows}"
+    assert restored.verify()
+
+
+def test_replay_does_not_evict_the_sessions_it_is_rebuilding(tmp_path, monkeypatch):
+    """#79 (round 10): `rehydrate` called `SessionStore.get` per RECORD, which
+    applies the LRU cap per record — so replaying an interleaved log evicted
+    the very sessions it was rebuilding. A user with three released rows came
+    back with spent 0 and no cohorts because other identities' rows sat between
+    them, and `rehydrate` still reported success. Forgetting a cohort is the
+    unsafe direction (#59, #69)."""
+    from safetre_web.session import SessionStore
+
+    log = _audit_log(tmp_path, monkeypatch)
+    for i in range(3):
+        log.append(user="A", request="q", spec={"dataset": "spend"},
+                   status="released", findings=[], output_shape=[1, 1],
+                   accounting={"cost": 1,
+                               "cohorts": [["spend", [["region", "==", f"R{i}"]]]]})
+        for j in range(3):
+            log.append(user=f"other{i}{j}", request="q", spec={"dataset": "spend"},
+                       status="released", findings=[], output_shape=[1, 1],
+                       accounting={"cost": 1,
+                                   "cohorts": [["spend", [["sex", "==", "F"]]]]})
+
+    store = SessionStore(threshold=10, budget=20)      # the shipped cap
+    store.rehydrate(log, window_hours=24)
+    auditor = store.get("A").auditor
+    assert (auditor.spent, len(auditor._cohorts)) == (3, 3)
+
+
+def test_eviction_prefers_a_session_holding_no_state():
+    """#79: dropping a session drops its spent budget and its lineage, so a
+    session with state is evicted only when there is nothing else to drop."""
+    from safetre_web.session import SessionStore
+
+    store = SessionStore(threshold=10, budget=20, max_sessions=2)
+    stateful = store.get("busy@org").auditor
+    stateful.charge(1)
+    stateful.record_cohort("spend", (("region", "==", "London"),))
+    store.get("idle@org")                              # no state
+    store.get("newcomer@org")                          # forces an eviction
+
+    assert "busy@org" in store._sessions, "the session holding state was evicted"
+    assert "idle@org" not in store._sessions
+    kept = store.get("busy@org").auditor
+    assert (kept.spent, len(kept._cohorts)) == (1, 1)

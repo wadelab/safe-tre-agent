@@ -22,13 +22,25 @@ class RateLimiter:
         self._lock = threading.Lock()
 
     def _sweep_locked(self, now: float) -> None:
-        """Drop fully-refilled (idle) buckets so the map cannot grow without
-        bound under many distinct identities. A dropped bucket just resets to
-        full, which is the correct state for an idle key anyway."""
+        """Bring the map back under `max_keys`. A dropped bucket resets to
+        full, which is the correct state for an idle key anyway.
+
+        Idle buckets go first. If that is not enough the least recently used
+        go too, because idleness alone was never a bound: a stream of FRESH
+        distinct keys has no idle buckets to drop, so the map grew without
+        limit while the docstring said it could not — 50,000 entries against a
+        `max_keys` of 100, measured (round 10, #77). Dropping an active
+        bucket forgives that key its spent tokens, which is why it is the
+        second resort and not the first, but a limiter that runs out of memory
+        limits nothing.
+        """
         idle_before = now - self.window_sec
-        stale = [k for k, (_, last) in self._buckets.items() if last <= idle_before]
-        for k in stale:
+        for k in [k for k, (_, last) in self._buckets.items() if last <= idle_before]:
             del self._buckets[k]
+        if len(self._buckets) > self.max_keys:
+            by_age = sorted(self._buckets.items(), key=lambda kv: kv[1][1])
+            for k, _ in by_age[:len(self._buckets) - self.max_keys]:
+                del self._buckets[k]
 
     def allow(self, key: str) -> bool:
         now = time.monotonic()

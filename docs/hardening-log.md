@@ -3,6 +3,87 @@
 A dated record of self-red-team findings and the fixes applied. New findings get
 appended; the table is the quick index, the notes below give detail.
 
+## 2026-07-31 — round 10 (the controls that were never asked what they would do when they failed)
+
+Round 9 closed the state-accounting and restart paths. This round went after the
+layer underneath them: the things every other control assumes are working —
+the tamper-evident log, the identity a bucket is keyed on, the order the request
+layers actually run in, and what a restart or a copy preserves. Five findings,
+and four of them are a control that was correct about the case it was written
+for and silent about the case next to it.
+
+The pattern this round leaves behind: **an integrity check that cannot fail is
+not a check.** #75 and #78 are the same defect twice — `verify()` returned True
+on a chain with rows deleted and True on a database copied without its
+write-ahead log — and in both the answer was structurally unable to be anything
+else, because nothing outside the rows themselves said how many rows there
+should be. #77 is the request-edge equivalent: four layers each correct in
+isolation, composed in an order nobody had enumerated.
+
+| # | Finding | Sev | Status | Fix | Where |
+|---|---|---|---|---|---|
+| 75 | **A chain cannot detect its own truncation.** Walking the rows and checking that each `prev_mac` matches the last MAC proves the rows *present* are consistent and says nothing about rows that are no longer there: deleting the TAIL leaves a perfectly valid chain from GENESIS. So #59's verify-before-replay gate — the control that stops a restart rebuilding session state from unauthenticated rows — passed a truncated log. Measured end to end: release the first half of a differencing pair (261.69), delete that one row, restart, and the second half is released (258.71) over ~15 donors, with `verify()` reporting the chain intact throughout. Two smaller defects in the same unit made the documented answer unusable: `expected_head` had to EQUAL the head, so an off-box anchor went stale on the very next append — including the app's own startup policy record, which left the check red for the whole life of every process after the first — and no route, script or command in the repository ever RETURNED a head, while the shipped systemd unit told the operator to anchor "the chain head from `/api/audit/verify`" | High | **Fixed** | a high-water mark (`<db>.head`, written atomically after every append) records the head the log last had, and `verify()` fails if that MAC is no longer in the chain. It lives on the same host, so it is not proof against an attacker who can write the directory — what it does is turn a one-row DELETE into a two-file forgery and make the DEFAULT deployment notice rather than accept it silently. The anchor becomes a MEMBERSHIP check: an anchor names a point the chain must still contain, everything after it is growth. `head()` is exposed on `/api/audit/verify` beside the verdict, because an operator cannot record a head they have no way to read, and a MAC discloses nothing about the rows it covers | `safetre/audit.py`, `safetre_web/app.py`, `tests/test_hardening.py` |
+| 76 | **A bound on one caller's waste was applied to everybody.** #68 capped abandoned ceiling-exceeded tasks at 16 process-wide, checked at the outermost layer — so sixteen cheap requests from ONE identity returned 503 to every other user on every route, `/healthz` included, and a liveness probe would have declared the app dead and restarted it. That trades an unbounded compute pool for a global kill switch, which is the worse bargain. The shared pool was also a cross-user oracle: an attacker holding it one slot below the limit could read from a cheap probe exactly when somebody else's query crossed the ceiling and when it finished — the unpadded wall-clock duration of another user's over-ceiling work, which is the quantity the response-time padding exists to hide | Med | **Fixed** | the cap is per caller (`MAX_ABANDONED_PER_CALLER`, 4) with a global backstop an order of magnitude higher (`MAX_ABANDONED_TOTAL`, 64) for many callers overrunning at once, and `/healthz` is never refused. Per-caller pools do not move when anybody else runs a query, so the oracle closes with the outage | `safetre_web/timing.py`, `tests/test_timing_channel.py` |
+| 77 | **Four request-edge layers, each right on its own, composed in an order nobody had enumerated.** (a) `security_headers` was registered FIRST, which in Starlette makes it the INNERMOST layer, so it decorated router output only: every refusal the middleware generated itself — the channel 403, the cross-site 403, the 413, the 429, the 503 ceiling — went out with none of the four headers and in particular without `nosniff`, while the module docstring claimed strict headers throughout. (b) The rate limiter was keyed on `current_user`, which in the default posture returns `(login, True)` for any string the caller invents, so every rotation of the header minted a fresh bucket — the limiter was keyed on something the caller chooses, #45's root in a new place. (c) `RateLimiter._sweep_locked` dropped only IDLE buckets, and idleness is not a bound: a stream of fresh distinct keys has no idle buckets to drop, so the map grew without limit while its docstring said it could not — 50,000 entries against a `max_keys` of 100, measured. (d) `path.startswith("/static")` also matched `/static-anything`, an unmetered path that is not a static file, and `/api/audit/verify` is a GET with a real side effect — a full-chain rescan under the audit lock, #47 measured it at 31x median latency — reachable cross-site because the CSRF gate only covered state-changing METHODS | Med | **Fixed** | the headers move to a shared constant (`safetre_web/headers.py`) applied by the outermost middleware AND written directly into the two raw-ASGI refusals that are deliberately outside it (the body ceiling and the response-time boundary, which must answer before and during the inner app respectively); `identity.rate_limit_key()` charges the login only when the header is trustworthy in this deployment and the peer address otherwise; the sweep evicts least-recently-used once idle buckets are exhausted; the static exemption is a path prefix with its separator; and the expensive GET is gated like a state-changing route | `safetre_web/headers.py`, `safetre_web/app.py`, `safetre_web/identity.py`, `safetre_web/rate.py`, `safetre_web/body.py`, `safetre_web/timing.py`, `tests/test_web.py` |
+| 78 | **A copy of the audit database was not a copy of the audit log.** The log runs in WAL mode, so committed rows live in `audit.db-wal` until a checkpoint. Copying, backing up or restoring `audit.db` alone — the classic SQLite mistake, and the exact scenario #65's own note describes when it tells an operator to keep the log and the key apart — produced a database whose `records` table did not exist, which `AuditLog` then recreated empty on open. Measured: 5 rows live, **0 rows in the copy, `verify()` True**. An integrity check that returns True for an empty log is the failure mode #75 has in common with this one | Med | **Fixed** | `PRAGMA wal_checkpoint(TRUNCATE)` after every append, so the database file is self-contained at all times. The log is written once per request, so a checkpoint per append is affordable. The high-water mark from #75 covers the residue: a copy taken mid-append now fails verification instead of reporting an empty chain intact | `safetre/audit.py`, `tests/test_hardening.py` |
+| 79 | **Replay evicted the sessions it was rebuilding.** `SessionStore.rehydrate` called `get()` once per audit RECORD, and `get()` applies the LRU cap — so replaying an interleaved log dropped sessions mid-reconstruction. A user with three released rows came back with spent 0 and no cohorts because other identities' rows sat between them, and `rehydrate` reported success. Forgetting a cohort is #59's unsafe direction exactly: it is how the second half of a differencing pair gets released. The live path had the milder version of the same fault — eviction chose the least-recently-used session without regard to whether it was holding any state, so an idle session with nothing in it survived while one holding budget and lineage was dropped | Med | **Fixed** | `rehydrate` rebuilds into a local map ordered by LAST activity and applies the cap once, at the end, where it can be applied sensibly; live eviction prefers a session holding no state (spent 0, no cohorts) and evicts a stateful one only when there is nothing else to drop, and then logs at ERROR with what was lost and which dial to raise. Silent loss of a lineage is the thing being fixed, so the loud version is the fix, not a nicety | `safetre_web/session.py`, `tests/test_hardening.py` |
+
+### Notes
+
+**#75 and #78 are one finding with two causes, and the shape is worth naming.**
+Both are `verify()` returning True about a log that had lost rows. In #75 the
+rows were deleted by an attacker; in #78 by an operator following the backup
+advice in the project's own security document. In neither case could the check
+have said anything else, because every input it consulted lived inside the
+thing it was checking. A chain is a *relative* integrity structure: it proves
+row N+1 followed row N. Any absolute claim — how many rows there are, which row
+is last — has to come from outside, and until this round nothing outside was
+consulted, while the docstring described the property as if it were.
+
+The high-water mark is deliberately modest and is documented as such. It sits
+beside the database on the same host, so an attacker with write access to the
+directory can rewrite it as easily as the log. Its value is that it changes the
+DEFAULT deployment's failure from silent acceptance to a refusal, and raises a
+one-row `DELETE` into a two-file forgery. The control that actually survives a
+host compromise is the off-box anchor — which is why the third part of #75, the
+unreachable head, mattered more than it looked. An anchor nobody can read is an
+anchor nobody sets, and `configuration_problems()` had been telling production
+operators to set one since #65 without any way to obtain the value.
+
+**#77(b) is #45 arriving by a third route, and that is now the interesting
+part.** #45 was "the identity header is forgeable, so do not trust it for
+authorisation". The lesson generalised in this round to: *do not key anything on
+it*. A rate-limit bucket is not an authorisation decision, which is exactly why
+it was easy to miss — the code was not making a trust decision, it was picking
+a dictionary key, and the dictionary key was chosen by the attacker. The same
+question was then asked of every other keyed structure at the edge. The session
+store is keyed on `current_user`, which fails closed to `unverified` when the
+header is not trustworthy, so it was already sound. The abandoned-task pool of
+#76 keys on the raw header deliberately and says so: it is a resource bucket,
+rotating the header buys more slots, and the global backstop is what bounds
+that.
+
+**The middleware order was load-bearing and undocumented.** Starlette applies
+`@app.middleware("http")` functions in reverse registration order, so the first
+one registered is the innermost. Nothing in the module stated this, and three
+separate comments in `app.py` described the intended layering in terms that
+were true of the source order rather than the runtime order. The layers are now
+registered in the order they are meant to run and each carries a comment saying
+which side of it the others sit on. The two raw-ASGI layers cannot participate
+in that ordering at all — the body ceiling must refuse before anything reads the
+body, the response-time boundary must answer while the inner app is still
+running — so they import the header constants directly instead. That is why
+`headers.py` exists rather than the headers being a literal in one place.
+
+**What this round did NOT find.** No SQL injection, no identifier egress, no
+schema escape — the tenth round in a row, and the QuerySpec boundary remains
+the one layer that has never broken. Nothing in the disclosure arithmetic:
+rounds 6 and 8 appear to have exhausted the reachable defects there. Every
+finding this round is in the layer *around* the gateway rather than in it,
+which is where rounds 9 and 10 have both landed, and is the argument for the
+next round starting from the deployment and operations surface rather than the
+query surface.
+
 ## 2026-07-28 — round 9 (a fix created a new surface, and no model followed it there)
 
 A full adversarial review of the boundary after #1–#57

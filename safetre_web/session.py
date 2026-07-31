@@ -99,6 +99,20 @@ class SessionStore:
         self._max_sessions = max_sessions
         self._lock = threading.Lock()
 
+    def _evictable(self) -> str | None:
+        """The least-recently-used session that is holding NO state.
+
+        Eviction drops a session's spent budget and its differencing lineage,
+        and forgetting a cohort is the unsafe direction — it is how the second
+        half of a differencing pair gets released (#59, #69). So a session with
+        state is evicted only when there is nothing else to drop, and then
+        loudly (round 10, #79).
+        """
+        for user, sess in self._sessions.items():        # oldest first
+            if sess.auditor.spent == 0 and not sess.auditor._cohorts:
+                return user
+        return None
+
     def get(self, user: str) -> Session:
         with self._lock:
             sess = self._sessions.get(user)
@@ -106,7 +120,20 @@ class SessionStore:
                 sess = Session(SessionAuditor(threshold=self._threshold, budget=self._budget))
                 self._sessions[user] = sess
                 if len(self._sessions) > self._max_sessions:
-                    self._sessions.popitem(last=False)   # evict least-recently-used
+                    victim = self._evictable()
+                    if victim is not None:
+                        del self._sessions[victim]
+                    else:
+                        victim, dropped = self._sessions.popitem(last=False)
+                        log.error(
+                            "session cache full (%d): evicted %s, which was "
+                            "holding %d spent and %d recorded cohort(s). Its "
+                            "differencing lineage is gone until the next "
+                            "restart replays it from the audit log; raise "
+                            "MAX_SESSIONS above the number of distinct "
+                            "identities in a window.",
+                            self._max_sessions, victim,
+                            dropped.auditor.spent, len(dropped.auditor._cohorts))
             else:
                 self._sessions.move_to_end(user)
             return sess
@@ -177,11 +204,27 @@ class SessionStore:
 
         now = time.time() if now is None else now
         cutoff = now - window_hours * 3600
+        rebuilt: "OrderedDict[str, Session]" = OrderedDict()
         for record in audit_log.since(cutoff):
             user = record.get("user") or ""
             if not user or user == "system":
                 continue
-            session = self.get(user)
+            # NOT `self.get`: that applies the LRU cap per record, so replaying
+            # an interleaved log evicts the very sessions it is rebuilding. A
+            # user with three released rows came back with spent 0 and no
+            # cohorts because nine other identities' rows sat between them,
+            # and `rehydrate` still reported success (round 10, #79). The cap
+            # is applied once, at the end, where it can be applied sensibly.
+            session = rebuilt.get(user)
+            if session is None:
+                session = Session(SessionAuditor(threshold=self._threshold,
+                                                 budget=self._budget))
+                rebuilt[user] = session
+            # order by LAST activity, not first sighting: if the cap has to
+            # drop anyone it should drop whoever has been quiet longest, and
+            # first-seen order would drop the user who has been busy all
+            # window because their first row happens to be oldest
+            rebuilt.move_to_end(user)
             accounting = record.get("accounting")
 
             if isinstance(accounting, dict) and "cost" in accounting:
@@ -202,6 +245,21 @@ class SessionStore:
             # rebuild an EMPTY lineage from a log that plainly holds cohorts,
             # which is the more dangerous of the two errors.
             self._rehydrate_legacy(session, record)
+
+        # Install, newest-active last so the LRU order matches the log, and
+        # apply the cap once. Anything dropped is said out loud rather than
+        # discovered later as a missing lineage.
+        with self._lock:
+            for user, session in rebuilt.items():
+                self._sessions[user] = session
+                self._sessions.move_to_end(user)
+            while len(self._sessions) > self._max_sessions:
+                victim, dropped = self._sessions.popitem(last=False)
+                log.error(
+                    "restored more identities (%d) than the session cache "
+                    "holds (%d): dropped %s with %d spent and %d cohort(s)",
+                    len(rebuilt), self._max_sessions, victim,
+                    dropped.auditor.spent, len(dropped.auditor._cohorts))
         return len(self._sessions)
 
     @staticmethod

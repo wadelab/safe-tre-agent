@@ -36,7 +36,10 @@ from safetre.service import QueryService
 
 from .body import DEFAULT_MAX_BODY_BYTES, RequestSizeLimit
 from .channel import channel_allowed
-from .identity import configuration_problems, current_user, is_production
+from .headers import CSP
+from .identity import (
+    configuration_problems, current_user, is_production, rate_limit_key,
+)
 from .rate import RateLimiter
 from .session import SessionStore
 from .timing import ResponseTimeBoundary, sleep_to_boundary  # noqa: F401
@@ -165,23 +168,9 @@ class QueryRequest(BaseModel):
     q: str = Field(..., min_length=1, max_length=500)
 
 
-@app.middleware("http")
-async def security_headers(request: Request, call_next):
-    resp = await call_next(request)
-    resp.headers["Content-Security-Policy"] = (
-        "default-src 'self'; img-src 'self' data:; style-src 'self'; "
-        "script-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
-    )
-    resp.headers["X-Content-Type-Options"] = "nosniff"
-    resp.headers["Referrer-Policy"] = "no-referrer"
-    resp.headers["X-Frame-Options"] = "DENY"
-    return resp
-
-
-# Registered between the security headers and the channel check, so it runs
-# INSIDE the response-time padding (an unpadded 429 would be its own signal)
-# and AFTER the channel gate (a request off the channel should not spend a
-# bucket at all).
+# Runs INSIDE the response-time padding (an unpadded 429 would be its own
+# signal) and AFTER the channel gate (a request off the channel should not
+# spend a bucket at all).
 @app.middleware("http")
 async def rate_limit(request: Request, call_next):
     """Rate-limit every route, not only `/api/query` (hardening #47).
@@ -200,10 +189,11 @@ async def rate_limit(request: Request, call_next):
     budget — nor share one bucket with every other refused caller.
     """
     path = request.url.path
-    if path == "/healthz" or path.startswith("/static"):
+    # `/static` (no slash) also matched `/static-anything`, an unmetered path
+    # that is not a static file (round 10, #77)
+    if path == "/healthz" or path.startswith("/static/"):
         return await call_next(request)
-    user, allowed = current_user(request)
-    key = user if allowed else f"peer:{request.client.host if request.client else '?'}"
+    key = rate_limit_key(request)
     if not limiter.allow(key):
         return JSONResponse({"detail": "rate limit exceeded; slow down"},
                             status_code=429)
@@ -231,7 +221,13 @@ async def same_site_only(request: Request, call_next):
     rather than allowlisting: those are the two values that mean "another
     origin caused this".
     """
-    if request.method not in ("GET", "HEAD", "OPTIONS"):
+    # `/api/audit/verify` is a GET with a real side effect: it rescans the
+    # whole chain under the audit lock, which #47 measured at 31x median
+    # latency for everyone. A visited page could fire the victim's whole
+    # verify budget at it, so it is gated like a state-changing route
+    # (round 10, #77).
+    expensive_get = request.url.path == "/api/audit/verify"
+    if expensive_get or request.method not in ("GET", "HEAD", "OPTIONS"):
         site = request.headers.get("sec-fetch-site", "")
         if site in ("cross-site", "same-site"):
             return JSONResponse(
@@ -248,6 +244,23 @@ async def restricted_channel(request: Request, call_next):
             status_code=403,
         )
     return await call_next(request)
+
+
+# Registered LAST of the `@app.middleware` functions, which makes it the
+# OUTERMOST of them — so the headers land on responses the other layers
+# generate themselves, not only on router output. They used to reach neither
+# the 403s, the 413, the 429 nor the 503 refusal, while the module docstring
+# claimed strict headers throughout; `nosniff` was missing on every one
+# (round 10, #77). The bodies are fixed JSON so nothing was live, but a
+# refusal is a response like any other.
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    resp = await call_next(request)
+    resp.headers["Content-Security-Policy"] = CSP
+    resp.headers["X-Content-Type-Options"] = "nosniff"
+    resp.headers["Referrer-Policy"] = "no-referrer"
+    resp.headers["X-Frame-Options"] = "DENY"
+    return resp
 
 
 def _autorun_prefill() -> bool:
@@ -358,7 +371,13 @@ def audit_verify(request: Request):
         raise HTTPException(403, "not on the Safe People allowlist")
     if not verify_limiter.allow(user):
         raise HTTPException(429, "audit verification is rate limited; slow down")
-    return {"chain_intact": audit_log.verify(expected_head=_audit_head_anchor)}
+    # The head is returned so an operator can actually record an anchor: the
+    # shipped unit told them to set SAFETRE_AUDIT_HEAD_ANCHOR to "the chain
+    # head from /api/audit/verify" and nothing ever returned one (round 10,
+    # #75). A MAC discloses nothing about the rows it covers.
+    return {"chain_intact": audit_log.verify(expected_head=_audit_head_anchor),
+            "head": audit_log.head_is_reachable(),
+            "anchored": _audit_head_anchor is not None}
 
 
 # Added LAST so it is the OUTERMOST layer: the channel rejection, the rate

@@ -8,6 +8,151 @@ and fixes are in [docs/hardening-log.md](docs/hardening-log.md).
 
 ### Security
 
+- **Red-team round 10 ([hardening log](docs/hardening-log.md)): the controls
+  that were never asked what they would do when they failed.** Five fixes
+  (#75–#79) in the layer every other control assumes is working — the
+  tamper-evident log, the identity a bucket is keyed on, the order the request
+  layers actually run in, and what a restart or a copy preserves. Four of the
+  five are a control that was correct about the case it was written for and
+  silent about the case next to it. The pattern: **an integrity check that
+  cannot fail is not a check.**
+  - **A chain cannot detect its own truncation** (#75). Checking that each
+    `prev_mac` matches the last MAC proves the rows *present* are consistent
+    and says nothing about rows that are gone — deleting the TAIL leaves a
+    valid chain from GENESIS, so #59's verify-before-replay gate passed a
+    truncated log. Measured end to end: release one half of a differencing pair
+    (261.69), delete that row, restart, and the other half is released (258.71)
+    with `verify()` reporting the chain intact. Two smaller defects made the
+    documented answer unusable: `expected_head` had to *equal* the head, so an
+    off-box anchor went stale on the next append — including the app's own
+    startup record, leaving the check red for the life of every process after
+    the first — and nothing in the repository ever returned a head to anchor,
+    while the shipped systemd unit told operators to anchor "the chain head
+    from `/api/audit/verify`". Fixed: a `<db>.head` high-water mark written
+    atomically after every append and consulted by `verify()`; the anchor
+    becomes a membership check; `head()` is returned beside the verdict. The
+    mark is on the same host and is documented as what it is — it turns a
+    one-row `DELETE` into a two-file forgery and makes the default deployment
+    notice. The off-box anchor remains the control that survives a host
+    compromise.
+  - **A copy of the audit database was not a copy of the audit log** (#78). WAL
+    mode keeps committed rows in `audit.db-wal` until a checkpoint, so copying
+    `audit.db` alone — the classic SQLite mistake, and the exact scenario #65's
+    note describes — gave a database whose `records` table did not exist, which
+    `AuditLog` recreated empty on open. Measured: 5 rows live, **0 in the copy,
+    `verify()` True**. Fixed with `PRAGMA wal_checkpoint(TRUNCATE)` after every
+    append; the log is written once per request, so that is affordable.
+  - **A bound on one caller's waste was applied to everybody** (#76). #68's
+    abandoned-task cap was process-wide and checked at the outermost layer, so
+    sixteen cheap requests from one identity returned 503 to every other user
+    on every route, `/healthz` included — an unbounded compute pool traded for
+    a global kill switch. The shared pool was also a cross-user oracle: held
+    one slot below the limit, a cheap probe read the unpadded wall-clock
+    duration of another user's over-ceiling work, which is the quantity the
+    response-time padding exists to hide. Now per caller (4) with a global
+    backstop (64), and `/healthz` is never refused.
+  - **Four request-edge layers, each right on its own, composed in an order
+    nobody had enumerated** (#77). `security_headers` was registered first,
+    which in Starlette makes it *innermost*, so every middleware-generated
+    refusal — the two 403s, the 413, the 429, the 503 — went out without any of
+    the four headers. The rate limiter was keyed on a header the caller
+    chooses (#45's root in a new place). `RateLimiter`'s sweep dropped only
+    idle buckets, and idleness is not a bound — 50,000 entries against a
+    `max_keys` of 100, measured. `startswith("/static")` matched
+    `/static-anything`, and `/api/audit/verify` is a GET with a real side
+    effect (a full-chain rescan under the audit lock) that the CSRF gate did
+    not cover because the gate keyed on the method. All four fixed; the header
+    set moves to `safetre_web/headers.py` so the two raw-ASGI layers outside
+    the middleware stack carry it too.
+  - **Replay evicted the sessions it was rebuilding** (#79). `rehydrate` called
+    `get()` per audit record, and `get()` applies the LRU cap, so replaying an
+    interleaved log dropped sessions mid-reconstruction — a user with three
+    released rows came back with spent 0 and no cohorts, and `rehydrate`
+    reported success. Forgetting a cohort is #59's unsafe direction. The cap is
+    now applied once at the end; live eviction prefers a session holding no
+    state and says loudly what it dropped when it cannot.
+
+- **Red-team round 9 ([hardening log](docs/hardening-log.md)): a fix created a
+  new surface, and no model followed it there.** Seventeen findings (#58–#74)
+  from a full adversarial review of the boundary
+  ([redteam/round9_report.md](redteam/round9_report.md)), with executable
+  reproducers for the four headline items
+  ([redteam/round9_repro.py](redteam/round9_repro.py), gated in CI). The
+  QuerySpec boundary held for the ninth time; everything found is in the
+  state-accounting and restart paths that hardening #49 introduced, in the
+  shipped deployment configuration, or in oracles that survived the
+  canonical-refusal work.
+  - **Live and replayed accounting were two implementations of one cost model,
+    and they disagreed in opposite directions** (#58 — the round's real
+    finding). `rehydrate` inferred what a request had cost from the *shape* of
+    its audit row: a released gaussian GLM left the live auditor at 2 and the
+    rehydrated one at 1, so every restart refunded roughly half of every model
+    a user had run, on the control that bounds accumulation. A cohort the
+    *procedure* added — a binomial's `response == True` — could not be
+    recovered by re-reading the spec, so a restart forgot it and a query
+    differencing against it passed the lineage check. Fixed by deleting the
+    inference: the audit row carries an `accounting` block written by the code
+    that did the live accounting, inside the MAC, and replay replays it. The
+    general rule, now machine-checked as `ReplayEquivalence` in
+    `formal/temporal_session.als`: a security control reconstructed from a log
+    needs a replay-equivalence property.
+  - **Rehydration rebuilt the security controls from rows nobody had
+    authenticated** (#59). `rehydrate` never called `verify()`, so deleting the
+    record of one half of a differencing pair made the reconstruction skip it
+    and released the other half after a restart — while `verify()` returned
+    False throughout. Hardening #49 had quietly changed what the audit log *is*:
+    before it, an output; after it, an authoritative input to the budget and
+    the lineage. Nobody verifies an output before reading it, because an output
+    is not something you read. Now verified before replay, with
+    `AuditChainUnverified` refusing startup.
+  - **Exceptions were free** (#60), **the manifest announced a policy the
+    system was not running** (#61), **`_donor_total` called itself the
+    distinct-donor size and is not one** (#63), and **the last thing a restart
+    did not survive** (#74, the observed totals now replay through
+    `restore_observation`).
+  - **The request body was unbounded before validation** (#64). Pydantic's
+    500-character cap bounds what the application accepts and nothing about
+    what the transport buffers, and uvicorn imposes no default. An 8 KB
+    raw-ASGI ceiling with two gates — an oversized `Content-Length` refused
+    without reading a byte, and the receive channel counted as it arrives —
+    registered outside the response-time padding, since padding a 413 would be
+    the denial of service paying for itself.
+  - **The shipped unit kept the audit HMAC key on the same host as the log**
+    (#65), the single threat the HMAC exists to address. Production now refuses
+    to start without an externally supplied key.
+  - **The model path answered a data-derived refusal with several
+    distinguishable answers** (#66), where the aggregate path gives one:
+    estimability messages named the term and the failure, the compiled plans
+    came back on the withheld path, and the per-role trace said which design
+    cells had cleared the gateway. Now the canonical refusal, with
+    `tests/test_refusal_equality.py` extended to the model path.
+  - **One user's hung checker was every user's outage** (#67). One
+    `CompositeVetter`, one checker process, one lock, and a 120 s exchange
+    timeout against a 5 s response ceiling. Timeout down to 2 s, and waiting
+    for the pipe bounded separately at 1 s so a user who cannot get it fails
+    closed instead of joining the queue.
+  - **Abandoned ceiling-exceeded work grew without limit** (#68) — capped, and
+    corrected in round 10 as #76.
+  - **The exact differencing leg's denial was justified as a bit the analyst
+    already had, and it is not** (#62). Accepted and priced rather than closed:
+    across 368,511 cohort pairs the exact leg denies 34,163 the cheap leg
+    allowed, so **99.6% of every differencing denial is non-simulatable**. The
+    decision stands — the alternative is #40, which recovered twenty
+    sub-threshold cells — but the bit is now stated at its real size.
+  - **An audit for one justification form, and the three claims it found**
+    (#72). Three findings had turned out to be the same mistake — a safety
+    claim of the shape *the analyst could obtain this anyway*, asserted on the
+    branch where they could not — so the form was searched for rather than
+    waited for. It found three more, none live, all of them the reasoning a
+    future reader would rely on.
+  - **Nothing in CI had ever read the shipped systemd unit** (#73). #45 and #65
+    were the same defect twice, both found by reading, a round apart.
+    `tests/test_deploy_unit.py` now parses `deploy/safetre-web.service` and
+    checks it against what the code itself calls production, reading the
+    required names out of `identity.configuration_problems()` rather than
+    restating them — so a NEW requirement in the code fails until the unit
+    answers it.
+
 - **Red-team round 8 ([hardening log](docs/hardening-log.md)): the filter
   algebra was a differencing channel, and the harness could not see it.**
   Twenty fixes, one residual priced rather than closed, and round 7's two

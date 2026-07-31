@@ -118,7 +118,11 @@ endpoint that checks the chain against an off-box anchor. *(Amended 2026-07-28:
 an exception anywhere in the pipeline MUST still produce exactly one audit
 record, carrying the exception's type and never its message, and the caller
 MUST receive the canonical withheld response, so a crash is neither an audit
-gap nor a distinguishable oracle. See hardening #37.)*
+gap nor a distinguishable oracle. See hardening #37. Further amended 2026-07-31:
+the verification endpoint MUST also RETURN the current chain head, because an
+anchor an operator has no way to read is an anchor nobody sets; and the anchor
+is a MEMBERSHIP check — the anchored head must still appear in the chain, not
+still be its last row, which went stale on the next append. See hardening #75.)*
 
 **R9** — The system MUST publish its disclosure-safe metadata contracts: the
 capability **manifest**, the schema **codebook**, and the **marginals**
@@ -306,9 +310,15 @@ unbounded (hardening #45).
 **P14** — MUST NOT serve any request — query or metadata — that arrives outside
 the restricted channel or from an identity not on the allowlist.
 
-**P15** — MUST NOT let the audit log be silently rewritten. Verification uses a
-keyed (HMAC) chain, so an attacker who can edit the database but not the off-box
-key cannot forge a valid chain.
+**P15** — MUST NOT let the audit log be silently rewritten **or truncated**.
+Verification uses a keyed (HMAC) chain, so an attacker who can edit the database
+but not the off-box key cannot forge a valid chain. *(Amended 2026-07-31: the
+original clause said "rewritten", and deletion is not rewriting — a chain proves
+that row N+1 followed row N and therefore cannot detect the removal of its own
+tail, which needs no key at all. Verification MUST additionally check the chain
+against a high-water mark recorded outside the rows, and the log's on-disk form
+MUST be self-contained so that a copy of the database file is a copy of the log.
+See hardening #75 and #78.)*
 
 **P16** — MUST NOT let concurrent requests from one identity bypass the session
 controls. The `observe → apply → record` critical section is serialised per
