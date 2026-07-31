@@ -174,7 +174,9 @@ def empty_difference_allowed(tables) -> None:
                       filters=[{"column": "sex", "op": "!=", "value": "nobody-is-this"}]
                       ).normalized_filters()
     auditor.record_cohort("spend", prior)
-    findings = auditor.observe_cohort("spend", probe, lambda a, b: 0)
+    # `bound` takes (prev_dataset, prev_filters, dataset, filters) since round
+    # 11 — the cross-view groundwork for #95 (roadmap 0.0)
+    findings = auditor.observe_cohort("spend", probe, lambda pd_, a, d_, b: 0)
     check("a provably empty difference is allowed through",
           not findings,
           "a bound of 0 now denies"
