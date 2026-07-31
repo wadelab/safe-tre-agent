@@ -389,9 +389,30 @@ _FLOORS: tuple[tuple, ...] = (
      "exists to close"),
     (lambda c: 1 <= c.max_output_rows <= 10_000,
      "max_output_rows must be between 1 and 10000"),
-    (lambda c: c.response_quantum_ms > 0,
-     "response_quantum_ms must be > 0: zero reopens the timing channel that "
-     "D5 measured putting sub-threshold cohorts in size order"),
+    (lambda c: c.response_quantum_ms >= 10,
+     "response_quantum_ms must be >= 10: the parameter's own note says the "
+     "measured latency spread across every cohort whose exact size is withheld "
+     "sits within a few milliseconds, so 50 puts them in one bucket with room. "
+     "A 1 ms quantum puts them in DIFFERENT buckets and reopens the channel D5 "
+     "measured putting sub-threshold cohorts in size order — the floor was "
+     "`> 0`, which forbade only the value that disables padding outright and "
+     "admitted every value that makes it useless (round 11, #88)"),
+    (lambda c: c.moment2_dom_threshold is None
+     or 0.0 < c.moment2_dom_threshold <= 0.8,
+     "moment2_dom_threshold must be <= 0.8: it had NO floor, and at 1.0 the "
+     "second-moment dominance rule is switched off entirely — the witness is "
+     "MAX(|c|)/SUM(|c|), which is always <= 1, so no cell can ever fail it. "
+     "Those cells back every model standard error (R14), and the parameter's "
+     "own text calls this a TIGHTER rule than `dom_threshold`, which is "
+     "floored at 0.5 (round 11, #88)"),
+    (lambda c: c.query_budget * 1.2 <= c.response_ceiling_ms,
+     "query_budget x 1.2 ms must fit inside response_ceiling_ms: #69 bounded "
+     "the budget at 1000 BECAUSE the ceiling was 5000 ms, and then floored "
+     "only one of the two. Lowering the ceiling instead reaches the identical "
+     "failure — the differencing lineage cannot finish inside the deadline and "
+     "the timing ceiling refuses every query in its place. Measured at ~1.2 ms "
+     "per recorded cohort; stated as the relation the two dials actually have "
+     "rather than as two independent constants (round 11, #88)"),
 )
 
 

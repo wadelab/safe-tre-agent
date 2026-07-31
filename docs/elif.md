@@ -21,7 +21,7 @@ secret. Around this sits a general **framework for adding statistical
 procedures**: each new procedure is a registered contract whose safety
 obligations are enforced by CI (the build fails if you skip one), checked by
 exhaustive enumeration over its finite request space (767 model shapes),
-fuzzed by property tests, attacked by a 22-scenario red-team, cross-validated
+fuzzed by property tests, attacked by a 33-scenario red-team, cross-validated
 against reference implementations, and — new for this project — model-checked
 by an **Alloy solver** in CI. Along the way we found and fixed a real
 pre-existing bug: released counts carried the exact number right next to the
@@ -129,10 +129,10 @@ the new "declare every released column" contract exists to make impossible.
 
 | What | Count |
 |---|---|
-| Requirement / prohibition clauses in the spec | R1–R17, P1–P22 |
+| Requirement / prohibition clauses in the spec | R1–R18, P1–P22 |
 | Model shapes, all machine-checked | 767 (718 GLM + 49 ANOVA) |
 | Tests in the default suite | 500+ (plus an exhaustive `-m slow` pass) |
-| Red-team scenarios, every attack blocked by a named control | 22 (18 attacks, 4 benign) |
+| Red-team scenarios, every attack blocked by a named control | 33 (28 attacks, 5 benign) |
 | Solver-checked properties (Alloy, in CI) | 12, across three models |
 | Coefficient agreement with reference implementations | ~1e-14 (exact maths), 1e-8 (tested bound) |
 | New runtime dependencies | 0 (the fitter is stdlib-only) |

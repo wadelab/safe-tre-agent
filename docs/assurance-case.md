@@ -28,8 +28,9 @@ the boundary — outside them nothing here is claimed at all.
 - **A2** — The data may be hostile. Any string field may carry an injection, SQL/DDL, tool-call spoof, or spreadsheet-formula payload.
 - **A3** — The operator supplies the network boundary and an upstream identity proxy. The app enforces the restricted channel and reads the proxy's identity header; it does not itself authenticate users.
 - **A4** — The audit HMAC key and the off-box chain anchor live outside the app host.
-- **A5** — A real deployment runs a **local** model inside the safepod. A remote model endpoint is an egress channel and is permitted for synthetic data only, behind an explicit opt-in.
+- **A5** — A real deployment runs a **local** model inside the safepod. A remote model endpoint is an egress channel and is permitted for synthetic data only, behind an explicit opt-in. *(Amended 2026-07-31: the host allowlist enforcing this is checked on the URL the planner ASKS for, and the model runtime — which A1 calls adversarial — writes the response. Every redirect is therefore refused, because following one moves the request, and the `Authorization` header, to a host nobody allowlisted. See hardening #80.)*
 - **A6** — The data in this repository are synthetic.
+- **A7** — Exactly **one application process** serves one audit database. The chain's head-read and insert are atomic only within a process, and the query budget and the differencing lineage live in that process's memory, so a second worker splits every session control and corrupts the chain in ordinary operation. This is enforced, not assumed: the app takes an advisory claim on the audit database at startup and refuses to start if another process holds it. *(Added 2026-07-31, hardening #81.)*
 
 ## Strategy: decompose by the Five Safes
 

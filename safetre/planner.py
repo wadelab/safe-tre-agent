@@ -16,10 +16,10 @@ from .manifest import manifest_sha256, public_manifest
 from .query import CATALOGUE, INTERNAL_RANGE_RULES
 
 
-def _manifest_text() -> str:
-    manifest = public_manifest()
+def _manifest_text(policy=None) -> str:
+    manifest = public_manifest(policy)
     lines = []
-    lines.append(f"manifest_sha256: {manifest_sha256()}")
+    lines.append(f"manifest_sha256: {manifest_sha256(policy)}")
     for tool in manifest["tools"]:
         lines.append(
             f"- tool '{tool['id']}' v{tool['version']} ({tool['status']}): "
@@ -32,8 +32,13 @@ def _manifest_text() -> str:
     return "\n".join(lines)
 
 
-def planner_system() -> str:
+def planner_system(policy=None) -> str:
     """The planner system prompt, generated from the ACTIVE dataset definition.
+
+    `policy` is the RESOLVED policy the gateway is enforcing. Omitting it makes
+    the embedded manifest re-read config.yaml and the environment, so the
+    prompt can announce a `minimum_cell_size` the gateway is not running — and
+    a planner uses that number to decide what to ask for (round 11, #89).
 
     The fixed parts state the security contract (JSON only, the three spec
     shapes, what a model may release); every dataset-specific fact — the
@@ -88,7 +93,8 @@ def planner_system() -> str:
         "ANOVA takes exactly one categorical factor and a gaussian (interval-scale) "
         "response. If the request names more than one factor, use the glm tool "
         "instead.\n"
-        "Published tool manifest (anything else is rejected):\n" + _manifest_text() +
+        "Published tool manifest (anything else is rejected):\n"
+        + _manifest_text(policy) +
         "\nNever reference identifiers, names, timestamps or free text. JSON only."
     )
     return "".join(parts)
@@ -100,13 +106,19 @@ def _extract_json(text: str) -> str:
 
 
 class LLMPlanner:
-    """Real planner over any OpenAI-compatible client (see safetre.llm)."""
+    """Real planner over any OpenAI-compatible client (see safetre.llm).
 
-    def __init__(self, client):
+    `policy` is the resolved policy the gateway enforces; the app passes the
+    one it captured at startup so the prompt cannot announce a threshold the
+    gateway is not running (#89).
+    """
+
+    def __init__(self, client, policy=None):
         self.client = client
+        self.policy = policy
 
     def plan(self, request: str) -> dict:
-        raw = self.client.complete(planner_system(), request)
+        raw = self.client.complete(planner_system(self.policy), request)
         return json.loads(_extract_json(raw))
 
 

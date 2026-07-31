@@ -25,6 +25,12 @@ dist/
 *.db-wal
 *.db-shm
 *.db.key
+# the audit chain's high-water mark (#75) and the one-process claim (#81) are
+# sidecars of a runtime database, not source. Neither is secret — a MAC
+# discloses nothing and the claim file holds a pid — but a broad `git add`
+# committing an operator's chain head is exactly the shape of #57.
+*.db.head
+*.db.lock
 site/
 # binary presentation artifacts are distributed via releases, not git
 # (see artifacts/README.md)

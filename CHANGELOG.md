@@ -8,6 +8,118 @@ and fixes are in [docs/hardening-log.md](docs/hardening-log.md).
 
 ### Security
 
+- **Red-team round 11 ([hardening log](docs/hardening-log.md)): the fixture was
+  doing the work, and the catalogue had a second door.** The first full-surface
+  audit since the repository went public — five surfaces examined in parallel
+  (the audit chain, the web edge, the disclosure core, configuration and
+  deployment, repository hygiene), every finding required to come with an
+  executable reproducer. **Twenty-two findings, #80–#101**, and for the first
+  time since round 8 the serious ones are back inside the gateway rather than
+  around it.
+  - **The differencing lineage was keyed on the dataset name, and the catalogue
+    publishes three views of the same donors** (#95 — the round's real finding).
+    `observe_cohort` skipped any prior cohort from a different dataset, and the
+    cheap totals layer was keyed the same way, so a differencing pair with one
+    leg in each view was compared by neither. Measured: two individually safe
+    releases — `sum(total_spend_gbp)` over North West and `sum(amount_gbp)` over
+    North West excluding `sex=X` — differ by one person, and that difference is
+    their exact annual spend, **GBP 120.93, absolute error 0.000000**. The
+    identical pair inside one view is denied. The specification's own definition
+    of a cohort is "the set of individuals a query's filters select, identified
+    by its normalized filter predicate" — the dataset was never part of it, so
+    the implementation was narrower than the clause it implemented, and no test
+    could catch it because every test used one dataset. Cohorts are now compared
+    across every view of a population; the exact leg falls back to the donor-set
+    symmetric difference, since row-level difference has no cross-view reading.
+    P11 and the *Cohort* definition amended, and a *Population* definition added.
+  - **The distinct-donor threshold counted the cohort; the released value
+    described the respondents** (#92). `AVG`/`SUM` skip NULL and
+    `COUNT(DISTINCT donor_id)` does not, and only `corr` ever declared a
+    NOT-NULL guard. Measured on a twelve-donor cohort where two answered:
+    `mean`, `sum` and `sum_sq` all released reporting `n=10`, and `sum ÷ mean`
+    gives the contributor count while `sum_sq` gives the variance — both
+    individuals' exact scores recovered. No measure column in the demo corpus
+    contains a NULL, which is why ten rounds did not meet it.
+  - **A resource bucket keyed on a string the caller writes is a bucket the
+    caller can pick — including somebody else's** (#91). `timing._caller` read
+    the identity header unverified, so round 10's per-caller abandoned-task pool
+    let an unauthenticated attacker hold a *named victim's* pool one below the
+    cap and read that user's over-ceiling durations off a cheap probe — three
+    held sockets, no credentials, 0.99 s read against a 1.00 s overrun — and
+    lock them out of every route with four stalled request bodies while
+    `/healthz` stayed green. `rate_limit_key` gated on a check that is vacuously
+    true outside production, and the verify limiter still keyed on
+    `current_user`. A login is now a sound key only where a proxy secret is
+    configured and matched.
+  - **A store full of state gave every newcomer a fresh conscience** (#90).
+    Round 10's #79 made eviction prefer a session holding no state, and `get()`
+    inserts the newcomer before choosing — so once every other session was
+    stateful the store deleted the session it had just created and returned an
+    orphan. That identity's budget never accumulated and its lineage was always
+    empty. Reachable over HTTP in the default posture.
+  - **Three controls assume one process, and nothing checked** (#81). The
+    chain's head-read and insert are atomic only within a process, and the
+    session budget and differencing lineage live in that process's memory.
+    `uvicorn --workers 2` broke all three — and broke the chain silently:
+    80 concurrent appends, every request answered normally, no error to any
+    caller, `verify()` afterwards **False**, and since #59 the next restart
+    refuses to boot. The app now takes an advisory claim on the audit database
+    at startup and refuses to start if another process holds it. Assumption A7
+    added.
+  - **The truncation check shipped with two ways to switch itself off** (#82,
+    round 10's own work audited a day later). A mark equal to GENESIS beside an
+    empty chain verified — so `DELETE FROM records` plus 64 ASCII zeros in the
+    sidecar passed with no key — and because that branch returned early it
+    skipped the off-box anchor, the one control that survives a host compromise.
+    A *missing* mark was likewise read as "no check to run". Both closed;
+    `SAFETRE_ALLOW_UNMARKED_CHAIN=1` is the documented one-time migration for a
+    pre-#75 log.
+  - **The model-endpoint allowlist was checked on the URL we ask for, not the
+    one we get** (#80). `urllib` follows 301/302/303 on a POST and carries the
+    `Authorization` header to the new host; the model runtime writes the
+    response and is in the untrusted zone, so it chose where the request went.
+    Measured: an allowlisted `127.0.0.1` endpoint redirected to `127.0.0.2`,
+    which arrived carrying the bearer token. Every redirect is now refused.
+    Assumption A5 amended.
+  - **The model path never ran the human-in-the-loop step** (#96), and discarded
+    every released role's gateway findings — so `too_granular` escalated on the
+    plain path and released the same cross-tab as a model artifact. R7 now holds
+    on both paths.
+  - **Dominance bounded a donor's share of the cell's magnitude, never of the
+    released number** (#93): 21 donors, one at +137.42 and ten each at ±50,
+    passes at a witness of 0.12 while the released total *is* that donor's
+    contribution. The witness is now the worse of the two shares, identical on
+    non-negative data. **The influence witness was a `MAX` over non-NULL
+    deltas** (#94), so the one donor whose removal destroys the correlation was
+    the donor excluded from the check.
+  - **A request the audit log could not store answered 500 and recorded
+    nothing** (#85) — a lone surrogate in `q`, legal JSON, breaking R8's "exactly
+    one audit record per request" with a payload anyone can send.
+  - Also: three unfloored policy dials, one of which switches the second-moment
+    dominance rule off at 1.0 (#88); the manifest re-resolving the policy from
+    disk on every request, so announced and enforced could differ (#89);
+    `verify()` reporting tampering on an intact chain under ordinary load
+    (#84); the high-water mark neither fsynced nor validated (#83); the
+    `system` sentinel sharing a namespace with real identities (#86); the
+    off-box anchor unstripped (#87); the external checker inheriting the audit
+    key and the proxy secret (#97); `restart_web.sh` taking its bind address
+    from the environment (#98); CI reading the shipped unit only for what it
+    must set and never for what it must not (#99); the accessibility gate
+    checking the home page four times (#100); and the one unpinned third-party
+    execution in CI (#101).
+
+### Fixed
+
+- The red-team corpus grew to 33 scenarios and four documents did not follow.
+  `README.md`, `docs/writeup.md`, `docs/elif.md` and `docs/bestiary.md` claimed
+  22 scenarios / 18 attacks / 8 leaks; the harness reports **33 scenarios, 28
+  attacks, 28/28 neutralised, 13/33 leaking with the gateway off**. The public
+  README was understating the project's own headline result.
+- `docs/deployment.md` taught the trust model hardening #45 removed — that the
+  loopback bind makes the identity header unforgeable — and neither it nor
+  `docs/install.md` mentioned `SAFETRE_PROXY_SHARED_SECRET`, which #45 made
+  required. Following the guide produced a deployment that answers nothing.
+
 - **Red-team round 10 ([hardening log](docs/hardening-log.md)): the controls
   that were never asked what they would do when they failed.** Five fixes
   (#75–#79) in the layer every other control assumes is working — the

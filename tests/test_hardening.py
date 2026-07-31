@@ -31,6 +31,7 @@ Each test pins one finding from the security review so a regression fails CI:
 
 import concurrent.futures as cf
 import json
+import os
 import time
 
 import numpy as np
@@ -515,7 +516,7 @@ def test_the_service_wires_the_row_difference_into_the_auditor(tables):
     a = _cohort("spend", base + [{"column": "age_rating", "op": ">=", "value": 7}])
     b = _cohort("spend", base + [{"column": "age_rating", "op": ">=", "value": 8}])
 
-    assert bound(a, b) < DisclosurePolicy().threshold
+    assert bound("spend", a, "spend", b) < DisclosurePolicy().threshold
     auditor = SessionAuditor()
     auditor.record_cohort("spend", a)
     assert [f.rule for f in auditor.observe_cohort("spend", b, bound)] == \
@@ -529,7 +530,7 @@ def test_an_empty_difference_is_denied_too(tables):
     auditor = SessionAuditor()
     seen = []
 
-    def bound(a, b):
+    def bound(prev_dataset, a, this_dataset, b):
         seen.append((a, b))
         return 0
 
@@ -1565,7 +1566,19 @@ def test_a_copy_of_the_database_alone_is_complete(tmp_path, monkeypatch):
     restored = AuditLog(copy)
     rows = restored.con.execute("SELECT COUNT(*) FROM records").fetchone()[0]
     assert rows == 5, f"the copy lost rows to the WAL: {rows}"
-    assert restored.verify()
+
+    # ...and since #82 that copy no longer VERIFIES, which is the stronger
+    # answer. #78 stopped the rows being lost silently; the high-water mark is
+    # what notices that something beside the rows is missing. Copying
+    # `audit.db` alone leaves the `.head` sidecar behind, and a non-empty chain
+    # that cannot show a mark is indistinguishable from a truncated one — so it
+    # fails, and `docs/deployment.md` says to copy `audit.db*`.
+    assert not restored.verify(), (
+        "a copy without the high-water mark must not verify (#82)")
+
+    shutil.copy(path + ".head", copy + ".head")
+    complete = AuditLog(copy)
+    assert complete.verify(), "a copy of audit.db* is a copy of the log"
 
 
 def test_replay_does_not_evict_the_sessions_it_is_rebuilding(tmp_path, monkeypatch):
@@ -1611,3 +1624,296 @@ def test_eviction_prefers_a_session_holding_no_state():
     assert "idle@org" not in store._sessions
     kept = store.get("busy@org").auditor
     assert (kept.spent, len(kept._cohorts)) == (1, 1)
+
+
+# --- #81: one process per audit database, enforced rather than assumed -------
+
+def test_two_writers_on_one_database_break_the_chain(tmp_path, monkeypatch):
+    """#81 (round 11). The premise, demonstrated, so the claim below has a
+    reason. `AuditLog._lock` is a `threading.Lock`: it serialises threads in
+    one process and means nothing between two. Two writers read the same head
+    and both append from it.
+
+    Measured: 80 appends across two `AuditLog` objects on one path, every call
+    returning normally with no error raised to any caller, and `verify()`
+    afterwards False. That is a destroyed audit log produced by ordinary
+    operation and indistinguishable from tampering — and since #59 the next
+    restart refuses to boot on it.
+    """
+    import threading
+
+    from safetre.audit import AuditLog
+
+    monkeypatch.setenv("SAFETRE_AUDIT_KEY", "0" * 64)
+    path = str(tmp_path / "shared.db")
+    a, b = AuditLog(path), AuditLog(path)
+    assert a._lock is not b._lock, "two objects, two locks — as two processes are"
+
+    barrier = threading.Barrier(2)
+
+    def hammer(log, tag):
+        barrier.wait()
+        for i in range(40):
+            log.append(user=tag, request=f"{tag}{i}", spec=None,
+                       status="released", findings=[], output_shape=None)
+
+    threads = [threading.Thread(target=hammer, args=(a, "w1")),
+               threading.Thread(target=hammer, args=(b, "w2"))]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert not a.verify(), (
+        "two concurrent writers no longer corrupt the chain — if the append "
+        "became atomic across processes, #81's claim can be reconsidered")
+
+
+def test_a_second_server_process_is_refused_the_audit_database(tmp_path):
+    """#81: the control. One *server* per audit database, taken at startup and
+    held for the process lifetime. Not in `AuditLog.__init__` — tests, the CLI
+    and the harnesses legitimately build several logs over throwaway paths;
+    the invariant is one application process."""
+    import pathlib
+    import subprocess
+    import sys
+
+    from safetre.audit import AuditDatabaseInUse, claim_exclusive
+
+    path = str(tmp_path / "claimed.db")
+    held = claim_exclusive(path)
+    assert held is not None
+    try:
+        probe = subprocess.run(
+            [sys.executable, "-c",
+             "import sys; sys.path.insert(0, %r)\n"
+             "from safetre.audit import claim_exclusive, AuditDatabaseInUse\n"
+             "try:\n"
+             "    claim_exclusive(%r)\n"
+             "    print('GRANTED')\n"
+             "except AuditDatabaseInUse:\n"
+             "    print('REFUSED')\n"
+             % (str(pathlib.Path(__file__).resolve().parent.parent), path)],
+            capture_output=True, text=True, timeout=60)
+        assert probe.stdout.strip() == "REFUSED", (probe.stdout, probe.stderr)
+    finally:
+        held.close()
+
+    # the kernel drops the claim when the holder exits, so a crash needs no
+    # cleanup and a restart that waits for the old process is unaffected
+    again = claim_exclusive(path)
+    assert again is not None
+    again.close()
+
+    with pytest.raises(AuditDatabaseInUse):
+        keep = claim_exclusive(path)
+        try:
+            claim_exclusive(path)   # same process, second claim: still refused
+        finally:
+            keep.close()
+
+
+# --- #82: the truncation check had two ways to switch itself off ------------
+
+def test_a_wiped_log_with_a_genesis_mark_does_not_verify(tmp_path, monkeypatch):
+    """#82 (round 11). `verify()` treated a mark equal to GENESIS beside an
+    empty chain as "legitimately empty" and RETURNED — so `DELETE FROM records`
+    plus 64 ASCII zeros in the sidecar verified, with no key and no forgery.
+
+    Worse, the early `return` skipped the off-box anchor, which is the one
+    control that survives a host compromise and the reason #75 made the head
+    readable at all. `_write_mark` only ever writes a real MAC, so no honest
+    deployment can produce that state; the branch was reachable only by an
+    attacker.
+    """
+    from safetre.audit import GENESIS, AuditLog
+
+    monkeypatch.setenv("SAFETRE_AUDIT_KEY", "0" * 64)
+    monkeypatch.delenv("SAFETRE_ALLOW_UNMARKED_CHAIN", raising=False)
+    path = str(tmp_path / "wiped.db")
+    log = AuditLog(path)
+    anchor = log.append(user="u", request="q0", spec=None, status="released",
+                        findings=[], output_shape=None)
+    for i in range(2):
+        log.append(user="u", request=f"q{i+1}", spec=None, status="released",
+                   findings=[], output_shape=None)
+    assert log.verify(expected_head=anchor)
+
+    log.con.execute("DELETE FROM records")
+    log.con.commit()
+    with open(path + ".head", "w") as fh:
+        fh.write(GENESIS)
+
+    assert not log.verify(), "a wiped chain verified against a GENESIS mark"
+    assert not log.verify(expected_head=anchor), (
+        "the off-box anchor was skipped by the truncation branch's early return")
+
+
+def test_a_missing_mark_fails_unless_an_operator_says_otherwise(tmp_path, monkeypatch):
+    """#82: absence of the mark was read as "no truncation check to run", so
+    `DELETE FROM records WHERE id > k; rm audit.db.head` — two operations, no
+    key — restored the pre-#75 position. The off-box anchor does not
+    compensate, because #75 made it a MEMBERSHIP check: truncating everything
+    after the anchored row is invisible to it by construction."""
+    from safetre.audit import AuditLog
+
+    monkeypatch.setenv("SAFETRE_AUDIT_KEY", "0" * 64)
+    monkeypatch.delenv("SAFETRE_ALLOW_UNMARKED_CHAIN", raising=False)
+    path = str(tmp_path / "unmarked.db")
+    log = AuditLog(path)
+    anchor = log.append(user="u", request="q0", spec=None, status="released",
+                        findings=[], output_shape=None)
+    for i in range(4):
+        log.append(user="u", request=f"q{i+1}", spec=None, status="released",
+                   findings=[], output_shape=None)
+
+    log.con.execute("DELETE FROM records WHERE id > 3")
+    log.con.commit()
+    os.unlink(path + ".head")
+    assert not log.verify()
+    assert not log.verify(expected_head=anchor)
+
+    # the migration case: a chain written before #75 genuinely has no mark
+    monkeypatch.setenv("SAFETRE_ALLOW_UNMARKED_CHAIN", "1")
+    assert log.verify(), "the documented override must still let a legacy chain verify"
+
+
+def test_an_unreadable_or_malformed_mark_fails_and_does_not_raise(tmp_path, monkeypatch):
+    """#82/#83: `_read_mark` returned None for absent AND unreadable, so
+    `chmod 000` disabled the check as effectively as `rm`. And a non-UTF-8
+    sidecar raised `UnicodeDecodeError` straight out of `/api/audit/verify` —
+    the behaviour `verify`'s own row path forbids in as many words: a corrupt
+    input is a verification failure, not an exception."""
+    from safetre.audit import AuditLog
+
+    monkeypatch.setenv("SAFETRE_AUDIT_KEY", "0" * 64)
+    monkeypatch.delenv("SAFETRE_ALLOW_UNMARKED_CHAIN", raising=False)
+
+    for label, blob in [("non-utf8", b"\xff" * 64),
+                        ("non-ascii", "é".encode() * 32),
+                        ("too short", b"abc"),
+                        ("not hex", b"z" * 64)]:
+        path = str(tmp_path / f"{label.replace(' ', '')}.db")
+        log = AuditLog(path)
+        log.append(user="u", request="q", spec=None, status="released",
+                   findings=[], output_shape=None)
+        with open(path + ".head", "wb") as fh:
+            fh.write(blob)
+        assert log.verify() is False, f"{label}: must be False, not an exception"
+
+    path = str(tmp_path / "unreadable.db")
+    log = AuditLog(path)
+    for i in range(3):
+        log.append(user="u", request=f"q{i}", spec=None, status="released",
+                   findings=[], output_shape=None)
+    log.con.execute("DELETE FROM records WHERE id = 3")
+    log.con.commit()
+    os.chmod(path + ".head", 0o000)
+    try:
+        assert not log.verify(), "an unreadable mark must not read as absent"
+    finally:
+        os.chmod(path + ".head", 0o600)
+
+
+def test_an_append_during_verify_does_not_report_tampering(tmp_path, monkeypatch):
+    """#84: the rows were snapshotted under the lock and the mark read after
+    the whole MAC recomputation, so an append landing in that window advanced
+    the mark past every MAC in the snapshot and an intact chain reported itself
+    tampered. Measured on a 200k-row chain: a 1.6 s window, and `rehydrate`
+    turns the same race into a refusal to boot."""
+    import threading
+
+    from safetre.audit import AuditLog
+
+    monkeypatch.setenv("SAFETRE_AUDIT_KEY", "0" * 64)
+    monkeypatch.delenv("SAFETRE_ALLOW_UNMARKED_CHAIN", raising=False)
+    log = AuditLog(str(tmp_path / "racing.db"))
+    for i in range(400):
+        log.append(user="u", request=f"q{i}", spec=None, status="released",
+                   findings=[], output_shape=None)
+
+    verdicts, stop = [], threading.Event()
+
+    def writer():
+        i = 0
+        while not stop.is_set():
+            log.append(user="w", request=f"w{i}", spec=None, status="released",
+                       findings=[], output_shape=None)
+            i += 1
+
+    t = threading.Thread(target=writer)
+    t.start()
+    try:
+        for _ in range(25):
+            verdicts.append(log.verify())
+    finally:
+        stop.set()
+        t.join()
+
+    assert all(verdicts), (
+        f"an intact chain reported tampering under concurrent appends: "
+        f"{verdicts.count(False)}/{len(verdicts)} false alarms")
+
+
+def test_a_request_the_log_cannot_store_is_refused_not_a_500(tmp_path, monkeypatch):
+    """#85: `{"q": "…\\ud800"}` is legal JSON, Python decodes a lone surrogate
+    into an ordinary `str` that passes `max_length`, and SQLite must encode
+    TEXT as UTF-8 — so the append raised. The audited boundary's own handler
+    then appended the SAME request, raised again, and escaped: HTTP 500, ZERO
+    audit rows, and the auditor charged. R8 says every request produces exactly
+    one audit record, and this broke it with a payload anyone can send."""
+    from fastapi.testclient import TestClient
+
+    from safetre_web.app import app
+
+    client = TestClient(app, raise_server_exceptions=False)
+    # sent as the JSON escape, which is how it arrives on the wire: the body is
+    # valid ASCII and only becomes an unencodable `str` once Python decodes it
+    r = client.post("/api/query",
+                    content=rb'{"q": "mean spend by region \ud800"}',
+                    headers={"content-type": "application/json"})
+    assert r.status_code == 422, (
+        f"an unstorable request must be refused at the boundary, got {r.status_code}")
+    assert r.status_code != 500, "a 500 is the one response the header layer cannot reach"
+
+
+def test_the_boundary_survives_a_log_that_cannot_be_written(tables, tmp_path,
+                                                            monkeypatch):
+    """#85, the general case: the surrogate was one way in, not the defect. A
+    log raising for ANY reason — a full disk, a revoked permission — made the
+    boundary re-raise, because its answer to a failed append was to append
+    again with the same arguments."""
+    class Unwritable:
+        def append(self, **kwargs):
+            raise OSError(28, "No space left on device")
+
+    service = QueryService(tables)
+    result = service.handle("mean spend by region", planner=None,
+                            audit_log=Unwritable(), user="analyst@org")
+    assert result.status == "denied", (
+        "a log failure must yield the canonical refusal, not an exception")
+
+
+def test_an_analyst_called_system_keeps_their_lineage(tmp_path, monkeypatch):
+    """#86: `rehydrate` skipped the app's own startup record by matching
+    `user == "system"`, which put the sentinel in the identity namespace. An
+    analyst whose login is literally `system` had every row skipped, so their
+    budget and differencing lineage reset on every restart with `verify()`
+    green. The app's records are distinguished by `status="config"`, which no
+    request path produces."""
+    from safetre_web.session import SessionStore
+
+    log = _audit_log(tmp_path, monkeypatch)
+    log.append(user="system", request="policy", spec={"policy": "x"},
+               status="config", findings=[], output_shape=None)
+    for i in range(3):
+        log.append(user="system", request="q", spec={"dataset": "spend"},
+                   status="released", findings=[], output_shape=[1, 1],
+                   accounting={"cost": 1,
+                               "cohorts": [["spend", [["region", "==", f"R{i}"]]]]})
+
+    store = SessionStore(threshold=10, budget=20)
+    store.rehydrate(log, window_hours=24)
+    auditor = store.get("system").auditor
+    assert (auditor.spent, len(auditor._cohorts)) == (3, 3), (
+        "an identity named `system` lost its accumulated state to the sentinel")

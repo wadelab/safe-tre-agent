@@ -33,6 +33,7 @@ Two answers, and only the second is a real control:
 
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import hmac
 import json
@@ -50,11 +51,90 @@ def _canonical(obj) -> str:
     return json.dumps(obj, sort_keys=True, separators=(",", ":"), default=str)
 
 
+def _truthy_env(name: str) -> bool:
+    """An override is an environment variable set to exactly `1`.
+
+    Same shape as `SAFETRE_ALLOW_HOST_AUDIT_KEY` and
+    `SAFETRE_ALLOW_UNVERIFIED_REHYDRATE`: a safety default that an operator can
+    turn off has to be turned off deliberately, and an env var is harder to set
+    by accident than a config key.
+    """
+    return os.environ.get(name) == "1"
+
+
 class HostResidentAuditKey(RuntimeError):
     """Production asked for a tamper-evident log and got a key sitting next to
     it. Raised rather than warned: the chain's whole purpose is to survive a
     host compromise, and a compromise that finds both the log and the key can
     re-MAC a forged chain that `verify()` then accepts."""
+
+
+class AuditDatabaseInUse(RuntimeError):
+    """Another process already serves this audit database (hardening #81)."""
+
+
+def claim_exclusive(path: str):
+    """Take a process-lifetime exclusive claim on an audit database.
+
+    **One application process per audit database, enforced rather than
+    assumed.** `docs/security.md` states that the head-read and the insert
+    "must be atomic" and prices the resulting lock contention as accepted —
+    but the lock delivering that atomicity is a `threading.Lock` on the
+    `AuditLog` object, which serialises threads inside one process and means
+    nothing between two. Nothing anywhere checked, so `uvicorn --workers 2`,
+    `WEB_CONCURRENCY`, or simply starting a second server on the same
+    `SAFETRE_AUDIT_DB` was a supported-looking configuration that silently
+    broke three controls at once (round 11, #81):
+
+      * the CHAIN. Two writers read the same head and both append from it.
+        Measured: 80 concurrent appends across two `AuditLog` objects, every
+        request answered normally, no error raised to any caller, and
+        `verify()` afterwards **False** — a log destroyed in ordinary
+        operation and indistinguishable from tampering. Since #59 the next
+        restart then refuses to boot on the unverifiable chain.
+      * the SESSION STORE, which holds the query budget and the differencing
+        lineage in memory. Two workers are two budgets, and a cohort recorded
+        on one is invisible to the other, so the two halves of a differencing
+        pair land on different workers and both release.
+      * the RATE LIMITER, likewise per-process.
+
+    An advisory `flock` on a sidecar is enough for the honest-operator case
+    this is about, and the kernel releases it when the process dies, so a
+    crash needs no cleanup and `scripts/restart_web.sh` (which waits for the
+    old process to exit) is unaffected. It is taken by the APPLICATION at
+    startup, not by `AuditLog.__init__`: the invariant is one *server* per
+    database, and tests, the CLI and the harnesses legitimately construct
+    several `AuditLog` objects over throwaway paths.
+
+    Returns the open lock file, which the caller must keep referenced for the
+    process lifetime — closing it drops the claim.
+    """
+    if path in (":memory:", ""):
+        return None
+    # Resolve first: the claim must be keyed on the DATABASE, not on how this
+    # process spelled it. A relative path, an absolute one and a symlink to the
+    # same file would otherwise take three different lock files and all three
+    # proceed — which is the configuration this exists to refuse.
+    lock_path = os.path.realpath(path) + ".lock"
+    handle = open(lock_path, "a+")
+    try:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError as exc:
+        handle.seek(0)
+        holder = handle.read().strip() or "an unknown process"
+        handle.close()
+        raise AuditDatabaseInUse(
+            f"{path} is already served by {holder}. One process per audit "
+            "database: the HMAC chain's head-read and insert must be atomic, "
+            "and the session budget and differencing lineage live in that "
+            "process's memory. Run a single worker (no `--workers`, no "
+            "WEB_CONCURRENCY), or give this instance its own SAFETRE_AUDIT_DB"
+        ) from exc
+    handle.seek(0)
+    handle.truncate()
+    handle.write(f"pid {os.getpid()}")
+    handle.flush()
+    return handle
 
 
 def _load_key(db_path: str, require_external: bool = False) -> bytes:
@@ -159,19 +239,55 @@ class AuditLog:
         if path is None:
             return
         tmp = path + ".tmp"
+        # fsync both the file and its directory: the rows are written under
+        # `PRAGMA synchronous=FULL`, so without this a power cut can leave
+        # durable rows beside a mark that never reached the platter, and a
+        # zero-length mark reads as "no mark" — which is finding #82's
+        # fail-open (round 11, #83).
         with open(tmp, "w") as fh:
             fh.write(head)
+            fh.flush()
+            os.fsync(fh.fileno())
         os.replace(tmp, path)          # atomic: never a half-written mark
-
-    def _read_mark(self) -> str | None:
-        path = self._mark_path()
-        if path is None or not os.path.exists(path):
-            return None
+        dir_fd = os.open(os.path.dirname(path) or ".", os.O_RDONLY)
         try:
-            with open(path) as fh:
-                return fh.read().strip() or None
+            os.fsync(dir_fd)
+        finally:
+            os.close(dir_fd)
+
+    # A mark is 64 lowercase hex characters or it is not a mark. Anything else
+    # is a verification FAILURE, never an exception: `verify` says the same of
+    # a corrupt row, and the mark path had reintroduced exactly the behaviour
+    # that rule exists to forbid — a non-UTF-8 sidecar raised
+    # `UnicodeDecodeError` out of `/api/audit/verify` (round 11, #83).
+    _MARK_MISSING = "missing"
+    _MARK_INVALID = "invalid"
+
+    def _read_mark(self) -> str:
+        """The recorded high-water mark, `_MARK_MISSING`, or `_MARK_INVALID`.
+
+        Absent and unreadable are DIFFERENT answers. Returning `None` for both
+        meant `chmod 000` on the sidecar disabled the truncation check as
+        effectively as deleting it, and deleting it was already too easy
+        (#82).
+        """
+        path = self._mark_path()
+        if path is None:
+            return self._MARK_MISSING
+        try:
+            with open(path, "rb") as fh:
+                raw = fh.read(256)
+        except FileNotFoundError:
+            return self._MARK_MISSING
         except OSError:
-            return None
+            return self._MARK_INVALID          # present and unreadable
+        try:
+            text = raw.decode("ascii").strip()
+        except UnicodeDecodeError:
+            return self._MARK_INVALID
+        if len(text) != 64 or any(c not in "0123456789abcdef" for c in text):
+            return self._MARK_INVALID
+        return text
 
     def _head_locked(self) -> str:
         row = self.con.execute("SELECT mac FROM records ORDER BY id DESC LIMIT 1").fetchone()
@@ -293,6 +409,16 @@ class AuditLog:
            database on every append. Same host, so not proof against an
            attacker who can write the directory; it turns a one-row DELETE into
            a two-file forgery, and makes the default deployment notice.
+
+           **Absence of the mark is a failure, not a pass** (round 11, #82).
+           The first version treated a missing mark as "no check to run", so
+           `DELETE FROM records WHERE id > k; rm audit.db.head` — two
+           operations, no key — restored the pre-#75 position, and a backup of
+           `audit.db` alone left the mark behind, moving #78 one file over. A
+           chain that has never been appended to since this check shipped
+           genuinely has no mark; that case is the explicit
+           `SAFETRE_ALLOW_UNMARKED_CHAIN=1`, and it is a migration step, not a
+           posture.
         3. **Is this the chain the operator anchored?** `expected_head` must
            still appear IN the chain. It used to have to EQUAL the head, which
            made an anchor go stale on the very next append — including the
@@ -300,13 +426,24 @@ class AuditLog:
            life of every process after the first. An anchor names a point the
            chain must still contain; everything after it is growth, everything
            missing before it is tampering.
+
+           **This check runs on every path.** The truncation branch used to
+           `return` its own verdict, so a configured anchor was never consulted
+           once the mark disagreed — which is precisely when it matters most
+           (#82).
         """
         prev = GENESIS
+        # The rows AND the mark are read under one acquisition. Reading the
+        # mark after the recompute meant an append landing during a scan
+        # advanced it past every MAC in the snapshot, so an intact chain
+        # reported itself tampered — measured on a 200k-row chain, a 1.6 s
+        # window, and `rehydrate` turns that into a refusal to boot (#84).
         with self._lock:
             rows = self.con.execute(
                 "SELECT ts,user,request,spec,status,findings,output_shape,prev_mac,mac,"
                 "accounting FROM records ORDER BY id"
             ).fetchall()
+            mark = self._read_mark()
         seen_macs: list[str] = []
         for (ts, user, request, spec, status, findings, shape, prev_mac, mac,
              accounting) in rows:
@@ -331,11 +468,27 @@ class AuditLog:
             prev = mac
             seen_macs.append(mac)
 
-        # (2) truncation, against the mark written on the last append
-        mark = self._read_mark()
-        if mark is not None and not any(
-                hmac.compare_digest(m, mark) for m in seen_macs):
-            return prev == GENESIS and mark == GENESIS
+        # (2) truncation, against the mark written on the last append.
+        #
+        # No early `return` anywhere in here: check (3) is the control that
+        # survives a host compromise, and skipping it exactly when the mark
+        # disagrees is skipping it exactly when it is needed (#82).
+        if mark == self._MARK_INVALID:
+            return False
+        if mark == self._MARK_MISSING:
+            # An empty chain has nothing to have lost. A non-empty one that
+            # cannot show a mark is either pre-#75 or truncated, and the two
+            # are indistinguishable from here, so it fails unless an operator
+            # has said which it is.
+            if seen_macs and not _truthy_env("SAFETRE_ALLOW_UNMARKED_CHAIN"):
+                return False
+        elif not any(hmac.compare_digest(m, mark) for m in seen_macs):
+            # The mark names a MAC the chain no longer contains. Note there is
+            # no GENESIS special case: `_write_mark` only ever writes a real
+            # MAC, so a sidecar holding GENESIS is not a state any honest
+            # deployment reaches — and treating it as "legitimately empty" let
+            # a wipe of every row verify, anchor and all (#82).
+            return False
 
         # (3) the off-box anchor: still present, not necessarily last
         if expected_head is not None and expected_head != GENESIS:

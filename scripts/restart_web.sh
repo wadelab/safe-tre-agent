@@ -3,7 +3,14 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-HOST="${HOST:-127.0.0.1}"
+# NOT overridable (round 11, #98). `identity.py` calls the loopback bind
+# load-bearing and `tests/test_deploy_unit.py` pins it in the systemd unit —
+# but this script read it from the environment, and it sources `.env.local`
+# first, so a stray `HOST=0.0.0.0` line there silently published the demo on
+# every interface. `scripts/run_web.sh` already hardcodes it; this one now
+# matches. Set SAFETRE_CHANNEL_ALLOW_NETS if you need a wider channel, which
+# is the control that was designed for it.
+HOST="127.0.0.1"
 PORT="${PORT:-8800}"
 ENV_FILE="${SAFETRE_WEB_ENV_FILE:-.env.local}"
 LOG_FILE="${SAFETRE_WEB_LOG:-/tmp/safetre-web-${PORT}.log}"

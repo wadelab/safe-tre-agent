@@ -44,6 +44,7 @@ from __future__ import annotations
 
 import itertools
 import json
+import os
 import re
 import selectors
 # spawns a fixed local checker with a literal argv, never a shell
@@ -153,6 +154,23 @@ def parse_response(payload: str, request_id: int | None = None
     return verdicts, version
 
 
+# Secrets the checker has no use for and must not inherit (round 11, #97).
+# `Popen` with no `env=` hands the child the WHOLE parent environment, and the
+# shipped unit loads both of these into it with `EnvironmentFile=`. The checker
+# is a third-party dependency that the threat model treats as receiving
+# poisoned, untrusted cell-key strings (#44) — handing it the key that makes the
+# audit chain forgery-resistant, and the secret that makes the identity header
+# believable, gives away both controls to the one process most likely to be
+# exploited. Orthogonal to #65: that is about the key sharing a HOST with the
+# log, this is about handing it to a process we distrust on that host.
+_WITHHELD_FROM_CHECKER = ("SAFETRE_AUDIT_KEY", "SAFETRE_PROXY_SHARED_SECRET")
+
+
+def _checker_env() -> dict[str, str]:
+    return {k: v for k, v in os.environ.items()
+            if k not in _WITHHELD_FROM_CHECKER}
+
+
 class ExternalCheckerVetter(CellVetter):
     """Vets a cell table by asking a checker running in another process.
 
@@ -219,7 +237,8 @@ class ExternalCheckerVetter(CellVetter):
             # argv is built here, never from the request; no shell is involved
             self._process = subprocess.Popen(  # nosec B603
                 self.command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE, text=True, bufsize=1)
+                stderr=subprocess.PIPE, text=True, bufsize=1,
+                env=_checker_env())
         except OSError as exc:
             raise ValueError(f"checker could not be started: {exc}") from None
         return self._process

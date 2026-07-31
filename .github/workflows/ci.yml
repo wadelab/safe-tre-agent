@@ -117,6 +117,14 @@ jobs:
 
   accessibility:
     # pa11y (WCAG 2AA) against the four demo states, using the runner's Chrome.
+    # pa11y is version-pinned (round 11, #101): it was the only unpinned
+    # third-party execution in this file, resolving `latest` and running its
+    # whole transitive npm tree, while ci.yml's own header and
+    # docs/maintenance.md both said everything was pinned by SHA. Scope: this
+    # is `pull_request` with `contents: read`, so a hostile release could not
+    # reach secrets or write to the repo — what it got was code execution on a
+    # runner with the source checked out, and the ability to make the
+    # accessibility gate pass.
     # SAFETRE_LLM=mock: CI has no local model, and the mock planner is the
     # explicit tests/CI opt-in (never a silent fallback).
     runs-on: ubuntu-latest
@@ -128,8 +136,16 @@ jobs:
       - name: Sync (frozen — exactly uv.lock)
         run: uv sync --all-extras --frozen
       - name: Start the demo server (mock planner, synthetic data)
+        # SAFETRE_ALLOW_PREFILL_AUTORUN=1 is what makes this a FOUR-state gate
+        # rather than the home page scanned four times (round 11, #100).
+        # Hardening #50 turned `/#q=` auto-run off unless it is set; the
+        # screenshot and deck scripts set it, this job never did, so the three
+        # result states below rendered an empty page and `--wait 4000` waited
+        # for nothing. The fragment never reaches the server, so only the
+        # disabled JS could have told the four URLs apart.
         run: |
-          SAFETRE_LLM=mock nohup uv run uvicorn safetre_web.app:app \
+          SAFETRE_LLM=mock SAFETRE_ALLOW_PREFILL_AUTORUN=1 \
+            nohup uv run uvicorn safetre_web.app:app \
             --host 127.0.0.1 --port 8800 > /tmp/web.log 2>&1 &
           for i in $(seq 1 60); do
             curl -fsS http://127.0.0.1:8800/healthz > /dev/null && exit 0
@@ -143,7 +159,7 @@ jobs:
           PUPPETEER_SKIP_DOWNLOAD: "1"
         run: |
           printf '%s' '{"chromeLaunchConfig": {"executablePath": "/usr/bin/google-chrome", "args": ["--no-sandbox"]}}' > /tmp/pa11y.json
-          npx -y pa11y --config /tmp/pa11y.json --wait 3000 "http://127.0.0.1:8800/"
-          npx -y pa11y --config /tmp/pa11y.json --wait 4000 "http://127.0.0.1:8800/#q=mean%20spend%20by%20age%20band"
-          npx -y pa11y --config /tmp/pa11y.json --wait 4000 "http://127.0.0.1:8800/#q=mean%20spend%20by%20age%20band,%20region%20and%20device%20os"
-          npx -y pa11y --config /tmp/pa11y.json --wait 4000 "http://127.0.0.1:8800/#q=report%20wellbeing%20per%20donor"
+          npx -y pa11y@9.0.0 --config /tmp/pa11y.json --wait 3000 "http://127.0.0.1:8800/"
+          npx -y pa11y@9.0.0 --config /tmp/pa11y.json --wait 4000 "http://127.0.0.1:8800/#q=mean%20spend%20by%20age%20band"
+          npx -y pa11y@9.0.0 --config /tmp/pa11y.json --wait 4000 "http://127.0.0.1:8800/#q=mean%20spend%20by%20age%20band,%20region%20and%20device%20os"
+          npx -y pa11y@9.0.0 --config /tmp/pa11y.json --wait 4000 "http://127.0.0.1:8800/#q=report%20wellbeing%20per%20donor"

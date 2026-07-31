@@ -99,7 +99,7 @@ class SessionStore:
         self._max_sessions = max_sessions
         self._lock = threading.Lock()
 
-    def _evictable(self) -> str | None:
+    def _evictable(self, exclude: str | None = None) -> str | None:
         """The least-recently-used session that is holding NO state.
 
         Eviction drops a session's spent budget and its differencing lineage,
@@ -107,8 +107,22 @@ class SessionStore:
         half of a differencing pair gets released (#59, #69). So a session with
         state is evicted only when there is nothing else to drop, and then
         loudly (round 10, #79).
+
+        `exclude` is the session being created, and leaving it out is not a
+        nicety (round 11, #90). It is in the map by the time this runs and it
+        is the one session guaranteed to hold no state, so once every OTHER
+        session is stateful this returned the newcomer — the store deleted the
+        session it had just made and handed the caller an orphan. That
+        identity's auditor was then rebuilt from nothing on every request:
+        the budget never accumulated and the differencing lineage was always
+        empty, which is exactly the release the lineage exists to stop. It is
+        reachable over HTTP in the default posture by minting `max_sessions`
+        identities, and a restart of a busy deployment arms it for every
+        subsequent new user.
         """
         for user, sess in self._sessions.items():        # oldest first
+            if user == exclude:
+                continue
             if sess.auditor.spent == 0 and not sess.auditor._cohorts:
                 return user
         return None
@@ -120,7 +134,7 @@ class SessionStore:
                 sess = Session(SessionAuditor(threshold=self._threshold, budget=self._budget))
                 self._sessions[user] = sess
                 if len(self._sessions) > self._max_sessions:
-                    victim = self._evictable()
+                    victim = self._evictable(exclude=user)
                     if victim is not None:
                         del self._sessions[victim]
                     else:
@@ -207,7 +221,14 @@ class SessionStore:
         rebuilt: "OrderedDict[str, Session]" = OrderedDict()
         for record in audit_log.since(cutoff):
             user = record.get("user") or ""
-            if not user or user == "system":
+            # Skip the app's OWN records by their STATUS, not by their user
+            # string (round 11, #86). `user == "system"` put the sentinel in
+            # the identity namespace: an analyst whose login is literally
+            # `system` had every one of their rows skipped, so their budget
+            # and differencing lineage reset on every restart with `verify()`
+            # green. `status="config"` is written only by the startup policy
+            # record and is not a value any request path produces.
+            if not user or record.get("status") == "config":
                 continue
             # NOT `self.get`: that applies the LRU cap per record, so replaying
             # an interleaved log evicts the very sessions it is rebuilding. A

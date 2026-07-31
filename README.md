@@ -187,18 +187,21 @@ stand-in's dominance rule from ACRO's.
 
 ## Threat model / red-team
 
-`redteam/attacks.yaml` holds 22 scenarios (18 attacks, 4 benign baselines):
+`redteam/attacks.yaml` holds 33 scenarios (28 attacks, 5 benign baselines):
 small-cell over-granularity, prompt-injection planted in `free_text`,
 code-channel smuggling of identifiers, differencing pairs, direct
 re-identification, grouping-fidelity probes, GLM-specific attacks (suppressed
 cells recovered through a saturated design, internal-variable predictors,
-residual requests, model differencing pairs), and literal-spec entries.
-`run_redteam.py` replays each with the gateway OFF and ON and reports what
-actually leaked; it is a CI gate that exits nonzero on any failure.
+residual requests, model differencing pairs), literal-spec entries, the
+band-edge and double-differencing probes from round 8, and adversarial data
+payloads (negative dominance, non-finite values, undeclared categories, a
+hyperactive donor). `run_redteam.py` replays each with the gateway OFF and ON
+and reports what actually leaked; it is a CI gate that exits nonzero on any
+failure.
 
 ![Red-team: gateway off vs on](docs/figures/redteam_results.png)
 
-**18/18 attacks neutralised; 8/22 scenarios would leak row-level data with the
+**28/28 attacks neutralised; 13/33 scenarios would leak row-level data with the
 gateway off.** Benign analysis flows through; small-cell queries are redacted
 and released.
 

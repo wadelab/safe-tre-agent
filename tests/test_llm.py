@@ -198,3 +198,106 @@ def test_llm_client_accepts_data_wrapped_response(monkeypatch):
     finally:
         server.shutdown()
         thread.join(timeout=5)
+
+
+# --- #80: the allowlist is checked on the URL we ask for --------------------
+
+def test_a_redirect_cannot_move_the_request_off_the_allowlisted_host(monkeypatch):
+    """#80 (round 11). `validate()` checks the CONFIGURED host once, and
+    `urllib` then follows 301/302/303 on a POST by default — downgrading it to
+    a GET and carrying every header except Content-Length and Content-Type to
+    the new host, the `Authorization` bearer token included.
+
+    The model runtime writes the response, and `docs/security.md` puts it in
+    the UNTRUSTED zone, so it chose where the request went. Measured before the
+    fix: a compliant `127.0.0.1` endpoint redirected to `127.0.0.2` — not on
+    the default allowlist — the request arrived there as a GET carrying
+    `Authorization: Bearer <key>`, and the attacker's reply was returned to the
+    planner. That is the mitigation the threat model names for row 13, LLM
+    endpoint egress / SSRF.
+    """
+    clear_llm_env(monkeypatch)
+    arrived = []
+
+    class Elsewhere(BaseHTTPRequestHandler):
+        """A host that is NOT on the allowlist."""
+        def do_GET(self):  # noqa: N802
+            arrived.append(self.headers.get("Authorization"))
+            raw = json.dumps({"choices": [{"message": {"content": "pwned"}}]}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(raw)))
+            self.end_headers()
+            self.wfile.write(raw)
+
+        do_POST = do_GET
+
+        def log_message(self, *_args):
+            return
+
+    elsewhere = ThreadingHTTPServer(("127.0.0.2", 0), Elsewhere)
+    elsewhere_port = elsewhere.server_port
+    elsewhere_thread = threading.Thread(target=elsewhere.serve_forever, daemon=True)
+    elsewhere_thread.start()
+
+    class Redirector(BaseHTTPRequestHandler):
+        """The configured, allowlisted endpoint — which redirects."""
+        def do_POST(self):  # noqa: N802
+            self.send_response(302)
+            self.send_header(
+                "Location",
+                f"http://127.0.0.2:{elsewhere_port}/v1/chat/completions")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+
+        def log_message(self, *_args):
+            return
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Redirector)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        base_url = f"http://127.0.0.1:{server.server_port}/v1"
+        client = LLMClient(base_url=base_url, model="pod-120b",
+                           api_key="pod-key-must-not-egress")
+        with pytest.raises(RuntimeError, match="redirect"):
+            client.complete("system", "the research question")
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+        elsewhere.shutdown()
+        elsewhere_thread.join(timeout=5)
+
+    assert not arrived, (
+        f"the request reached the off-allowlist host carrying {arrived!r}")
+
+
+def test_a_non_object_response_is_a_schema_error_not_a_crash(monkeypatch):
+    """The response body is untrusted. A bare JSON list reached `data.get`
+    and raised `AttributeError` instead of the schema error beside it."""
+    clear_llm_env(monkeypatch)
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self):  # noqa: N802
+            self.rfile.read(int(self.headers["Content-Length"]))
+            raw = json.dumps([1, 2, 3]).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(raw)))
+            self.end_headers()
+            self.wfile.write(raw)
+
+        def log_message(self, *_args):
+            return
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        client = LLMClient(base_url=f"http://127.0.0.1:{server.server_port}/v1",
+                           model="pod-120b", api_key="pod-key")
+        with pytest.raises(RuntimeError, match="chat-completions schema"):
+            client.complete("system", "user")
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)

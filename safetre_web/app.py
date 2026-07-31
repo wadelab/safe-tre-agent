@@ -18,15 +18,16 @@ import os
 import pathlib
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from safetre import __version__ as _version
 from safetre import dataset as dataset_mod
 from safetre import synth
-from safetre.audit import AuditLog
+from safetre.audit import AuditLog, claim_exclusive
 from safetre.config import load_policy_config
 from safetre.disclosure import DisclosurePolicy, build_vetter
 from safetre.manifest import manifest_for_response, public_schema
@@ -83,11 +84,24 @@ service = QueryService(_tables, _policy)
 # can re-MAC a forged chain that verify() accepts — the exact threat the chain
 # exists to address. The shipped unit set the database path and not the key,
 # and startup only warned (hardening #65).
-audit_log = AuditLog(os.environ.get("SAFETRE_AUDIT_DB", "audit.db"),
-                     require_external_key=is_production())
+_audit_db = os.environ.get("SAFETRE_AUDIT_DB", "audit.db")
+# One server process per audit database, checked rather than assumed (hardening
+# #81). A second worker on the same database breaks the chain in ordinary
+# operation — two writers append from the same head, nothing raises, and
+# `verify()` goes False — and splits the session budget and the differencing
+# lineage, which live in this process's memory, across processes that cannot
+# see each other. The claim is held for the process lifetime; the kernel drops
+# it when we exit, so a crash needs no cleanup.
+_audit_claim = claim_exclusive(_audit_db)
+audit_log = AuditLog(_audit_db, require_external_key=is_production())
 # Off-box anchor for the audit chain head (optional); when set, /api/audit/verify
 # checks the recomputed head against it, not just internal consistency.
-_audit_head_anchor = os.environ.get("SAFETRE_AUDIT_HEAD_ANCHOR") or None
+# `.strip()` because an operator copy-pastes this off a terminal, and a
+# trailing newline made the anchor miss, `rehydrate` raise, and the app refuse
+# to start — pointing them at SAFETRE_ALLOW_UNVERIFIED_REHYDRATE, i.e. at
+# turning the control off (round 11, #87). A malformed anchor is reported by
+# `configuration_problems()` rather than silently ignored.
+_audit_head_anchor = (os.environ.get("SAFETRE_AUDIT_HEAD_ANCHOR") or "").strip() or None
 sessions = SessionStore(threshold=_cfg.differencing_delta, budget=_cfg.query_budget)
 limiter = RateLimiter(int(os.environ.get("SAFETRE_RATE_LIMIT", "120")))
 # A full-chain verification is an integrity scan, not an interactive read: it
@@ -151,7 +165,10 @@ def make_planner():
     from safetre.llm import LLMClient, resolve_planner_mode
     if resolve_planner_mode(default="real") == "mock":
         return MockPlanner()
-    return LLMPlanner(LLMClient())
+    # the RESOLVED policy, so the prompt's embedded manifest cannot announce a
+    # `minimum_cell_size` the gateway is not enforcing — a planner uses that
+    # number to decide what to ask for (#89)
+    return LLMPlanner(LLMClient(), policy=_cfg)
 
 
 def _format_p_value(value) -> str:
@@ -164,8 +181,64 @@ def _format_p_value(value) -> str:
     return f"{p:.3f}"
 
 
+@app.exception_handler(RequestValidationError)
+async def validation_error(request: Request, exc: RequestValidationError):
+    """A validation failure names the FIELD and the RULE, never the input.
+
+    FastAPI's default handler echoes the offending value back inside the error
+    body (`input`, and whatever a validator put in `ctx`). Two problems, one of
+    them live (round 11, #85):
+
+      * **It turns a 422 into a 500.** Rendering that body means encoding the
+        input as UTF-8, and the input is exactly the thing that failed. A `q`
+        carrying a lone surrogate — legal JSON, and an ordinary `str` once
+        Python decodes it — made the default handler raise while building the
+        refusal, so the caller got a bare 500 from Starlette's
+        `ServerErrorMiddleware`. That is the one response class registered
+        OUTSIDE every `@app.middleware`, so it is also the one that #77's
+        header work cannot reach: no CSP, no `nosniff`.
+      * **It is a reflection surface.** The body is the caller's own input, so
+        nothing leaks about the data — but a fixed refusal is the house style
+        everywhere else here, and an error that quotes untrusted content back
+        is the shape #71 asked people to stop writing.
+
+    The rule is still stated in full, because a validation failure is decided
+    from the REQUEST: the analyst holds it and can see for themselves what is
+    wrong. That is the same line `service.WITHHELD_MESSAGE` draws.
+    """
+    return JSONResponse(
+        status_code=422,
+        content={"detail": [{"loc": [str(p) for p in err.get("loc", ())],
+                             "type": err.get("type", "value_error"),
+                             "msg": str(err.get("msg", "invalid"))}
+                            for err in exc.errors()]})
+
+
 class QueryRequest(BaseModel):
     q: str = Field(..., min_length=1, max_length=500)
+
+    @field_validator("q")
+    @classmethod
+    def storable(cls, value: str) -> str:
+        """A request that cannot be written to the audit log is not a request
+        this system can accept (hardening #85).
+
+        `{"q": "…\\ud800"}` is legal JSON and Python decodes a lone surrogate
+        into a perfectly ordinary `str`, which passes `max_length` — and then
+        SQLite, which must encode TEXT as UTF-8, raises. That made R8's
+        "exactly one audit record per request" breakable by anyone: HTTP 500,
+        zero rows, and the auditor charged. Refusing at the boundary is the
+        right place, because this is a fact about the REQUEST — the analyst
+        holds it and can see for themselves what is wrong with it — so it may
+        be explained in full, unlike a refusal decided from the data.
+        """
+        try:
+            value.encode("utf-8")
+        except UnicodeEncodeError:
+            raise ValueError(
+                "the request contains characters that cannot be encoded "
+                "(unpaired surrogates); send valid UTF-8") from None
+        return value
 
 
 # Runs INSIDE the response-time padding (an unpadded 429 would be its own
@@ -280,7 +353,7 @@ def _autorun_prefill() -> bool:
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request):
     user, allowed = current_user(request)
-    manifest = manifest_for_response()
+    manifest = manifest_for_response(_cfg)
     return templates.TemplateResponse(request, "index.html", {
         "user": user, "allowed": allowed, "catalogue": CATALOGUE,
         "manifest": manifest, "schema": public_schema(),
@@ -334,7 +407,7 @@ def manifest(request: Request):
     _, allowed = current_user(request)
     if not allowed:
         raise HTTPException(403, "not on the Safe People allowlist")
-    return manifest_for_response()
+    return manifest_for_response(_cfg)
 
 
 @app.get("/api/schema")

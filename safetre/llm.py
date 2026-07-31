@@ -136,6 +136,44 @@ class LLMConfig:
         return self.base_url.rstrip("/") + "/chat/completions"
 
 
+class _RefuseRedirect(request.HTTPRedirectHandler):
+    """Refuse every redirect, because the allowlist is checked on the URL we
+    ASK for and a redirect changes the URL we GET (hardening #80).
+
+    `validate()` checks the configured host against `SAFETRE_ALLOWED_LLM_HOSTS`
+    once, at construction. `urllib` then follows 301/302/303 on a POST by
+    default — downgrading it to a GET — and `HTTPRedirectHandler` carries every
+    header except `Content-Length` and `Content-Type` to the new host, the
+    `Authorization` bearer token included. The model runtime is in the
+    UNTRUSTED zone (`docs/security.md`), and it is the party that writes the
+    response, so it chose where the request went: a redirect from a compliant
+    local endpoint to `127.0.0.2` was accepted, arrived with the API key
+    attached, and answered the planner. That defeats the mitigation the threat
+    model names for row 13, LLM endpoint egress / SSRF — the point of the
+    allowlist is that the planner cannot be made to talk to a host outside the
+    safepod, and the process making the request may hold network reach the
+    model runtime does not.
+
+    A chat-completions endpoint has no business redirecting, so this fails
+    closed rather than re-validating: an operator whose endpoint moved should
+    point `SAFETRE_LLM_BASE_URL` at where it moved to.
+    """
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise error.HTTPError(
+            req.full_url, code,
+            f"refused: the model endpoint redirected to {newurl!r}. The host "
+            "allowlist is checked on the configured URL, so a redirect would "
+            "move the request — and the Authorization header — off it. Set "
+            "SAFETRE_LLM_BASE_URL to the endpoint's real location",
+            headers, fp)
+
+
+# Built once: `build_opener` drops the default redirect handler in favour of a
+# subclass of it, so nothing else in the chain changes.
+_OPENER = request.build_opener(_RefuseRedirect)
+
+
 class LLMClient:
     """Thin wrapper over an OpenAI-compatible chat-completions endpoint."""
 
@@ -161,10 +199,16 @@ class LLMClient:
             self.config.chat_completions_url, data=body, headers=headers, method="POST",
         )
         try:
-            with request.urlopen(req, timeout=self.config.timeout) as resp:  # nosec B310
+            with _OPENER.open(req, timeout=self.config.timeout) as resp:  # nosec B310
                 data = json.loads(resp.read().decode())
         except error.URLError as exc:
             raise RuntimeError(f"LLM request failed: {exc}") from exc
+        except json.JSONDecodeError as exc:
+            raise RuntimeError("LLM response was not JSON") from exc
+        # the response is untrusted: a bare list or scalar must reach the
+        # schema error below rather than an AttributeError on `.get`
+        if not isinstance(data, dict):
+            raise RuntimeError("LLM response did not match chat-completions schema")
         if "choices" not in data and isinstance(data.get("data"), dict):
             data = data["data"]
         try:

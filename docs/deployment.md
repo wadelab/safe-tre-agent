@@ -81,8 +81,19 @@ host is also meant to call the web app as an approved ingress peer.
 SAFETRE_ALLOWLIST="alex@example.org,sam@example.org" ...
 ```
 
-Because the app binds `127.0.0.1`, the `Tailscale-User-Login` header can only be
-supplied by the local tailscale proxy — a remote client cannot forge it.
+3. **`SAFETRE_PROXY_SHARED_SECRET`** is **required** wherever
+   `SAFETRE_REQUIRE_IDENTITY=1`. The proxy sends it as `X-Safetre-Proxy-Auth`;
+   without it the identity header is not believed and every request is refused,
+   so a production deployment configured without it answers nothing.
+
+> **The loopback bind is not what makes the identity header trustworthy.** This
+> page used to say that binding `127.0.0.1` meant only the local tailscale proxy
+> could supply `Tailscale-User-Login`. Hardening #45 refuted it: `docs/security.md`
+> puts the model runtime in the *untrusted* zone **on this host**, so loopback is a
+> shared trust domain and not a boundary — any local process could present any
+> login and have the audit log attribute queries to that person. Measured: 21
+> forged requests accepted. The shared secret is what makes the header
+> believable; the bind is what keeps the socket off the network.
 
 ## Restricted channel
 
@@ -129,11 +140,42 @@ as fallbacks, but new deployments should use the `SAFETRE_LLM_*` names. The
 model never sees secrets and never needs network beyond the local model
 endpoint. See `.env.example` and [Model runtime](model-runtime.md).
 
+## One process per audit database
+
+**Do not run more than one worker.** No `--workers`, no `WEB_CONCURRENCY`, and
+never two servers pointed at the same `SAFETRE_AUDIT_DB`. Three controls assume
+a single process and all three fail silently without one (hardening #81):
+
+- the **audit chain**. The head-read and the insert must be atomic, and the lock
+  that makes them so is a `threading.Lock` inside one process. Two writers
+  append from the same head: measured, 80 concurrent appends left every request
+  answered normally, no error raised to any caller, and `verify()` **False**.
+  Since #59 the next restart then refuses to boot on the unverifiable chain.
+- the **session store**, which holds the query budget and the differencing
+  lineage in memory. Two workers are two budgets, and a cohort recorded on one
+  is invisible to the other — so the two halves of a differencing pair land on
+  different workers and both release.
+- the **rate limiter**, likewise per-process.
+
+The application enforces this at startup with an advisory lock on
+`$SAFETRE_AUDIT_DB.lock` and refuses to start if another process holds it
+(`AuditDatabaseInUse`). The kernel releases the claim when the process exits, so
+a crash needs no cleanup. If you need throughput, the answer is a bigger box or
+the async delivery model on the roadmap, not more workers.
+
 ## Audit log operations
 
 - The log is an append-only, hash-chained SQLite database at `SAFETRE_AUDIT_DB`.
-- Verify integrity at any time: `GET /api/audit/verify` → `{"chain_intact": true}`,
-  or in code `AuditLog(path).verify()`.
+- Verify integrity at any time: `GET /api/audit/verify` → `{"chain_intact": true,
+  "head": "<64 hex>", "anchored": true|false}`, or in code
+  `AuditLog(path).verify()`. Record the returned `head` off-box and set it as
+  `SAFETRE_AUDIT_HEAD_ANCHOR`; that anchor is the only control that survives a
+  compromise of this host.
+- **Back it up with `sqlite3 audit.db ".backup out.db"`, or copy `audit.db*` —
+  never `audit.db` alone.** The log runs in WAL mode; copying the database file
+  on its own once produced an empty log that verified happily (#78). It is
+  checkpointed after every append now, but the sidecars still matter: `.head` is
+  the high-water mark `verify()` uses to detect truncation (#75).
 - **Mirror it off-box** (rsync/litestream to a separate host) so a compromise of
   `d2-1` cannot rewrite history. (Phase 2.)
 - Back up before upgrades; the chain is portable.

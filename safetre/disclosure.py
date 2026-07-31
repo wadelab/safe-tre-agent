@@ -900,8 +900,9 @@ class SessionAuditor:
     def observe_cohort(self, dataset: str, filters: tuple, bound) -> list[Finding]:
         """Flag a release whose difference from an earlier one is too few people.
 
-        `filters` is QuerySpec.normalized_filters(); `bound(a, b) -> int` returns
-        an upper bound on the number of individuals the two releases differ over.
+        `filters` is QuerySpec.normalized_filters();
+        `bound(prev_dataset, a, dataset, b) -> int` returns an upper bound on
+        the number of individuals the two releases differ over.
         The caller injects `service._difference_bound`, which takes the smaller of
         the simulatable marginal bound and the exact count of donors behind the
         rows exactly one of the two queries aggregated (hardening #40).
@@ -919,10 +920,26 @@ class SessionAuditor:
         a filter naming a value no record holds drops exactly the donors who
         carry a NULL. Both were live before this changed.
         """
+        # Compared ACROSS views, not only within one (round 11, #95). The
+        # skip used to be `prev_dataset != dataset`, and the spec's own
+        # definition of a cohort is "the set of individuals a query's filters
+        # select, identified by its normalized filter predicate" — the dataset
+        # is not part of it. A catalogue publishes several views of the SAME
+        # people (here `spend` and `donor_spend`, one a per-event sum and the
+        # other its per-donor total), so a differencing pair with one leg in
+        # each was never compared by either layer. Measured: two individually
+        # safe releases 2065.77 and 1944.84, differing by one person, recovered
+        # that individual's exact annual spend of GBP 120.93 with zero error.
+        # The identical pair inside one view is denied.
+        #
+        # `same_population` is conservative on purpose: every dataset in a
+        # definition shares one `person_key`, so they are treated as one
+        # population unless a definition ever declares otherwise. Comparing too
+        # much costs availability; comparing too little is this finding.
         for prev_dataset, prev_filters in self._cohorts:
-            if prev_dataset != dataset or prev_filters == filters:
+            if prev_dataset == dataset and prev_filters == filters:
                 continue
-            if bound(prev_filters, filters) < self.threshold:
+            if bound(prev_dataset, prev_filters, dataset, filters) < self.threshold:
                 return [Finding(
                     "high", "differencing",
                     "cohort is within the differencing threshold of a previously "

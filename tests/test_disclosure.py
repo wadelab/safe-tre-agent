@@ -110,7 +110,8 @@ def test_auditor_cohort_lineage_flags_near_cohort():
     london_minus_elderly = (("age_band", "!=", "50+"), ("region", "==", "London"))
     a.record_cohort("spend", london)
     # the injected bound is small (< threshold) -> flagged
-    flags = a.observe_cohort("spend", london_minus_elderly, bound=lambda a_, b_: 3)
+    flags = a.observe_cohort("spend", london_minus_elderly,
+                             bound=lambda pd_, a_, d_, b_: 3)
     assert any(f.rule == "differencing" for f in flags)
 
 
@@ -120,14 +121,18 @@ def test_auditor_cohort_lineage_allows_separated_and_identical():
     a.record_cohort("spend", london)
     # well-separated cohort: bound is large -> fine
     assert a.observe_cohort("spend", (("region", "==", "South East"),),
-                            bound=lambda a_, b_: 200) == []
+                            bound=lambda pd_, a_, d_, b_: 200) == []
     # identical cohort: same query repeated reveals nothing new -> fine,
     # and the (possibly costly) bound is never even computed
     assert a.observe_cohort("spend", london,
-                            bound=lambda a_, b_: 1 / 0) == []
-    # other dataset: cohorts do not cross datasets
+                            bound=lambda pd_, a_, d_, b_: 1 / 0) == []
+    # a DIFFERENT view of the same people IS compared now (#95): the catalogue
+    # publishes several views over one donor population, and a differencing
+    # pair with one leg in each used to be skipped entirely
     assert a.observe_cohort("wellbeing", (("region", "==", "London"),),
-                            bound=lambda a_, b_: 1 / 0) == []
+                            bound=lambda pd_, a_, d_, b_: 3) != []
+    assert a.observe_cohort("wellbeing", (("region", "==", "Wales"),),
+                            bound=lambda pd_, a_, d_, b_: 200) == []
 
 
 def test_secondary_suppression_single_dim():

@@ -136,7 +136,7 @@ caller and which control engaged.
 
 The table shows the original five attacks; the corpus has since grown to 22
 scenarios (grouping-fidelity probes, GLM-specific attacks, literal-spec
-entries). Current standing: **18/18 attacks neutralised; 8/22 scenarios would
+entries). Current standing: **28/28 attacks neutralised; 13/33 scenarios would
 leak row-level data with the gateway off.** Benign analysis still flows
 through untouched, and small-cell queries are **redacted and released**
 (offending cells suppressed) rather than blanket-denied — matching real TRE

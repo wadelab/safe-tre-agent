@@ -176,32 +176,115 @@ def configuration_problems() -> list[str]:
             problems.append(
                 "SAFETRE_REQUIRE_IDENTITY=1 without SAFETRE_ALLOWLIST: the Safe "
                 "People gate admits nobody until an allowlist is set")
-        if not os.environ.get("SAFETRE_AUDIT_HEAD_ANCHOR", ""):
+        if not os.environ.get("SAFETRE_AUDIT_HEAD_ANCHOR", "").strip():
             problems.append(
                 "SAFETRE_REQUIRE_IDENTITY=1 without SAFETRE_AUDIT_HEAD_ANCHOR: "
                 "the chain is checked only for internal consistency, so a "
                 "wholesale rewrite by someone holding the key verifies. An "
                 "off-box anchor is what makes that detectable")
+    # Shape-checked whatever the posture: an anchor that is not 64 hex will
+    # never match a MAC, so it fails the chain at startup and reads as
+    # tampering. Said here so the operator learns it is their typo (#87).
+    anchor = os.environ.get("SAFETRE_AUDIT_HEAD_ANCHOR", "").strip()
+    if anchor and (len(anchor) != 64
+                   or any(c not in "0123456789abcdef" for c in anchor.lower())):
+        problems.append(
+            "SAFETRE_AUDIT_HEAD_ANCHOR is not 64 hex characters, so it cannot "
+            "match any chain head: the app will refuse to start and report the "
+            "chain unverified. Copy the `head` from /api/audit/verify")
+    problems += waived_controls()
     return problems
+
+
+# Every environment variable whose whole purpose is to turn a control OFF, and
+# what each one stops doing. Reported by `configuration_problems()` because
+# #73's deploy-unit test derives its requirements from this function — so
+# adding a sentinel here makes the test demand the shipped unit not set it,
+# without restating a list anywhere (round 11, #99).
+#
+# #73 closed one half of "nothing in CI reads the shipped unit": that it SETS
+# what production needs. The other half was that it must not set what production
+# forbids, and a unit carrying all eight of these passed all eight deploy tests
+# while serving a 1-donor cell threshold with no rounding.
+CONTROL_WAIVERS = {
+    "SAFETRE_ALLOW_UNSAFE_POLICY":
+        "the resolved-policy safety floors are not enforced",
+    "SAFETRE_ALLOW_HOST_AUDIT_KEY":
+        "the audit chain may be signed by a key generated beside it (#65)",
+    "SAFETRE_ALLOW_UNVERIFIED_REHYDRATE":
+        "session state is rebuilt from a chain that failed to verify (#59)",
+    "SAFETRE_ALLOW_UNMARKED_CHAIN":
+        "the truncation check is skipped on a chain with no high-water mark (#82)",
+    "SAFETRE_ALLOW_TEST_CLIENT":
+        "the restricted-channel check honours the test client's fake peer",
+    "SAFETRE_ALLOW_PREFILL_AUTORUN":
+        "a visited `/#q=` link may run itself on load (#50)",
+    "SAFETRE_ALLOW_REMOTE_LLM":
+        "the model endpoint host allowlist is not enforced; research questions "
+        "may leave the safepod",
+    "SAFETRE_TRUST_FORWARDED_IDENTITY":
+        "the identity header is believed from beyond loopback",
+}
+
+
+def waived_controls() -> list[str]:
+    """Which control-waiving sentinels are set in this environment."""
+    return [f"{name} is set: {effect}"
+            for name, effect in sorted(CONTROL_WAIVERS.items())
+            if os.environ.get(name, "").strip()
+            and os.environ.get(name, "").strip().lower() not in ("0", "false", "no", "off")]
+
+
+def identity_is_verifiable() -> bool:
+    """Whether a presented login can be BELIEVED in this deployment.
+
+    `_header_trustworthy` answers "is the header good enough to act on", and
+    outside production it says yes vacuously: `_secret_ok` returns
+    `not _require_identity()` when no secret is configured, and `_allowed`
+    does the same for an empty allowlist. That is the right answer for
+    AUTHORISATION in a demo — there is nobody to impersonate — and the wrong
+    answer for a resource KEY, where the question is not "may this caller in"
+    but "can this caller choose their own bucket" (round 11, #91).
+
+    So: a login is a sound key only where a proxy secret actually exists and
+    actually matched.
+    """
+    return bool(os.environ.get("SAFETRE_PROXY_SHARED_SECRET", ""))
+
+
+def _peer_key(request: Request) -> str:
+    client = request.client
+    return f"peer:{client.host if client else '?'}"
 
 
 def rate_limit_key(request: Request) -> str:
     """The bucket a request's rate limit is charged to.
 
     The login ONLY when the header is trustworthy in this deployment — that is,
-    when the proxy secret checks out. In production that is already true, but
-    in the default/demo posture there is no secret and no allowlist, so
-    `current_user` returns `(login, True)` for any string the caller invents
-    and every rotation of the header minted a fresh bucket: the limiter was
-    keyed on something the caller chooses (round 10, #77, the same root as
-    #45). Falling back to the peer address costs nothing where identity is
-    real and is the only sound key where it is not.
+    when a proxy secret is configured AND checks out. In production that is
+    already true; in the default/demo posture there is no secret and no
+    allowlist, so `current_user` returns `(login, True)` for any string the
+    caller invents and every rotation of the header minted a fresh bucket: the
+    limiter was keyed on something the caller chooses (round 10, #77, the same
+    root as #45). Falling back to the peer address costs nothing where identity
+    is real and is the only sound key where it is not.
+
+    **Round 11, #91**: the first version of this gated on `_header_trustworthy`
+    alone, which is vacuously true outside production — so in the posture the
+    docstring named as the problem, the docstring was describing a check the
+    code was not making. Both directions were live: mint fresh buckets to
+    escape the limit, or name a victim to spend theirs.
+
+    The key is length-bounded for the same reason `timing._caller` bounds
+    itself: it becomes a dictionary key, and `max_keys` counts entries rather
+    than bytes, so an 8 kB header against a 100 000-key bound is 0.8 GB inside
+    a `MemoryMax=1G` unit.
     """
     login = _presented_login(request)
-    if login and _header_trustworthy(request) and _allowed(login):
-        return login
-    client = request.client
-    return f"peer:{client.host if client else '?'}"
+    if (login and identity_is_verifiable()
+            and _header_trustworthy(request) and _allowed(login)):
+        return login[:200]
+    return _peer_key(request)
 
 
 def current_user(request: Request) -> tuple[str, bool]:

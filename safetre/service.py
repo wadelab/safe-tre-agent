@@ -7,6 +7,7 @@ request → intent vetting → planner (untrusted) → QuerySpec validation
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass, field
 
 import pandas as pd
@@ -36,6 +37,12 @@ from .query import QuerySpec
 WITHHELD_MESSAGE = "blocked by safe-outputs gateway: nothing from this query " \
                    "can be released"
 WITHHELD_TRACE = "gateway: nothing released"
+
+log = logging.getLogger("safetre")
+
+# Substituted for a request the audit log cannot store verbatim (#85). WHAT was
+# asked is already unstorable; THAT it was asked still belongs in the chain.
+UNLOGGABLE_REQUEST = "<request could not be stored verbatim>"
 
 # Trace steps decided from the REQUEST alone. An analyst holds their own
 # request, so these may be shown in full; every step below them has seen data
@@ -200,11 +207,25 @@ class QueryService:
 
         The exact leg runs only when the cheap one has not already denied.
         """
-        def bound(a: tuple, b: tuple) -> int:
-            cheap = simulatable_cohort_bound(marginals, dataset, a, b)
+        def bound(prev_dataset: str, a: tuple, this_dataset: str, b: tuple) -> int:
+            """`prev_dataset` is the view the EARLIER release came from.
+
+            Across two views of the same people the row-level leg is not
+            defined — "the rows exactly one query aggregated" has no meaning
+            when the two queries aggregate different row universes — so the
+            exact leg falls back to the DONOR-set symmetric difference, which
+            is the right question there and the one the cross-view attack
+            defeats (round 11, #95). Within one view nothing changes.
+            """
+            if prev_dataset != this_dataset:
+                # the simulatable marginal bound is stated per dataset, so it
+                # has no cross-view reading; go straight to the exact leg
+                return self.engine.cohort_symdiff(prev_dataset, a, b,
+                                                  dataset_b=this_dataset)
+            cheap = simulatable_cohort_bound(marginals, this_dataset, a, b)
             if cheap < self.policy.threshold:
                 return cheap
-            return self.engine.row_symdiff_donors(dataset, a, b)
+            return self.engine.row_symdiff_donors(this_dataset, a, b)
 
         return bound
 
@@ -243,12 +264,59 @@ class QueryService:
             if auditor.spent == spent_before:
                 auditor.charge()
             if audit_log is not None:
-                audit_log.append(
-                    user=user, request=request, spec=None, status="error",
-                    findings=[f.__dict__ for f in findings], output_shape=None,
-                    accounting=_accounting(auditor.spent - spent_before, ()))
+                self._append_or_die(audit_log, user=user, request=request,
+                                    findings=findings,
+                                    cost=auditor.spent - spent_before)
             return Result("denied", message=WITHHELD_MESSAGE,
                           findings=_withheld(), trace=[WITHHELD_TRACE])
+
+    @staticmethod
+    def _append_or_die(audit_log, *, user: str, request: str, findings,
+                       cost: int) -> None:
+        """Write the error row, and never let writing it be the thing that
+        escapes (round 11, #85).
+
+        The boundary's answer to a failed request was to append a row carrying
+        the SAME request string that had just failed — so a request the log
+        could not store failed twice and the second raise escaped the boundary
+        entirely. `{"q": "…\\ud800"}` is legal JSON, Pydantic accepts a lone
+        surrogate as a `str`, and SQLite must encode TEXT as UTF-8: the result
+        was HTTP 500, **zero** audit rows, and R8's "exactly one audit record
+        per request" broken by a payload anyone can send. Worse, the auditor is
+        charged before the append, so live and replayed spend disagreed by one
+        per attempt — the property #58 exists to hold.
+
+        The retry replaces the request with a fixed marker rather than dropping
+        the row: WHAT was asked is already unstorable, THAT it was asked is the
+        thing the log exists to record.
+        """
+        try:
+            audit_log.append(
+                user=user, request=request, spec=None, status="error",
+                findings=[f.__dict__ for f in findings], output_shape=None,
+                accounting=_accounting(cost, ()))
+            return
+        except Exception as exc:                  # noqa: BLE001
+            log.error("audit append failed for a request from %s (%s); "
+                      "retrying with the request elided", user,
+                      type(exc).__name__)
+        try:
+            audit_log.append(
+                user=user, request=UNLOGGABLE_REQUEST, spec=None,
+                status="error",
+                findings=[f.__dict__ for f in findings] +
+                         [D.Finding("high", "unloggable_request",
+                                    "the request could not be stored verbatim",
+                                    audit_detail="request elided").__dict__],
+                output_shape=None, accounting=_accounting(cost, ()))
+        except Exception:                         # noqa: BLE001
+            # Nothing further is available. Say so at ERROR — an audit gap the
+            # operator does not know about is worse than one they do — and
+            # still answer the caller the canonical refusal rather than a 500,
+            # which is the one response class the header middleware cannot
+            # reach.
+            log.exception("audit append failed twice; this request is NOT in "
+                          "the chain")
 
     def _handle_inner(self, request: str, planner, auditor: D.SessionAuditor,
                       audit_log=None, user: str = "anon") -> Result:
@@ -572,8 +640,34 @@ class QueryService:
             # identical finalized-then-shaped frames (P21)
             trace.append(f"gateway[{role}]: released by "
                          f"{self.policy.vetter.describe()}")
+            # Keep the gateway's findings for this role (round 11, #96). They
+            # used to be dropped on the release branch — `findings` was bound
+            # and never read — so any vetter finding that is medium/high, not
+            # suppressable and not deny-class vanished, and the model path ran
+            # no human-in-the-loop step at all. The reachable instance today is
+            # `too_granular`: the plain path escalates it to an output checker
+            # and withholds the table, while the model path released the same
+            # cross-tab as the model's `cells` artifact.
+            notes.extend(findings)
             finalized[role] = get_procedure(agg.measure.fn).postprocess(released, agg)
             cohorts.append((agg.dataset, cohort))
+
+        # The documented HITL step, on the model path too (R7). Suppression
+        # already settled anything suppressable; a residual medium escalates
+        # and a residual high denies, exactly as on the plain path.
+        residual = [f for f in notes if not D.is_suppressable(f)]
+        decision = D.hitl_decision(residual)
+        trace.append(f"hitl: {decision}")
+        if decision != "auto":
+            spec_dict = spec.model_dump() | {
+                "aggregates": [a.measure_key() for a in aggregates]}
+            if decision == "deny":
+                record("denied", spec_dict, notes, None)
+                return Result("denied", message="blocked at human-in-the-loop",
+                              spec=spec_dict, findings=notes, trace=trace)
+            record("review", spec_dict, notes, None)
+            return Result("review", message="escalated to human output checker",
+                          spec=spec_dict, findings=notes, trace=trace, plans=plans)
 
         problems = proc.preconditions(finalized, spec)
         if problems:

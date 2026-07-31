@@ -53,14 +53,30 @@ It also stopped being a cross-user oracle in the process. With one shared pool
 an attacker could hold it one slot below the limit and read, from a cheap
 probe, exactly when somebody else's query crossed the ceiling and when it
 finished — the wall-clock duration of another user's over-ceiling work,
-unpadded. Per-caller pools do not move when anybody else runs a query.
+unpadded.
+
+**But only once the pool key was trustworthy** (round 11, #91). "Per-caller
+pools do not move when anybody else runs a query" was written of a key taken
+from an UNVERIFIED header, so they moved whenever the caller named somebody
+else: an attacker who could not authenticate held a chosen victim's pool at one
+below the cap and read that victim's over-ceiling durations off a cheap probe,
+and locked them out of every route with four stalled request bodies that cost
+no thread at all. #76 did not close the oracle so much as aim it. `_caller` now
+believes a login only where the proxy secret proves it, which makes the key
+space the allowlist and the bound real.
+
+`/static/` is admitted alongside `/healthz`: the comment below always said
+static assets cost nothing, and serving a 503 for the stylesheet while the
+liveness probe stays green is the outage being invisible twice over.
 """
 
 from __future__ import annotations
 
 import asyncio
+import hmac
 import json
 import math
+import os
 import time
 
 from .headers import SECURITY_HEADERS
@@ -90,8 +106,15 @@ MAX_ABANDONED_PER_CALLER = 4
 MAX_ABANDONED_TOTAL = 64
 
 # Never refused, whatever the pool looks like: a liveness probe that fails
-# under load gets the service restarted, and static assets cost nothing.
+# under load gets the service restarted, and static assets cost nothing. Both
+# are matched the way `app.rate_limit` matches them — an exact path or a
+# prefix WITH its separator, never a bare `startswith` (#77d).
 ALWAYS_ADMITTED = ("/healthz",)
+ALWAYS_ADMITTED_PREFIXES = ("/static/",)
+
+
+def _always_admitted(path: str) -> bool:
+    return path in ALWAYS_ADMITTED or path.startswith(ALWAYS_ADMITTED_PREFIXES)
 
 
 class ResponseTimeBoundary:
@@ -106,15 +129,40 @@ class ResponseTimeBoundary:
     def _caller(scope) -> str:
         """Who to charge an abandoned task to.
 
-        The presented identity where there is one, the peer otherwise. This is
-        a RESOURCE bucket, not an authorisation decision, so an unverified
-        header is fine to key on: rotating it buys more slots but stays inside
-        the global backstop, and every other control still refuses the forged
-        identity itself.
+        The presented identity **only when the proxy secret proves it**, and
+        the peer otherwise.
+
+        The first version keyed on the raw header and argued that an unverified
+        one was fine because this is a resource bucket rather than an
+        authorisation decision. That was wrong in a way #76 made worse rather
+        than better (round 11, #91). #76 replaced one shared pool with a pool
+        per caller and claimed "per-caller pools do not move when anybody else
+        runs a query" — but they move when the caller NAMES somebody else. An
+        unauthenticated attacker holding a named user's pool at one below the
+        cap turns each cheap probe into a one-bit read of whether THAT user has
+        over-ceiling work in flight, and polling recovers its duration: the
+        wall-clock size of another user's query, which is the quantity R18's
+        ceiling and D5's quantisation exist to destroy. Measured: three held
+        sockets, no credentials, 0.99 s read against a 1.00 s overrun. The
+        oracle #76 closed for everyone, it reopened for a chosen target.
+
+        The same key is also a targeted denial of service — four stalled
+        request bodies, which cost the attacker nothing and hold no thread,
+        lock a named user out of every route.
+
+        Verifying here duplicates no logic worth sharing: this is raw ASGI, so
+        it reads the scope directly, but the rule is `identity.py`'s.
         """
+        secret = os.environ.get("SAFETRE_PROXY_SHARED_SECRET", "")
+        login = presented = None
         for name, value in scope.get("headers", ()):
             if name == b"tailscale-user-login" and value:
-                return "user:" + value.decode("latin-1", "replace")[:200]
+                login = value.decode("latin-1", "replace")[:200]
+            elif name == b"x-safetre-proxy-auth" and value:
+                presented = value.decode("latin-1", "replace")
+        if (secret and login and presented is not None
+                and hmac.compare_digest(presented, secret)):
+            return "user:" + login
         client = scope.get("client")
         return "peer:" + (client[0] if client else "?")
 
@@ -163,7 +211,7 @@ class ResponseTimeBoundary:
         # who has not overrun anything is never refused for someone else's.
         caller = self._caller(scope)
         mine = self._abandoned_by.get(caller, ())
-        if (scope.get("path") not in ALWAYS_ADMITTED
+        if (not _always_admitted(scope.get("path", ""))
                 and (len(mine) >= self.max_abandoned
                      or len(self._abandoned) >= self.max_abandoned_total)):
             started = time.monotonic()

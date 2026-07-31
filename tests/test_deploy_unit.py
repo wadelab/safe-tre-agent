@@ -180,3 +180,73 @@ def test_the_unit_would_start_under_its_own_settings(monkeypatch):
     problems = [p for p in configuration_problems()
                 if "SAFETRE_AUDIT_HEAD_ANCHOR" not in p]
     assert not problems, problems
+
+
+def test_the_unit_runs_exactly_one_worker(unit):
+    """#81. Three controls assume one process and none of them checked.
+
+    The HMAC chain's head-read and insert must be atomic, which
+    `docs/security.md` states and prices; the lock delivering it is a
+    `threading.Lock` on the `AuditLog` object, which means nothing between two
+    processes. The session store's query budget and differencing lineage live
+    in that process's memory. The rate limiter likewise. A second worker
+    breaks all three at once — and breaks the chain *silently*, in ordinary
+    operation, leaving a log indistinguishable from a tampered one.
+
+    `claim_exclusive` is the control; this is the check that the shipped
+    artifact never asks for the configuration it would refuse.
+    """
+    exec_lines = [line for line in unit.splitlines()
+                  if line.strip().startswith("ExecStart=")]
+    assert exec_lines, "no ExecStart"
+    for line in exec_lines:
+        assert "--workers" not in line, line
+    assert "WEB_CONCURRENCY" not in unit, (
+        "WEB_CONCURRENCY makes uvicorn fork workers, each with its own session "
+        "budget, differencing lineage and audit-chain writer")
+
+
+def test_the_unit_waives_no_control(unit):
+    """#99. #73 closed one half of "nothing in CI reads the shipped unit" —
+    that it SETS what production needs. The other half is that it must not set
+    what production forbids, and every assertion in this file was positive: a
+    unit carrying all eight control-waiving sentinels passed all of them while
+    serving a one-donor cell threshold with no rounding and a chain that need
+    not verify.
+
+    Derived from `identity.CONTROL_WAIVERS` rather than restated, so a NEW
+    sentinel added to the code is forbidden in the unit from the moment it
+    exists — the same mechanism `_required_by_the_code` uses for the positive
+    half, and for the same reason (#58: no second implementation of one rule).
+    """
+    from safetre_web.identity import CONTROL_WAIVERS
+
+    for name in CONTROL_WAIVERS:
+        for line in unit.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("#") or not stripped.startswith("Environment"):
+                continue
+            assert f"{name}=" not in stripped, (
+                f"the unit waives a control: {stripped} "
+                f"({CONTROL_WAIVERS[name]})")
+
+
+def test_a_waived_control_is_reported_at_startup(monkeypatch):
+    """#99: the operator must be told, not only the test suite. These sit
+    beside the Safe People gaps in `configuration_problems()`, which is what
+    the app logs at startup."""
+    from safetre_web.identity import CONTROL_WAIVERS, waived_controls
+
+    for name in CONTROL_WAIVERS:
+        monkeypatch.delenv(name, raising=False)
+    assert waived_controls() == []
+
+    monkeypatch.setenv("SAFETRE_ALLOW_UNSAFE_POLICY", "1")
+    monkeypatch.setenv("SAFETRE_ALLOW_REMOTE_LLM", "1")
+    reported = waived_controls()
+    assert len(reported) == 2
+    assert any("SAFETRE_ALLOW_UNSAFE_POLICY" in r for r in reported)
+    assert any("safepod" in r for r in reported), "the EFFECT must be stated"
+
+    monkeypatch.setenv("SAFETRE_ALLOW_UNSAFE_POLICY", "0")
+    assert len(waived_controls()) == 1, "an explicitly-off sentinel is not a waiver"

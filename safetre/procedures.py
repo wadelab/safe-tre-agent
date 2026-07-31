@@ -195,8 +195,31 @@ class _ColumnAggregate(AggregateProcedure):
         return (m.column,)
 
     def select_exprs(self, m: Measure) -> tuple[list[str], tuple[str, ...]]:
+        """The guard is the whole point (round 11, #92).
+
+        `AVG`/`SUM`/`SUM(x*x)` skip NULL, and `COUNT(DISTINCT donor_id)` does
+        not — so with no guard here the threshold counted donors in the COHORT
+        while the released value described only the donors who ANSWERED. On any
+        dataset with item non-response that is P5 broken outright: measured on
+        a twelve-donor London cohort where two people answered the PGSI item,
+        `mean`, `sum` and `sum_sq` all released, reporting `n=10`, and the pair
+        `sum ÷ mean` gives the contributor count while `sum_sq` gives the
+        variance — both scores recovered exactly.
+
+        The dominance witness did not compensate: it drops the same NULL
+        donors, so it bounds a donor's share AMONG CONTRIBUTORS, which is the
+        right dominance question and no substitute for a missing threshold.
+        `Corr` has always declared its guards; the one-column aggregates never
+        did, and the demo corpus has no NULL in any measure column, which is
+        why ten rounds did not meet it.
+
+        With the guard, `n`, `n_donors`, the dominance witness and the
+        contribution frame all describe exactly the rows the released value
+        aggregated — which is what `_measure_guards` already claimed.
+        """
         # fn is a Literal allowlist; column is allowlist- and regex-validated
-        return [f"{self.fn.upper()}({_ident(m.column)}) AS value"], ()
+        return ([f"{self.fn.upper()}({_ident(m.column)}) AS value"],
+                (f"{_ident(m.column)} IS NOT NULL",))
 
     def postprocess(self, df: pd.DataFrame, spec: QuerySpec) -> pd.DataFrame:
         df["value"] = df["value"].round(2)
@@ -244,8 +267,14 @@ class SumSq(_ColumnAggregate):
     fn = "sum_sq"
 
     def select_exprs(self, m: Measure) -> tuple[list[str], tuple[str, ...]]:
+        # same guard as every other one-column aggregate, and for the same
+        # reason (#92): SUM skips NULL, COUNT(DISTINCT donor_id) does not, so
+        # without it the threshold counts a cohort while the value describes
+        # only its respondents. This override exists for the squared
+        # expression, not to opt out of the guard — which is how it came to be
+        # missing here after the base class gained one.
         col = _ident(m.column)
-        return [f"SUM({col} * {col}) AS value"], ()
+        return [f"SUM({col} * {col}) AS value"], (f"{col} IS NOT NULL",)
 
     def contribution_expr(self, m: Measure) -> str | None:
         # the squared scale, as the dominance witness uses: a checker bounding

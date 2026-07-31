@@ -181,8 +181,22 @@ def compile_dominance_query(spec: QuerySpec) -> SQLPlan:
     # released total. `abs` is identical on non-negative data — the same MAX,
     # the same SUM — so no existing decision changes. A cell whose magnitudes
     # sum to zero yields NULL, which fills to +inf and suppresses (fail closed).
+    # ...but the magnitude share is only HALF the question (round 11, #93).
+    # It bounds a donor's share of the cell's total magnitude and says nothing
+    # about their share of the number actually released. On the mixed-sign data
+    # `abs` was introduced for, those diverge: 21 donors, one at +137.42 and
+    # ten each at +/-50, gives a magnitude share of 0.12 — comfortably inside
+    # the p%-rule — while the released total IS that donor's contribution,
+    # exactly. The pre-#41 signed witness caught this one and inverted on
+    # others, so neither witness is right alone; the rule is the worse of the
+    # two. Identical on non-negative data, where SUM(abs(c)) == abs(SUM(c)), so
+    # #41's "no existing decision changes" still holds. A zero cell total makes
+    # the second term NULL -> +inf -> suppress, which is correct: a total of
+    # zero bounds nobody's share of anything.
     sql = (
-        f"SELECT {gpre}MAX(abs(c)) / NULLIF(SUM(abs(c)), 0) AS dominance "  # nosec
+        f"SELECT {gpre}GREATEST("  # nosec
+        f"MAX(abs(c)) / NULLIF(SUM(abs(c)), 0), "
+        f"MAX(abs(c)) / NULLIF(abs(SUM(c)), 0)) AS dominance "
         f"FROM ({inner}) t" + (f" GROUP BY {gsel}" if spec.group_by else "")
     )
     return SQLPlan(
@@ -254,7 +268,19 @@ def compile_influence_query(spec: QuerySpec) -> SQLPlan:
         f"p.dx, p.dy, p.dxx, p.dyy, p.dxy, p.dm, "
         f"g.tx, g.ty, g.txx, g.tyy, g.txy, g.tn FROM {join}), "
         f"d AS (SELECT {gpre}"
-        f"CASE WHEN (tn-dm) >= 3 THEN abs(({r_full}) - ({r_drop})) END AS delta FROM j) "
+        # An unresolved per-donor delta is INFINITE, not absent (round 11,
+        # #94). `r_drop` is NULL exactly when removing that donor leaves a
+        # degenerate group — no computable correlation without them — which is
+        # maximal influence, not missing data. As a NULL it was one row among
+        # many and `MAX` aggregated it away, so the single donor whose removal
+        # destroys the correlation was precisely the donor the check ignored.
+        # Measured: eleven donors at pgsi_score 0 and one at 15 — the ordinary
+        # shape of a general-population screening score — released r = -0.9866
+        # on a witness of 0.0028. The same reasoning already applies at cell
+        # level, where a NULL influence fills to +inf and suppresses; this
+        # makes the per-donor leg agree with it.
+        f"COALESCE(CASE WHEN (tn-dm) >= 3 THEN abs(({r_full}) - ({r_drop})) END, "
+        f"'Infinity') AS delta FROM j) "
         f"SELECT {gpre}MAX(delta) AS influence FROM d"
         + (f" GROUP BY {gsel}" if spec.group_by else "")
     )
@@ -632,18 +658,27 @@ class QueryEngine:
         params = params_a + params_b + params_b + params_a
         return int(self.cursor.execute(sql, params).fetchone()[0])
 
-    def cohort_symdiff(self, dataset: str, filters_a, filters_b) -> int:
+    def cohort_symdiff(self, dataset: str, filters_a, filters_b,
+                       dataset_b: str | None = None) -> int:
         """|A △ B|: distinct donors in exactly one of two cohorts.
 
         A small symmetric difference means the pair of released aggregates
         differs by only a few individuals — the signature of a differencing
         attack. Computed on the internal unit views; never released.
+
+        `dataset_b` lets the two halves come from DIFFERENT views of the same
+        people (round 11, #95). Every view in a definition projects the same
+        person key under `UNIT_PERSON`, so the donor sets are directly
+        comparable even where the rows are not — which is exactly the case
+        `row_symdiff_donors` cannot answer and the reason it is not used
+        across views.
         """
-        unit = self._unit_view(dataset)
+        unit_a = self._unit_view(dataset)
+        unit_b = self._unit_view(dataset_b or dataset)
         wa, pa = _where_triples(filters_a)
         wb, pb = _where_triples(filters_b)
-        a = f"SELECT DISTINCT {UNIT_PERSON} FROM {unit}{wa}"  # nosec
-        b = f"SELECT DISTINCT {UNIT_PERSON} FROM {unit}{wb}"  # nosec
+        a = f"SELECT DISTINCT {UNIT_PERSON} FROM {unit_a}{wa}"  # nosec
+        b = f"SELECT DISTINCT {UNIT_PERSON} FROM {unit_b}{wb}"  # nosec
         # EXCEPT halves are distinct and disjoint, so UNION ALL is exact.
         sql = f"SELECT COUNT(*) FROM (({a} EXCEPT {b}) UNION ALL ({b} EXCEPT {a})) t"  # nosec
         return int(self.cursor.execute(sql, pa + pb + pb + pa).fetchone()[0])

@@ -31,7 +31,12 @@ implements it, the test that checks it, and its status.
 - **Gateway** — the safe-outputs stage: minimum cell size, dominance,
   influence, suppression, count rounding.
 - **Cohort** — the set of individuals a query's filters select, identified by
-  its normalized filter predicate.
+  its normalized filter predicate. **Not by the view the query used**: a
+  catalogue may publish several views over one population, and the same people
+  selected through two of them are one cohort (hardening #95).
+- **Population** — the set of individuals a dataset's rows describe. Datasets
+  sharing a `person_key` share a population, and cohort lineage is compared
+  across every view of one.
 - **Cell** — one row of an aggregate result (one combination of group-by
   values).
 - **Donor** — a synthetic study participant; the unit the disclosure rules
@@ -57,8 +62,19 @@ claim.
   host.
 - **A5** — A real deployment runs a **local** model inside the safepod. A remote
   model endpoint is an egress channel and is permitted for synthetic data only,
-  behind an explicit opt-in.
+  behind an explicit opt-in. *(Amended 2026-07-31: the host allowlist enforcing
+  this is checked on the URL the planner ASKS for, and the model runtime — which
+  A1 calls adversarial — writes the response. Every redirect is therefore
+  refused, because following one moves the request, and the `Authorization`
+  header, to a host nobody allowlisted. See hardening #80.)*
 - **A6** — The data in this repository are synthetic.
+- **A7** — Exactly **one application process** serves one audit database. The
+  chain's head-read and insert are atomic only within a process, and the query
+  budget and the differencing lineage live in that process's memory, so a second
+  worker splits every session control and corrupts the chain in ordinary
+  operation. This is enforced, not assumed: the app takes an advisory claim on
+  the audit database at startup and refuses to start if another process holds
+  it. *(Added 2026-07-31, hardening #81.)*
 
 ## Requirements — what it MUST do
 
@@ -269,6 +285,17 @@ while their released values differ by a whole suppressed cell (hardening #40).
 The published, simulatable marginals remain the first test — they can only deny
 more, and they catch rare-category isolation without touching the data — but
 they are no longer the last word.
+
+*Amended 2026-07-31 (hardening #95).* The test MUST compare cohorts across
+every **view of the same population**, not only within one dataset name. The
+lineage was keyed on the dataset, which is not part of the definition of a
+cohort above, so a catalogue publishing a per-event view and a per-donor view of
+the same people carried a differencing surface neither layer examined: two
+individually safe releases, one from each, recovered one individual's exact
+annual total with zero error. Across two views the row-level leg has no
+reading — the queries aggregate different row universes — so the exact test
+there is the DONOR-set symmetric difference, and the simulatable marginal
+bound, being stated per dataset, does not apply.
 
 *Amended 2026-07-28.* This clause previously read "MUST NOT decide a
 differencing denial from the live donor sets", requiring the decision to be a
