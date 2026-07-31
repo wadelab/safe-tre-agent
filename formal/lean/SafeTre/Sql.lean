@@ -56,14 +56,27 @@ def Measure.frag (m : Measure) : Option AggFrag :=
       | some x, some y => some (.corr x y)
       | _, _ => none
 
-/-- The measure's NOT-NULL guard clauses (corr only), in engine order. -/
+/-- The measure's NOT-NULL guard clauses, in engine order.
+
+Every measure that reads a column guards it. `count` alone has none, because
+it counts rows rather than reading a value.
+
+This used to say "corr only", which was true of the code and wrong as a rule
+(hardening #92). `AVG`/`SUM` skip NULL and `COUNT(DISTINCT donor_id)` does not,
+so an unguarded one-column aggregate makes the distinct-donor threshold count a
+cohort while the released value describes only its respondents. The guard is
+what keeps `n`, `n_donors`, the dominance witness and the contribution frame
+describing the same rows. -/
 def Measure.guards (m : Measure) : List WhereAtom :=
   match m.fn with
-  | .corr =>
+  | .count => []
+  | .mean  => (m.column.map (WhereAtom.notNull ·)).toList
+  | .sum   => (m.column.map (WhereAtom.notNull ·)).toList
+  | .sumSq => (m.column.map (WhereAtom.notNull ·)).toList
+  | .corr  =>
       match m.x, m.y with
       | some x, some y => [.notNull x, .notNull y]
       | _, _ => []
-  | _ => []
 
 /-- One filter as a WHERE atom (engine.py::_where_triples). -/
 def filterAtom (f : Filter) : WhereAtom :=

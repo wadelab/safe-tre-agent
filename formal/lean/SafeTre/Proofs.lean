@@ -276,11 +276,22 @@ theorem guard_columns_sub_measure (m : Measure) :
     ∀ c ∈ (m.guards).map WhereAtom.column, c ∈ m.columns := by
   intro c hc
   unfold Measure.guards at hc
-  cases hfn : m.fn <;> rw [hfn] at hc <;> simp at hc
-  cases hx : m.x <;> cases hy : m.y <;> rw [hx, hy] at hc <;>
-    simp [WhereAtom.column] at hc
   unfold Measure.columns
-  rcases hc with rfl | rfl <;> simp [hx, hy]
+  cases hfn : m.fn <;> rw [hfn] at hc
+  case count => simp at hc
+  case mean =>
+    cases hcol : m.column <;> rw [hcol] at hc <;> simp [WhereAtom.column] at hc
+    subst hc; simp [hcol]
+  case sum =>
+    cases hcol : m.column <;> rw [hcol] at hc <;> simp [WhereAtom.column] at hc
+    subst hc; simp [hcol]
+  case sumSq =>
+    cases hcol : m.column <;> rw [hcol] at hc <;> simp [WhereAtom.column] at hc
+    subst hc; simp [hcol]
+  case corr =>
+    cases hx : m.x <;> cases hy : m.y <;> rw [hx, hy] at hc <;>
+      simp [WhereAtom.column] at hc
+    rcases hc with rfl | rfl <;> simp [hx, hy]
 
 /-- Aggregate-fragment columns name only measure columns. -/
 theorem frag_columns_sub_measure (m : Measure) :
@@ -398,8 +409,8 @@ theorem sumNats_append (a b : List Nat) :
 theorem guards_bind_nothing (m : Measure) :
     sumNats ((m.guards).map WhereAtom.params) = 0 := by
   unfold Measure.guards
-  cases m.fn <;> simp [sumNats]
-  cases m.x <;> cases m.y <;> simp [sumNats, WhereAtom.params]
+  cases m.fn <;> cases m.column <;> cases m.x <;> cases m.y <;>
+    simp [sumNats, WhereAtom.params]
 
 /-- A valid filter's atom binds exactly its value count. -/
 theorem filterAtom_params {ds : String} {f : Filter}
