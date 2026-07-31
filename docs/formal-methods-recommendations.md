@@ -7,7 +7,7 @@ decisions are recorded below with the reasoning, because a recommendation that
 quietly stops being worked on is indistinguishable from one nobody got to. The delivered items landed with the round-9 code fixes they
 specify — hardening #58–#67, see the [hardening log](hardening-log.md) and
 [formal/README.md](https://github.com/wadelab/safe-tre-agent/blob/main/formal/README.md). Companion to
-[security.md](security.md), [FORMAL_METHODS_ANALYSIS.md](FORMAL_METHODS_ANALYSIS.md),
+[security.md](security.md), [formal-methods-analysis.md](formal-methods-analysis.md),
 [formal/README.md](https://github.com/wadelab/safe-tre-agent/blob/main/formal/README.md) and
 [redteam/round9_report.md](https://github.com/wadelab/safe-tre-agent/blob/main/redteam/round9_report.md). This document
 recommends the formal-model work and records which of it has landed.
@@ -483,7 +483,7 @@ exactly the overclaim this document exists to stop.
 
 ### F6, original plan
 
-Designed in FORMAL_METHODS_ANALYSIS.md §C; its prerequisite (release =
+Designed in formal-methods-analysis.md §C; its prerequisite (release =
 postprocess ∘ finalize ∘ vet, hardening #26) has landed, and
 `tests/test_release_equality.py` is the executable half in both directions.
 
@@ -526,7 +526,7 @@ Roadmap item 3, unchanged in position: the only route to value-level
 insensitivity to any one donor as a theorem rather than a control description.
 Everything above hardens the deterministic pathway; this replaces "insensitive
 up to the controls" with an ε. Prefer a vetted library (OpenDP or equivalent)
-over a bespoke mechanism proof, per FORMAL_METHODS_ANALYSIS.md §E —
+over a bespoke mechanism proof, per formal-methods-analysis.md §E —
 deterministic rounding is not DP and should never be described as such.
 
 ## What is actually next, now that F1–F7 and F10 are in

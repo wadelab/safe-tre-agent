@@ -32,8 +32,24 @@ dist/
 *.db.head
 *.db.lock
 site/
+
+# `nohup uv run uvicorn ...` is the documented way to start the demo server
+# (scripts/restart_web.sh, and the accessibility CI job), so this file appears
+# on any machine that has ever run it.
+nohup.out
+
+# Retained audit chains from past red-team rounds. NOT reproducible — they are
+# historical evidence, kept because re-MACing a polluted chain is precisely the
+# operation the design exists to prevent (see the README inside). The `.db` and
+# `.db.key` were already covered by extension; the directory and its README
+# were not, so they sat in `git status` inviting exactly the broad `git add`
+# that caused #57.
+.audit-archive/
+
 # binary presentation artifacts are distributed via releases, not git
-# (see artifacts/README.md)
+# (see artifacts/README.md). NOTE: `.ppt` is deliberately NOT ignored — three
+# plain-language explainer decks are tracked on purpose, so a blanket rule
+# would be wrong. A stray `.ppt` is therefore something to notice in review.
 artifacts/*.pptx
 artifacts/*.pdf
 .DS_Store

@@ -33,11 +33,20 @@ BASE = f"http://127.0.0.1:{PORT}"
 
 # One entry per demo state. Queries are chosen so the deterministic mock
 # planner reproduces each gateway outcome; the tour page explains each one.
+# (url, window size). The mobile shot is here rather than captured by hand
+# because the hand-captured one went stale invisibly: `docs/figures/
+# web-ui-mobile.png` still showed the dark/teal console the GOV.UK restyle
+# retired in July, embedded in `docs/beginner.md`, with nothing in the
+# repository able to regenerate it (round 11 hygiene sweep).
+DESKTOP = "1280,1400"
+MOBILE = "390,1400"
 SHOTS = {
-    "demo-home": "/",
-    "demo-released": "/#q=mean%20spend%20by%20age%20band",
-    "demo-redacted": "/#q=mean%20spend%20by%20age%20band,%20region%20and%20device%20os",
-    "demo-denied": "/#q=show%20mean%20wellbeing%20per%20donor",
+    "demo-home": ("/", DESKTOP),
+    "demo-released": ("/#q=mean%20spend%20by%20age%20band", DESKTOP),
+    "demo-redacted": ("/#q=mean%20spend%20by%20age%20band,%20region%20and%20device%20os",
+                      DESKTOP),
+    "demo-denied": ("/#q=show%20mean%20wellbeing%20per%20donor", DESKTOP),
+    "demo-mobile": ("/", MOBILE),
 }
 
 
@@ -83,11 +92,11 @@ def main() -> None:
         try:
             wait_healthy()
             os.makedirs(FIGURES, exist_ok=True)
-            for name, path in SHOTS.items():
+            for name, (path, window) in SHOTS.items():
                 out = os.path.join(FIGURES, name + ".png")
                 subprocess.run(
                     [chrome, "--headless=new", "--disable-gpu", "--hide-scrollbars",
-                     "--window-size=1280,1400", "--run-all-compositor-stages-before-draw",
+                     f"--window-size={window}", "--run-all-compositor-stages-before-draw",
                      "--virtual-time-budget=9000",
                      f"--screenshot={out}", BASE + path],
                     check=True, stderr=subprocess.DEVNULL)

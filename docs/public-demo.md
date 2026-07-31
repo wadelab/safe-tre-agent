@@ -34,7 +34,7 @@ evidence:
 - the red-team replay — the run fails CI if any attack leaks
   ([hardening log](hardening-log.md));
 - a bounded model check of the prohibition clauses in Alloy
-  ([formal methods](FORMAL_METHODS_ANALYSIS.md));
+  ([formal methods](formal-methods-analysis.md));
 - this documentation, built `--strict` so broken links fail the build.
 
 ## Where the argument lives

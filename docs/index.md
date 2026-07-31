@@ -78,7 +78,7 @@ hosted server is involved.
 | See what's been red-teamed and fixed | [Hardening log](hardening-log.md) |
 | See the conformance review against TRE practice | [Best-practice review](best-practice-review.md) |
 | See the GOV.UK interface restyle record | [GOV.UK restyle record](govuk-ui-plan.md) |
-| See the formal-methods analysis | [Formal methods](FORMAL_METHODS_ANALYSIS.md) |
+| See the formal-methods analysis | [Formal methods](formal-methods-analysis.md) |
 | See candidate verifiable extensions | [Verifiable extensions](verifiable-extensions.md) |
 
 ### Positioning
@@ -112,4 +112,4 @@ differential-privacy release mode).
 > outputs-checked TRE model; ACRO/SACRO (DARE UK) for statistical disclosure
 > control; the Five Safes framework for governance.
 
-![safe-tre-agent web interface](figures/web-ui-home.png)
+![safe-tre-agent web interface](figures/demo-home.png)

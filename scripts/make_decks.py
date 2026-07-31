@@ -613,7 +613,7 @@ def build_guidelines(shots: str, out: str) -> None:
 def build_formal_elif(shots: str, out: str) -> None:
     """The plain-language deck for the formal layer: what the Lean proofs and
     Alloy models do, why they are needed, how they work, where they stop
-    (precise version: docs/FORMAL_METHODS_ANALYSIS.md + formal/README.md)."""
+    (precise version: docs/formal-methods-analysis.md + formal/README.md)."""
     prs = Presentation()
     prs.slide_width = SLIDE_W
     prs.slide_height = SLIDE_H
@@ -621,7 +621,7 @@ def build_formal_elif(shots: str, out: str) -> None:
     title_slide(prs, "The maths-checked safety layer, explained simply",
                 "What the Lean proofs and Alloy models do, why we need them, "
                 "how they are built, and where they stop "
-                "(precise version: docs/FORMAL_METHODS_ANALYSIS.md · formal/README.md)")
+                "(precise version: docs/formal-methods-analysis.md · formal/README.md)")
 
     bullets_slide(prs, "TL;DR", [
         "Tests check the examples we thought of; proofs check EVERY possibility.",

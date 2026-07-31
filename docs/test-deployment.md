@@ -88,7 +88,7 @@ curl http://127.0.0.1:8800/api/audit/verify
 
 The UI should look like this:
 
-![Desktop screenshot of the test web UI](figures/web-ui-home.png)
+![Desktop screenshot of the test web UI](figures/demo-home.png)
 
 ## 5. Rehearse restricted-channel access
 

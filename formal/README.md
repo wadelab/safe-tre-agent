@@ -195,5 +195,5 @@ numeric fit itself (covered by the reproducibility meta-test and the
 statsmodels oracle), rounding/dominance arithmetic (covered by the gateway's
 own tests), and value-level noninterference through the release path — the
 remaining slice, designed in the §C note of
-`docs/FORMAL_METHODS_ANALYSIS.md`; its prerequisite (released-value shaping
+`docs/formal-methods-analysis.md`; its prerequisite (released-value shaping
 running on the finalized frame) landed with hardening #26.

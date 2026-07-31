@@ -63,13 +63,21 @@ nav:
   - Engineering record:
       - Hardening log: hardening-log.md
       - Decision log: decision-log.md
+      - Decision records:
+          - D1 Cells-first models: decisions/D1-cells-first-models.md
+          - D2 ACRO composition: decisions/D2-acro-composition.md
+          - D3 Second-moment parameters: decisions/D3-second-moment-parameters.md
+          - D4 Robust dispersion: decisions/D4-robust-dispersion.md
+          - D5 Timing channel: decisions/D5-timing-channel.md
+          - D6 Checker default: decisions/D6-checker-default.md
+          - D7 Donor totals and band filters: decisions/D7-donor-totals-and-band-filters.md
       - Bestiary of caged beasts: bestiary.md
       - Best-practice review: best-practice-review.md
       - ACRO comparison: acro-comparison.md
       - ACRO integration design: acro-integration.md
-      - GOV.UK restyle record: govuk-ui-plan.md
-      - Formal methods: FORMAL_METHODS_ANALYSIS.md
-      - Formal-methods hardening plan: security2.md
+      - GOV.UK restyle record (delivered): govuk-ui-plan.md
+      - Formal methods: formal-methods-analysis.md
+      - Formal-methods hardening plan: formal-methods-recommendations.md
       - Verifiable extensions: verifiable-extensions.md
       - Adding a statistical tool (ANOVA): adding-a-statistical-tool.md
   - Fellowship positioning: fellowship.md

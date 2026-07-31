@@ -61,7 +61,7 @@ def test_llm_config_prefers_safetre_env_over_legacy_openai_env(monkeypatch):
 
 def test_llm_config_rejects_remote_endpoint_by_default(monkeypatch):
     clear_llm_env(monkeypatch)
-    monkeypatch.setenv("SAFETRE_LLM_BASE_URL", "https://openrouter.ai/api/v1")
+    monkeypatch.setenv("SAFETRE_LLM_BASE_URL", "https://remote.example/v1")
     with pytest.raises(ValueError, match="not allowed"):
         LLMConfig.from_env()
 
@@ -76,9 +76,9 @@ def test_llm_config_allows_named_in_safepod_model_host(monkeypatch):
 
 def test_llm_config_allows_remote_only_when_explicitly_enabled(monkeypatch):
     clear_llm_env(monkeypatch)
-    monkeypatch.setenv("SAFETRE_LLM_BASE_URL", "https://openrouter.ai/api/v1")
+    monkeypatch.setenv("SAFETRE_LLM_BASE_URL", "https://remote.example/v1")
     monkeypatch.setenv("SAFETRE_ALLOW_REMOTE_LLM", "1")
-    assert LLMConfig.from_env().base_url == "https://openrouter.ai/api/v1"
+    assert LLMConfig.from_env().base_url == "https://remote.example/v1"
 
 
 def test_remote_endpoint_configured_via_generic_env(monkeypatch):

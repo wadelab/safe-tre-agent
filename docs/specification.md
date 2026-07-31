@@ -3,7 +3,7 @@
 This is the normative specification for `safe-tre-agent`: what the system must
 do, and what it must never do. It is the source of truth the code and tests are
 written against, and the list of properties the
-[formal-methods work](FORMAL_METHODS_ANALYSIS.md) aims to prove. The prose
+[formal-methods work](formal-methods-analysis.md) aims to prove. The prose
 [security model](security.md) explains *why* each control exists; this page
 states the requirements as testable clauses.
 

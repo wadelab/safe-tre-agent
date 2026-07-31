@@ -16,7 +16,7 @@ You open a secure HTTPS page and sign in through the approved identity provider.
 You do not get shell access, database access, notebooks with raw rows, or data
 downloads.
 
-![Web interface before a query](figures/web-ui-home.png)
+![Web interface before a query](figures/demo-home.png)
 
 ## What the assistant does
 

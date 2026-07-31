@@ -5,7 +5,7 @@ system so that adding a new statistical procedure (regression, quantiles,
 ANOVA) or supporting a new kind of natural-language query is
 verifiable-by-construction, rather than a hand-audited change to three files?**
 
-It is the architectural companion to [Formal methods analysis](FORMAL_METHODS_ANALYSIS.md),
+It is the architectural companion to [Formal methods analysis](formal-methods-analysis.md),
 which catalogues *what* to prove about the current system. This one is about
 *where the seams should be* so that each new thing you add comes with a fixed,
 enumerable set of obligations — and so that you cannot wire it in until those

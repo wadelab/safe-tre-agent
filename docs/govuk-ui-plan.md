@@ -1,5 +1,13 @@
 # GOV.UK UI plan
 
+> **Status: DELIVERED** (2026-07-06, commit `41f7df0`). This page is the record
+> of a plan that shipped, kept for the reasoning rather than as work
+> outstanding: `safetre_web/static/app.css` cites it by name, every colour
+> token in "Visual language" below is in the shipped `:root` block, and the
+> choices under "Decisions to confirm" are settled in
+> `safetre_web/templates/index.html`. The shell is
+> [frozen](maintenance.md) — fixes only, no new shell features.
+
 Restyle the web interface to follow the
 [GOV.UK design principles](https://www.gov.uk/guidance/government-design-principles)
 and, for the concrete visual and interaction language, the

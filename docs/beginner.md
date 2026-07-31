@@ -50,12 +50,12 @@ loot-box, demographic, and wellbeing tables. It includes:
 - a red-team script showing what leaks with the gateway off and what is blocked
   with the gateway on.
 
-![Desktop screenshot of the web interface](figures/web-ui-home.png)
+![Desktop screenshot of the web interface](figures/demo-home.png)
 
 On narrow screens the same interface stacks the identity, query, and catalogue
 panels:
 
-![Mobile screenshot of the web interface](figures/web-ui-mobile.png)
+![Mobile screenshot of the web interface](figures/demo-mobile.png)
 
 ## The three result states
 

@@ -7,7 +7,7 @@ forged login was admitted; #65 set the audit database path and not the key, so
 the log was signed by a key sitting beside it. Both were found by reading, a
 round apart, and nothing in CI had ever looked at the file.
 
-This is what F8 was withdrawn in favour of (`docs/security2.md`). A trust-zone
+This is what F8 was withdrawn in favour of (`docs/formal-methods-recommendations.md`). A trust-zone
 model would have restated `docs/security.md`'s zone table with nothing tying it
 to the deployment, and passed forever regardless of what the unit said. The
 artifact under test here IS the thing that ships.

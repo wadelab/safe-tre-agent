@@ -1,6 +1,6 @@
 """Exhaustive (not sampled) formal checks over the bounded query skeleton.
 
-`docs/FORMAL_METHODS_ANALYSIS.md` argues the query space is finite and decidable.
+`docs/formal-methods-analysis.md` argues the query space is finite and decidable.
 `test_query_properties.py` samples it with Hypothesis; this module *enumerates*
 the no-filter skeleton in full — every dataset x every measure configuration x
 every group-by subset of size 0..MAX_GROUP_BY — and machine-checks the decidable
