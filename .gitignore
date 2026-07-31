@@ -31,6 +31,7 @@ dist/
 # committing an operator's chain head is exactly the shape of #57.
 *.db.head
 *.db.lock
+*.db.head.*.tmp
 site/
 
 # `nohup uv run uvicorn ...` is the documented way to start the demo server

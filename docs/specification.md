@@ -33,10 +33,15 @@ implements it, the test that checks it, and its status.
 - **Cohort** — the set of individuals a query's filters select, identified by
   its normalized filter predicate. **Not by the view the query used**: a
   catalogue may publish several views over one population, and the same people
-  selected through two of them are one cohort (hardening #95).
+  selected through two of them are one cohort. *(The lineage implementation
+  does not yet honour this across views — see P11 and hardening #95.)*
 - **Population** — the set of individuals a dataset's rows describe. Datasets
-  sharing a `person_key` share a population, and cohort lineage is compared
-  across every view of one.
+  sharing a `person_key` share a population.
+- **Commensurable** — two released values are commensurable when they measure
+  the same quantity, so that their difference is a quantity of the same kind.
+  Differencing controls bind only between commensurable releases; across views
+  of one population, commensurability is a declared property of the catalogue,
+  not something the gateway can infer.
 - **Cell** — one row of an aggregate result (one combination of group-by
   values).
 - **Donor** — a synthetic study participant; the unit the disclosure rules
@@ -286,16 +291,19 @@ The published, simulatable marginals remain the first test — they can only den
 more, and they catch rare-category isolation without touching the data — but
 they are no longer the last word.
 
-*Amended 2026-07-31 (hardening #95).* The test MUST compare cohorts across
-every **view of the same population**, not only within one dataset name. The
-lineage was keyed on the dataset, which is not part of the definition of a
-cohort above, so a catalogue publishing a per-event view and a per-donor view of
-the same people carried a differencing surface neither layer examined: two
-individually safe releases, one from each, recovered one individual's exact
-annual total with zero error. Across two views the row-level leg has no
-reading — the queries aggregate different row universes — so the exact test
-there is the DONOR-set symmetric difference, and the simulatable marginal
-bound, being stated per dataset, does not apply.
+*Known gap, 2026-07-31 (hardening #95) — NOT yet met across views.* The
+implementation compares cohorts only within one dataset name, while the
+definition of a cohort above is about the people a predicate selects. A
+catalogue publishing a per-event view and a per-donor view of the same donors
+therefore carries a differencing surface neither layer examines: two
+individually safe releases, one from each, recovered an individual's exact
+annual total with zero error. Simply dropping the dataset from the key does not
+satisfy this clause either — differencing needs the two released values to be
+COMMENSURABLE, and comparing a correlation against a mean denies ordinary
+analysis while adding no safety. Meeting it requires the catalogue to DECLARE
+which measures are the same quantity through different views (roadmap 0.0).
+Until then the clause is stated, the gap is reproduced, and
+`tests/test_disclosure.py` pins it so it stays visible.
 
 *Amended 2026-07-28.* This clause previously read "MUST NOT decide a
 differencing denial from the live donor sets", requiring the decision to be a

@@ -15,8 +15,35 @@ not new controls.
 ## 0. Security follow-ups from round 11
 
 Not a new workstream — the residuals the [round-11 audit](hardening-log.md)
-left behind, ordered by what they buy. The first two are cheap and change how
-every later round is run, which is why they sit above the fellowship work.
+left behind, ordered by what they buy. 0.0 is the round's one open finding;
+0.1 and 0.2 are cheap and change how every later round is run, which is why
+they sit above the fellowship work.
+
+**0.0 — Declared measure equivalence, and close #95.** The differencing lineage
+compares cohorts only within one dataset name, so a catalogue publishing
+several views of one donor population carries a surface neither layer
+examines. Reproduced: `sum(total_spend_gbp)` over North West and
+`sum(amount_gbp)` over North West excluding `sex=X`, both individually safe,
+differ by one person, and the difference is that person's exact annual spend —
+GBP 120.93, error 0.000000.
+
+Dropping the dataset from the key does NOT fix it, and that was measured too:
+differencing binds only between **commensurable** releases, and a correlation
+minus a mean recovers nothing however close the cohorts are, so the blanket
+version denied the demo's own benign correlation after one unrelated query
+while adding no safety. What the control needs is the fact the catalogue holds
+and the code cannot infer — that `donor_spend.total_spend_gbp` *is* the
+per-donor sum of exactly the `spend.amount_gbp` events.
+
+So: a `quantity:` declaration on measures in the dataset definition, two
+measures with the same quantity being comparable across views; threaded
+through `SessionAuditor.record_cohort`; and — the part that makes this more
+than an afternoon — carried in the audit row's `accounting` block, which
+stores `[dataset, filters]` pairs today, so replay must keep every chain
+written before the change verifying and restoring (#58, #74). Extend
+`formal/disclosure_policy.als`, which has no dataset atom at all and therefore
+could not have expressed the finding. Acceptance: `redteam/attacks.yaml` gains
+the cross-view pair, and the demo's correlation still releases.
 
 **0.1 — Make the adversarial dataset a first-class artifact.** Three of round
 11's findings (#92, #93, #94) are arithmetic that is wrong in general and
@@ -57,14 +84,14 @@ selecting the key per row, makes rotation an ordinary operation. This matters
 more now that #81 refuses to start on an unverifiable chain — a well-meant
 rotation currently bricks the service.
 
-**0.5 — Declare the population explicitly.** #95's fix treats every dataset in
-a definition as one population, on the conservative reading that they share a
-`person_key`. That is right for the demo catalogue and over-denies for a
-definition holding genuinely disjoint populations (a donors study and a staff
-study in one file). An explicit `population:` field per dataset, defaulting to
-the person key, would state it rather than infer it — and the Alloy model
-should gain the atom, since `disclosure_policy.als` has no notion of a dataset
-at all and therefore could not have expressed #95.
+**0.5 — Declare the population explicitly** (companion to 0.0). Comparing
+cohorts across views presupposes the views describe the same people, which the
+code would otherwise have to infer from a shared `person_key` — right for the
+demo catalogue and wrong for a definition holding genuinely disjoint
+populations, such as a donors study and a staff study in one file. An explicit
+`population:` field per dataset, defaulting to the person key, states it. Both
+declarations land together: a cross-view comparison needs the same population
+AND a commensurable quantity, and neither is inferable.
 
 **0.6 — Bring the last three dials inside the policy loader.**
 `SAFETRE_RATE_LIMIT`, `SAFETRE_AUDIT_VERIFY_RATE_LIMIT` and

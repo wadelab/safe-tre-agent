@@ -16,22 +16,26 @@ and fixes are in [docs/hardening-log.md](docs/hardening-log.md).
   executable reproducer. **Twenty-two findings, #80–#101**, and for the first
   time since round 8 the serious ones are back inside the gateway rather than
   around it.
-  - **The differencing lineage was keyed on the dataset name, and the catalogue
-    publishes three views of the same donors** (#95 — the round's real finding).
-    `observe_cohort` skipped any prior cohort from a different dataset, and the
-    cheap totals layer was keyed the same way, so a differencing pair with one
-    leg in each view was compared by neither. Measured: two individually safe
-    releases — `sum(total_spend_gbp)` over North West and `sum(amount_gbp)` over
-    North West excluding `sex=X` — differ by one person, and that difference is
-    their exact annual spend, **GBP 120.93, absolute error 0.000000**. The
-    identical pair inside one view is denied. The specification's own definition
-    of a cohort is "the set of individuals a query's filters select, identified
-    by its normalized filter predicate" — the dataset was never part of it, so
-    the implementation was narrower than the clause it implemented, and no test
-    could catch it because every test used one dataset. Cohorts are now compared
-    across every view of a population; the exact leg falls back to the donor-set
-    symmetric difference, since row-level difference has no cross-view reading.
-    P11 and the *Cohort* definition amended, and a *Population* definition added.
+  - **The differencing lineage is keyed on the dataset name, and the catalogue
+    publishes three views of the same donors** (#95 — the round's real finding,
+    **reproduced and left OPEN**). `observe_cohort` skips any prior cohort from
+    a different dataset, and the cheap totals layer is keyed the same way, so a
+    differencing pair with one leg in each view is compared by neither.
+    Measured: two individually safe releases — `sum(total_spend_gbp)` over North
+    West and `sum(amount_gbp)` over North West excluding `sex=X` — differ by one
+    person, and that difference is their exact annual spend, **GBP 120.93,
+    absolute error 0.000000**. The identical pair inside one view is denied.
+    The obvious repair — drop the dataset from the key — was implemented,
+    measured and **withdrawn**: differencing binds only between *commensurable*
+    releases, and a correlation minus a mean recovers nothing however close the
+    cohorts are, so the blanket version denied the demo's own benign correlation
+    after one unrelated query while adding no safety. Closing it needs the
+    catalogue to *declare* which measures are the same quantity through
+    different views, carried through `record_cohort` and the audit row's
+    accounting block with a migration that keeps existing chains verifying.
+    Roadmap item 0.0; `tests/test_disclosure.py` pins the gap; the groundwork
+    (`cohort_symdiff(dataset_b=…)`, a two-dataset `_difference_bound`) landed.
+    P11 carries the gap and *Commensurable* is now a defined term.
   - **The distinct-donor threshold counted the cohort; the released value
     described the respondents** (#92). `AVG`/`SUM` skip NULL and
     `COUNT(DISTINCT donor_id)` does not, and only `corr` ever declared a

@@ -126,20 +126,14 @@ def test_auditor_cohort_lineage_allows_separated_and_identical():
     # and the (possibly costly) bound is never even computed
     assert a.observe_cohort("spend", london,
                             bound=lambda pd_, a_, d_, b_: 1 / 0) == []
-    # the SAME predicate through a different view selects the same people, so
-    # it is the same cohort asked a second question — skipped, and the bound is
-    # not computed. Denying here would refuse an analyst a second MEASURE over
-    # a cohort they have already released, which is ordinary analysis
-    assert a.observe_cohort("wellbeing", london,
-                            bound=lambda pd_, a_, d_, b_: 1 / 0) == []
-    # a DIFFERING predicate through a different view IS compared now (#95).
-    # This is the shape that recovered an individual's exact annual spend from
-    # two individually safe releases, and it used to be skipped entirely
+    # another VIEW of the same people is not compared, and hardening #95 is
+    # the open finding that says so — see the note in `observe_cohort`. Pinned
+    # here so the gap is a stated property rather than an accident, and so
+    # whoever implements the declared measure equivalence (roadmap 0.0) has to
+    # come back and change this line.
     assert a.observe_cohort("wellbeing",
                             (("region", "==", "London"), ("sex", "!=", "X")),
-                            bound=lambda pd_, a_, d_, b_: 3) != []
-    assert a.observe_cohort("wellbeing", (("region", "==", "Wales"),),
-                            bound=lambda pd_, a_, d_, b_: 200) == []
+                            bound=lambda pd_, a_, d_, b_: 1 / 0) == []
 
 
 def test_secondary_suppression_single_dim():

@@ -9,8 +9,9 @@ The first full-surface audit since the repository went public, run across five
 independent surfaces at once — the audit chain, the web edge, the disclosure
 core, configuration and deployment, and repository hygiene — with every finding
 required to come with an executable reproducer before it counted. Twenty-two
-findings, **#80–#101**, and for the first time since round 8 the serious ones
-are back inside the gateway rather than around it.
+findings, **#80–#101** — twenty-one fixed and one (#95) reproduced and left
+open with its design recorded — and for the first time since round 8 the
+serious ones are back inside the gateway rather than around it.
 
 Three things this round establishes.
 
@@ -41,7 +42,7 @@ error.
 
 | # | Finding | Sev | Status | Fix | Where |
 |---|---|---|---|---|---|
-| 95 | **The differencing lineage was keyed on the dataset name, and the catalogue publishes three views of the same donors.** `observe_cohort` skipped any prior cohort from a different dataset, and the cheap totals layer was keyed the same way, so a differencing pair with one leg in each view was compared by neither. `demo_dataset.yaml` makes `donor_spend.total_spend_gbp` the per-donor sum of exactly the events `spend.amount_gbp` aggregates, so the two are commensurable by construction. Measured: `sum(total_spend_gbp)` over North West (2065.77, n=60) and `sum(amount_gbp)` over North West excluding `sex=X` (1944.84, n=275) both released, and their difference is one individual's exact annual spend — **GBP 120.93, absolute error 0.000000**. The identical pair inside one view is denied by the simulatable marginal leg. Nothing in the docs, the Alloy model (which has no dataset atom at all) or the log mentioned the boundary; the "cross-session lineage" roadmap item covers a different gap | High | **Fixed** | cohorts are compared across every view of the same population — conservatively, since all datasets in a definition share one `person_key`. Row-level symmetric difference has no cross-view reading (the two queries aggregate different row universes), so the exact leg falls back to the DONOR-set symmetric difference, which is the right question there; `cohort_symdiff` gained a `dataset_b`. Within one view nothing changes. Spec P11 and the *Cohort* definition amended | `safetre/disclosure.py`, `safetre/service.py`, `safetre/engine.py`, `docs/specification.md`, `tests/test_hardening.py` |
+| 95 | **The differencing lineage was keyed on the dataset name, and the catalogue publishes three views of the same donors.** `observe_cohort` skipped any prior cohort from a different dataset, and the cheap totals layer was keyed the same way, so a differencing pair with one leg in each view was compared by neither. `demo_dataset.yaml` makes `donor_spend.total_spend_gbp` the per-donor sum of exactly the events `spend.amount_gbp` aggregates, so the two are commensurable by construction. Measured: `sum(total_spend_gbp)` over North West (2065.77, n=60) and `sum(amount_gbp)` over North West excluding `sex=X` (1944.84, n=275) both released, and their difference is one individual's exact annual spend — **GBP 120.93, absolute error 0.000000**. The identical pair inside one view is denied by the simulatable marginal leg. Nothing in the docs, the Alloy model (which has no dataset atom at all) or the log mentioned the boundary; the "cross-session lineage" roadmap item covers a different gap | High | **Reproduced, OPEN** | the obvious fix — drop the dataset from the key — was implemented, measured and **withdrawn**. Differencing needs the two released values to be COMMENSURABLE, and a correlation on `wellbeing` minus a mean spend on `spend` recovers nothing however close the cohorts are: a blanket cross-view comparison denied the demo's own benign correlation because an unrelated spend query had been released earlier in the session, while adding no safety. The comparison is meaningful only between measures that are the same QUANTITY through different views — `donor_spend.total_spend_gbp` is *defined* as the per-donor sum of `spend.amount_gbp` — and that is a fact about the catalogue which this code cannot infer. The fix is a declared measure equivalence threaded through `record_cohort` and the audit row's accounting block, which stores `[dataset, filters]` pairs today and needs a migration (#58's lesson). **Roadmap item 0.0.** The groundwork landed: `cohort_symdiff` takes a `dataset_b`, and `_difference_bound` takes both datasets. `tests/test_disclosure.py` pins the gap so it stays stated | `safetre/disclosure.py`, `safetre/service.py`, `safetre/engine.py`, `tests/test_disclosure.py` |
 | 92 | **The distinct-donor threshold counted the cohort; the released value described the respondents.** `AVG`/`SUM` skip NULL and `COUNT(DISTINCT donor_id)` does not, and the one-column aggregates declared no NOT-NULL guard — only `corr` ever had. On any dataset with item non-response the threshold therefore protects a number of people the release does not describe. Measured on a twelve-donor cohort where **two** answered: `mean`, `sum` and `sum_sq` all released reporting `n=10`, and `sum ÷ mean` gives the contributor count while `sum_sq` gives the variance — both individuals' exact scores recovered. The dominance witness does not compensate: it drops the same NULL donors, so it bounds a share *among contributors*, which is the right dominance question and no substitute for a missing threshold. The code had already noticed the discrepancy and filed it as a checker-alignment note. No measure column in the demo corpus contains a NULL, which is why ten rounds did not meet it | High | **Fixed** | every one-column aggregate declares `<column> IS NOT NULL`, so `n`, `n_donors`, the dominance witness and the contribution frame all describe exactly the rows the released value aggregated — which `_measure_guards` already claimed. `sum_sq` overrides `select_exprs` for its squared expression and had silently opted out of the guard along with it | `safetre/procedures.py`, `tests/test_hardening.py` |
 | 91 | **A resource bucket keyed on a string the caller writes is a bucket the caller can pick — including somebody else's.** Three keyed structures, one root. `timing._caller` read `Tailscale-User-Login` off the raw scope with no verification, so #76's per-caller abandoned-task pool let an unauthenticated attacker hold a NAMED victim's pool one below the cap and read, from a cheap probe, whether that user had over-ceiling work in flight — polling recovers its duration, which is the quantity R18's ceiling and D5's quantisation exist to destroy. Measured in the production posture: three held sockets, no credentials, 0.99 s read against a 1.00 s overrun, and a bystander's 2.2 s overrun did not move it, so the oracle **names its target**. The same key is a targeted outage — four stalled request bodies, which cost the attacker nothing and hold no thread, 503 a named user on every route while `/healthz` stays green and monitoring sees nothing. Separately, #77(b)'s `rate_limit_key` gated on `_header_trustworthy`, which is vacuously true outside production, so in the very posture its docstring named as the problem it returned the caller's string unchanged; and `verify_limiter` still keyed on `current_user`, giving 60 full-chain rescans where the budget is 6 | High | **Fixed** | a login is a sound key only where a proxy secret is configured AND matched (`identity.identity_is_verifiable`); `_caller` verifies the same secret from the ASGI scope; the verify limiter uses `rate_limit_key`; keys are length-bounded, since `max_keys` counts entries and an 8 kB header against a 100 000-key bound is 0.8 GB inside a `MemoryMax=1G` unit. `/static/` joins `/healthz` as always-admitted, which the comment had claimed since #76 | `safetre_web/timing.py`, `safetre_web/identity.py`, `safetre_web/app.py` |
 | 90 | **A store full of state gave every newcomer a fresh conscience.** #79 made eviction prefer a session holding no state — and `get()` inserts the new session *before* asking which one to evict, so the newcomer is always the first candidate. Once every other session is stateful, the store deleted the session it had just created and returned an orphan the store no longer held. That identity's auditor was rebuilt from nothing on every request: the budget never accumulated and the differencing lineage was always empty, which is the release the lineage exists to stop. #79's `log.error` is on the other branch, so nothing was said. Reachable over HTTP in the default posture by minting `max_sessions` identities (measured: 4096 in 81 s, no 429s, then six consecutive released queries all reporting 19 of 20 budget remaining), and a restart of a deployment with that many identities in the window arms it for every subsequent new user | High | **Fixed** | `_evictable(exclude=user)` — the session being created is never its own victim | `safetre_web/session.py`, `tests/test_hardening.py` |
@@ -66,18 +67,37 @@ error.
 
 ### Notes
 
-**#95 is the finding, and its shape is the reason to look at every other
-plural in the system.** The lineage auditor was written when the catalogue had
-one dataset. It grew to three views over one donor population, and the control
-kept comparing within a name because a name was what it had been given. The
-specification defines a cohort in terms of the people a predicate selects, and
-the implementation keyed it on the view the query happened to use — an
-implementation narrower than the clause it implements, which no test could
-catch because every test used one dataset. The fix is conservative in the
-right direction: every dataset in a definition shares one `person_key`, so
-they are treated as one population unless a definition ever declares
-otherwise, and comparing too much costs availability where comparing too
-little costs an individual.
+**#95 is the finding, and the attempt to fix it is the second finding.** The
+lineage auditor was written when the catalogue had one dataset. It grew to
+three views over one donor population, and the control kept comparing within a
+name because a name was what it had been given. The specification defines a
+cohort in terms of the people a predicate selects; the implementation keyed it
+on the view the query happened to use — narrower than the clause it
+implements, and invisible to every test because every test used one dataset.
+
+The obvious repair is to drop the dataset from the key. That was implemented,
+and CI rejected it: the demo's own benign correlation on `wellbeing` came back
+denied because an unrelated mean-spend query had been released earlier in the
+same session. The reason is worth stating, because it is the thing the first
+attempt got wrong. **Differencing needs the two released values to be
+commensurable.** A − B recovers an individual's contribution only when A and B
+measure the same quantity; a correlation minus a mean recovers nothing however
+close the two cohorts are. The dataset key was a crude proxy for
+commensurability, and removing it removed the proxy without replacing it — so
+the change bought no safety and cost the multi-dataset demo its usability
+after a single query.
+
+What commensurability actually requires is a declaration. The catalogue knows
+that `donor_spend.total_spend_gbp` is the per-donor sum of exactly the
+`spend.amount_gbp` events; the code has no way to derive it. So the fix is a
+declared measure equivalence in the dataset definition, threaded through
+`record_cohort` and — the part that makes it more than an afternoon — the audit
+row's `accounting` block, which stores `[dataset, filters]` pairs and would
+need a migration that keeps every existing chain verifying (#58). That is
+roadmap item 0.0, and until it lands this is a reproduced, documented, open
+finding rather than a fix that makes the tool unusable. The groundwork is in:
+`cohort_symdiff` takes a second dataset, `_difference_bound` takes both, and
+`tests/test_disclosure.py` pins the gap so it cannot quietly stop being true.
 
 **The pattern behind #92, #93 and #94: the fixture was doing the work.** Each
 is arithmetic that is wrong in general and correct on the demo data, and each

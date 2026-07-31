@@ -920,31 +920,36 @@ class SessionAuditor:
         a filter naming a value no record holds drops exactly the donors who
         carry a NULL. Both were live before this changed.
         """
-        # Compared ACROSS views, not only within one (round 11, #95). The
-        # skip used to be `prev_dataset != dataset`, and the spec's own
-        # definition of a cohort is "the set of individuals a query's filters
-        # select, identified by its normalized filter predicate" — the dataset
-        # is not part of it. A catalogue publishes several views of the SAME
-        # people (here `spend` and `donor_spend`, one a per-event sum and the
-        # other its per-donor total), so a differencing pair with one leg in
-        # each was never compared by either layer. Measured: two individually
-        # safe releases 2065.77 and 1944.84, differing by one person, recovered
-        # that individual's exact annual spend of GBP 120.93 with zero error.
-        # The identical pair inside one view is denied.
+        # **This layer compares within one view only, and hardening #95 is the
+        # open finding that says so.** A catalogue publishes several views of
+        # the SAME people — here `spend` (per event) and `donor_spend` (that
+        # donor's total of exactly those events) — and a differencing pair with
+        # one leg in each is compared by neither this layer nor the totals
+        # layer. Reproduced: two individually safe releases, 2065.77 and
+        # 1944.84, differ by one person, and the difference is that
+        # individual's exact annual spend of GBP 120.93, error 0.000000. The
+        # identical pair inside one view is denied.
         #
-        # `same_population` is conservative on purpose: every dataset in a
-        # definition shares one `person_key`, so they are treated as one
-        # population unless a definition ever declares otherwise. Comparing too
-        # much costs availability; comparing too little is this finding.
+        # It is NOT fixed by dropping the dataset from the key, which is what
+        # round 11 first tried. Differencing needs the two released values to
+        # be COMMENSURABLE, and a correlation on `wellbeing` minus a mean spend
+        # on `spend` recovers nothing however close the two cohorts are — so a
+        # blanket cross-view comparison denies ordinary analysis (measured: the
+        # demo's benign correlation denied because an unrelated spend query had
+        # been released earlier in the session) while adding no safety. The
+        # comparison is only meaningful between measures that are the same
+        # QUANTITY through different views, and that equivalence is a fact
+        # about the catalogue — `donor_spend.total_spend_gbp` is defined as the
+        # per-donor sum of `spend.amount_gbp` — which the dataset definition
+        # knows and this code cannot infer.
+        #
+        # The fix is therefore a declared measure equivalence, threaded through
+        # `record_cohort` and the audit row's accounting block (which today
+        # stores `[dataset, filters]` pairs and would need a migration, #58's
+        # lesson). Roadmap item 0.0. Until then this is stated, reproduced and
+        # open rather than papered over.
         for prev_dataset, prev_filters in self._cohorts:
-            # Identical predicates select identical PEOPLE, whichever view they
-            # were asked through, so this is the same cohort queried again — it
-            # reveals nothing new about who is in it, and the (possibly costly)
-            # bound is not computed. Skipping on the dataset as well would undo
-            # #95; skipping on neither denies an analyst who asks for a second
-            # MEASURE over a cohort they have already released, which is
-            # ordinary analysis and not differencing.
-            if prev_filters == filters:
+            if prev_dataset != dataset or prev_filters == filters:
                 continue
             if bound(prev_dataset, prev_filters, dataset, filters) < self.threshold:
                 return [Finding(
