@@ -365,7 +365,7 @@ HMAC-chained log) without ever reading them.
 
 ### The sleeping dials — configuration as a habitat
 
-![The sleeping dials](figures/bestiary/15_the_sleeping_dials.png){ width="420" }
+![The sleeping dials](figures/bestiary/14_the_sleeping_dials.png){ width="420" }
 
 Not creatures so much as unlocked cage doors with labels on them. Bagged in
 round 8:
@@ -435,7 +435,7 @@ because each one generalises:
 
 And the meta-specimen that explains eleven others:
 
-![The Blind Zookeeper](figures/bestiary/14_the_blind_zookeeper.png){ width="300" align=right }
+![The Blind Zookeeper](figures/bestiary/15_the_blind_zookeeper.png){ width="300" align=right }
 
 > **The Blind Zookeeper (#48).** For seven rounds the red-team harness asked
 > the gateway's own findings whether the final frame leaked — a question
