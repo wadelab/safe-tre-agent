@@ -357,6 +357,26 @@ def _allow_unsafe_policy() -> bool:
 # Each entry is (predicate, message). They express the SDC conventions the
 # parameters' own documentation cites, so a deployment that means to depart
 # from them is departing from the documented policy and should say so.
+#
+# THESE FLOORS ARE WAIVABLE. `SAFETRE_ALLOW_UNSAFE_POLICY=1` turns every one of
+# them into a logged warning, which is the whole point of the sentinel — but it
+# does NOT make the dials unbounded, and an operator setting it should know
+# what still holds. `_validate` runs first and raises unconditionally, so the
+# hard floor under each waivable one is:
+#
+#   min_cell_size          >= 1        (a cell of nobody is not a cell)
+#   dom_threshold          in (0, 1]
+#   influence_threshold    > 0
+#   moment2_dom_threshold  in (0, 1] when set
+#   round_base             >= 1        (1 means "no rounding", not "invalid")
+#   query_budget           >= 1
+#   response_quantum_ms    >= 0        (0 means "no padding")
+#   response_ceiling_ms    > 0, and a whole number of quanta
+#   vetter                 one of VETTERS, with checker_cmd when external
+#
+# So the waiver buys a policy that is *weak*, never one that is incoherent:
+# every dial still parses, still has a meaning, and is still logged in the
+# startup digest and the chain's `status=config` record (#55).
 _FLOORS: tuple[tuple, ...] = (
     (lambda c: c.min_cell_size >= 5,
      "min_cell_size must be >= 5: below that a released cell describes too few "

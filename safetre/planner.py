@@ -12,11 +12,12 @@ import json
 import re
 
 from . import dataset as _dataset
+from .config import load_policy_config
 from .manifest import manifest_sha256, public_manifest
 from .query import CATALOGUE, INTERNAL_RANGE_RULES
 
 
-def _manifest_text(policy=None) -> str:
+def _manifest_text(policy) -> str:
     manifest = public_manifest(policy)
     lines = []
     lines.append(f"manifest_sha256: {manifest_sha256(policy)}")
@@ -35,10 +36,12 @@ def _manifest_text(policy=None) -> str:
 def planner_system(policy=None) -> str:
     """The planner system prompt, generated from the ACTIVE dataset definition.
 
-    `policy` is the RESOLVED policy the gateway is enforcing. Omitting it makes
-    the embedded manifest re-read config.yaml and the environment, so the
+    `policy` is the RESOLVED policy the gateway is enforcing. Omitting it
+    re-reads config.yaml and the environment HERE, at one named place, so the
     prompt can announce a `minimum_cell_size` the gateway is not running — and
-    a planner uses that number to decide what to ask for (round 11, #89).
+    a planner uses that number to decide what to ask for (round 11, #89). Any
+    caller serving a request must pass the gateway's policy; the fallback is
+    for callers that have no gateway to agree with (the CLI, evals, docs).
 
     The fixed parts state the security contract (JSON only, the three spec
     shapes, what a model may release); every dataset-specific fact — the
@@ -46,6 +49,7 @@ def planner_system(policy=None) -> str:
     families, the few-shot examples and any operator hints — comes from the
     active definition, so the same text generator serves any study.
     """
+    policy = policy if policy is not None else load_policy_config()
     defn = _dataset.active()
     parts = [
         "You translate a researcher's request into a QuerySpec JSON for a Trusted "

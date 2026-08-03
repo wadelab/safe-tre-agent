@@ -105,6 +105,7 @@ def check_filters(dataset: str, filters: list[Filter]) -> None:
     operator valid for the column type and type-checked values. Shared by
     QuerySpec and GLMSpec so both boundaries enforce identical rules."""
     cat = CATALOGUE[dataset]
+    internal_filters = set(cat.get("internal_filters", {}))
     filter_columns = cat["dims"] | cat.get("internal_filters", {})
     for f in filters:
         if f.column not in filter_columns:
@@ -115,6 +116,18 @@ def check_filters(dataset: str, filters: list[Filter]) -> None:
             raise ValueError(f"operator {f.op!r} not allowed on {f.column!r}")
         _check_filter_value(f, kind)
         rule = INTERNAL_RANGE_RULES.get(f.column)
+        # #39 holds only because every expressible predicate on an internal
+        # variable selects a union of whole public bands. A column declared as
+        # an internal filter with no range rule would fall through to the
+        # generic numeric branch, which permits `==`, `!=`, `in` and arbitrary
+        # values -- the exact-age probe #39 closed. Declaring an internal
+        # filter is therefore a commitment to declaring its band edges, and
+        # the omission fails closed rather than silently reopening the sweep.
+        if f.column in internal_filters and rule is None:
+            raise ValueError(
+                f"internal filter {f.column!r} declares no band-alignment rule; "
+                f"internal variables may only be filtered by band-aligned "
+                f"ranges (hardening #39)")
         if rule is not None:
             if f.op not in rule["ops"]:
                 raise ValueError(
@@ -127,6 +140,47 @@ def check_filters(dataset: str, filters: list[Filter]) -> None:
                     f"filter on internal variable {f.column!r} must align to "
                     f"the declared band edges ({', '.join(map(str, edges))} "
                     f"for {f.op!r}); the raw values are internal-only")
+
+
+def check_model_allowlist(dataset: str, response: str, family: str,
+                          terms: list[str], filters: list[Filter],
+                          term_word: str = "model term") -> None:
+    """The allowlist rules EVERY model tool shares (spec R15).
+
+    GLMSpec and AnovaSpec ran five near-identical checks each, written out
+    twice. Copy-paste is a poor place to keep a security boundary: the shared
+    rules have to be compared line by line to confirm they still agree, and the
+    two genuine differences — the family a tool permits, and GLM's reserved
+    filter slot — were invisible among them. The differences now live in the
+    callers, where they can be seen; the rules live here once.
+
+    `family` is what the TOOL permits, not a free choice: GLM passes the
+    analyst's requested family (which the response must declare), ANOVA passes
+    `"gaussian"` unconditionally, because a one-way ANOVA is an
+    interval-response procedure. `term_word` only names the concept in the
+    error an analyst reads ("model term" / "factor").
+    """
+    cat = CATALOGUE[dataset]
+    responses = cat.get("glm_responses", {})
+
+    # the response must be a declared model response that permits this family
+    if family not in responses.get(response, ()):
+        allowed = sorted(c for c, fams in responses.items() if family in fams)
+        raise ValueError(
+            f"response {response!r} is not a permitted {family} model response "
+            f"for dataset {dataset!r} (allowed: {allowed})")
+
+    for t in terms:
+        if t not in cat["dims"]:
+            raise ValueError(f"{term_word} {t!r} is not a permitted dimension")
+
+    # a response that is also a term, or filtered, is a model of itself: the
+    # design cells would carry the outcome as a key or be cut on it
+    if response in terms:
+        raise ValueError(f"response cannot also be a {term_word}")
+    check_filters(dataset, filters)
+    if any(f.column == response for f in filters):
+        raise ValueError("response cannot also be filtered in a model query")
 
 
 def _normalized_filters(filters: list[Filter]) -> tuple:
@@ -261,24 +315,9 @@ class GLMSpec(BaseModel):
 
     @model_validator(mode="after")
     def _check_allowlist(self):
-        cat = CATALOGUE[self.dataset]
-        responses = cat.get("glm_responses", {})
-        if self.response not in responses:
-            raise ValueError(
-                f"response {self.response!r} is not a permitted model response for "
-                f"dataset {self.dataset!r} (allowed: {sorted(responses)})")
-        if self.family not in responses[self.response]:
-            raise ValueError(
-                f"family {self.family!r} is not permitted for response "
-                f"{self.response!r} (allowed: {sorted(responses[self.response])})")
-        for t in self.terms:
-            if t not in cat["dims"]:
-                raise ValueError(f"model term {t!r} is not a permitted dimension")
-        if self.response in self.terms:
-            raise ValueError("response cannot also be a model term")
-        check_filters(self.dataset, self.filters)
-        if any(f.column == self.response for f in self.filters):
-            raise ValueError("response cannot also be filtered in a model query")
+        # the analyst chooses the family; the response must declare it
+        check_model_allowlist(self.dataset, self.response, self.family,
+                              self.terms, self.filters, "model term")
         return self
 
     def model_key(self) -> str:
@@ -325,21 +364,11 @@ class AnovaSpec(BaseModel):
 
     @model_validator(mode="after")
     def _check_allowlist(self):
-        cat = CATALOGUE[self.dataset]
-        responses = cat.get("glm_responses", {})
-        # one-way ANOVA is an interval-response procedure: gaussian only
-        if "gaussian" not in responses.get(self.response, set()):
-            gaussian = sorted(c for c, fams in responses.items() if "gaussian" in fams)
-            raise ValueError(
-                f"response {self.response!r} is not a permitted gaussian ANOVA "
-                f"response for dataset {self.dataset!r} (allowed: {gaussian})")
-        if self.factor not in cat["dims"]:
-            raise ValueError(f"factor {self.factor!r} is not a permitted dimension")
-        if self.factor == self.response:
-            raise ValueError("factor cannot also be the response")
-        check_filters(self.dataset, self.filters)
-        if any(f.column == self.response for f in self.filters):
-            raise ValueError("response cannot also be filtered in a model query")
+        # the family is FIXED, not chosen: a one-way ANOVA is an
+        # interval-response procedure, so gaussian regardless of what the
+        # response otherwise permits
+        check_model_allowlist(self.dataset, self.response, "gaussian",
+                              self.terms, self.filters, "factor")
         return self
 
     @property

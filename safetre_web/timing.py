@@ -79,6 +79,7 @@ import math
 import os
 import time
 
+from . import identity
 from .headers import SECURITY_HEADERS
 
 
@@ -150,18 +151,38 @@ class ResponseTimeBoundary:
         request bodies, which cost the attacker nothing and hold no thread,
         lock a named user out of every route.
 
-        Verifying here duplicates no logic worth sharing: this is raw ASGI, so
-        it reads the scope directly, but the rule is `identity.py`'s.
+        This is raw ASGI, so it reads the scope directly rather than a
+        `Request`, but it applies `identity.py`'s rule and not a weaker one.
+        It used to say it did while doing three things differently: it took the
+        LAST of a repeated `tailscale-user-login` (where #45 refuses ambiguity
+        outright, because an appending proxy makes the client's forged value
+        win), and it consulted no allowlist. Both are fixed below; a repeated
+        or comma-joined header now falls back to the peer key, which is the
+        fail-closed direction.
+
+        One difference remains, stated rather than implied away:
+        `identity.rate_limit_key` also requires `identity_is_verifiable()` (the
+        channel/opt-in posture), which needs config this layer does not read.
+        Here the proxy secret alone stands in for it. That is sound for this
+        use — the secret is exactly what proves the header was not forged by a
+        client, and this key only selects a resource bucket — but it is a
+        weaker precondition than the session path's, so do not copy this
+        function's shape into an authorisation decision.
         """
         secret = os.environ.get("SAFETRE_PROXY_SHARED_SECRET", "")
-        login = presented = None
+        logins, presented = [], None
         for name, value in scope.get("headers", ()):
             if name == b"tailscale-user-login" and value:
-                login = value.decode("latin-1", "replace")[:200]
+                logins.append(value.decode("latin-1", "replace")[:200])
             elif name == b"x-safetre-proxy-auth" and value:
                 presented = value.decode("latin-1", "replace")
+        # exactly one header, no comma-joined pair of identities (#45)
+        login = logins[0].strip() if len(logins) == 1 else ""
+        if "," in login:
+            login = ""
         if (secret and login and presented is not None
-                and hmac.compare_digest(presented, secret)):
+                and hmac.compare_digest(presented, secret)
+                and identity._allowed(login)):
             return "user:" + login
         client = scope.get("client")
         return "peer:" + (client[0] if client else "?")

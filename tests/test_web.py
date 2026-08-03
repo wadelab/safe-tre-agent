@@ -315,3 +315,32 @@ def test_the_static_exemption_is_a_path_not_a_prefix():
     before = len(limiter._buckets)
     client.get("/staticxyz")
     assert len(limiter._buckets) > before or before, "the path was not metered"
+
+
+def test_middleware_order_is_asserted_not_just_documented():
+    """Six controls are only correct in position, and the order is decided by
+    registration sequence through two different mechanisms whose shared rule
+    (last registered is outermost) is Starlette's, not ours. It used to be
+    described in four comment blocks beside four registrations; an ordering
+    invariant defended only by comments is one refactor from changing.
+    """
+    from safetre_web.app import (
+        MIDDLEWARE_ORDER, _assert_middleware_order, middleware_order,
+    )
+
+    assert middleware_order() == MIDDLEWARE_ORDER
+    _assert_middleware_order()          # runs at import too; explicit here
+
+    # the properties the order exists to provide, stated as positions
+    pos = {name: i for i, name in enumerate(MIDDLEWARE_ORDER)}
+    assert pos["RequestSizeLimit"] < pos["ResponseTimeBoundary"], (
+        "#64: the 413 must sit OUTSIDE the padding, or an oversized body is "
+        "held for a full quantum")
+    assert pos["ResponseTimeBoundary"] < pos["rate_limit"], (
+        "#47: a 429 must be padded like any other answer")
+    assert pos["ResponseTimeBoundary"] < pos["security_headers"], (
+        "every refusal generated below is answered inside the timing window")
+    assert pos["restricted_channel"] < pos["rate_limit"], (
+        "a request off the channel must not spend a bucket")
+    assert pos["security_headers"] < pos["restricted_channel"], (
+        "#77: CSP/nosniff must land on the 403 the channel gate generates")

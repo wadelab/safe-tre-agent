@@ -87,7 +87,31 @@ def _internal_filter_ops() -> dict[str, Any]:
             for column, rule in sorted(INTERNAL_RANGE_RULES.items())}
 
 
-def public_manifest(policy: PolicyConfig | None = None) -> dict[str, Any]:
+def _require_policy(policy: PolicyConfig | None) -> None:
+    """The announced policy must be the ENFORCED one, so it has to be passed in.
+
+    `load_policy_config()` re-reads config.yaml and the environment, so a
+    defaulted argument would announce a SECOND resolution of the policy while
+    the gateway keeps enforcing the one captured at startup. Editing
+    config.yaml under a running server moved the announced numbers and left the
+    enforced ones alone — #61 one layer up: the manifest said 10 while the
+    gateway held 25, and that sha goes into the planner prompt, where a planner
+    uses `minimum_cell_size` to decide what to ask for (round 11, #89).
+
+    That rule used to live in a comment saying callers "MUST" pass the policy,
+    which the signature did not enforce. It is now the signature's job: callers
+    that legitimately want the current config ask for it by name, via
+    `manifest_for_current_config()`.
+    """
+    if policy is None:
+        raise TypeError(
+            "manifest functions require the RESOLVED policy the gateway is "
+            "enforcing; pass it explicitly, or call "
+            "manifest_for_current_config() to re-read config.yaml on purpose "
+            "(hardening #89)")
+
+
+def public_manifest(policy: PolicyConfig) -> dict[str, Any]:
     """Return the public capability manifest safe to show outside the safepod.
 
     The disclosure numbers come from the RESOLVED policy, not from literals.
@@ -97,15 +121,7 @@ def public_manifest(policy: PolicyConfig | None = None) -> dict[str, Any]:
     reads as set and is not. A wrong number here is worse than a missing one,
     because a planner uses it to decide what to ask for (hardening #61).
     """
-    # `load_policy_config()` re-reads config.yaml and the environment, so an
-    # omitted argument announces a SECOND resolution of the policy while the
-    # gateway keeps enforcing the one captured at startup. Editing config.yaml
-    # under a running server moved the announced numbers and left the enforced
-    # ones alone — which is #61 again, one layer up: the manifest said 10 while
-    # the gateway held 25, and that sha goes into the planner prompt, where a
-    # planner uses `minimum_cell_size` to decide what to ask for (round 11,
-    # #89). Callers in the request path MUST pass the resolved policy.
-    policy = policy if policy is not None else load_policy_config()
+    _require_policy(policy)
     return {
         "manifest_version": MANIFEST_VERSION,
         "security_model": {
@@ -234,16 +250,27 @@ def public_manifest(policy: PolicyConfig | None = None) -> dict[str, Any]:
     }
 
 
-def manifest_json(policy: PolicyConfig | None = None) -> str:
+def manifest_json(policy: PolicyConfig) -> str:
     return json.dumps(public_manifest(policy), sort_keys=True,
                       separators=(",", ":"))
 
 
-def manifest_sha256(policy: PolicyConfig | None = None) -> str:
+def manifest_sha256(policy: PolicyConfig) -> str:
     return hashlib.sha256(manifest_json(policy).encode()).hexdigest()
 
 
-def manifest_for_response(policy: PolicyConfig | None = None) -> dict[str, Any]:
+def manifest_for_current_config() -> dict[str, Any]:
+    """The manifest for a FRESH read of config.yaml and the environment.
+
+    For callers with no gateway to agree with — the CLI, docs generation, an
+    eval harness. Named so that re-resolving the policy is something a caller
+    asks for, never something it gets by omitting an argument (#89). Anything
+    serving a request must pass the policy the gateway is enforcing instead.
+    """
+    return manifest_for_response(load_policy_config())
+
+
+def manifest_for_response(policy: PolicyConfig) -> dict[str, Any]:
     """The manifest plus its own hash, both from ONE resolution of the policy.
 
     Computing the hash from a second `public_manifest()` call would reintroduce

@@ -96,7 +96,9 @@ def _looks_like_a_measure(series: pd.Series) -> bool:
     if not pd.api.types.is_float_dtype(series):
         return False
     values = series.dropna()
-    return not bool(len(values)) or not bool((values == values.round()).all())
+    if values.empty:
+        return True                 # no evidence either way; assume a measure
+    return not bool((values == values.round()).all())   # any fraction -> measure
 
 
 def _key_text(series: pd.Series) -> pd.Series:
@@ -126,6 +128,143 @@ def _group_columns(df: pd.DataFrame, keys: tuple[str, ...] | None = None) -> lis
     return [c for c in df.columns
             if str(c).lower() not in _NON_KEY_COLUMNS
             and not _looks_like_a_measure(df[c])]
+
+
+@dataclass(frozen=True)
+class _RuleHit:
+    """One suppression rule's verdict on one column: which cells it withholds.
+
+    `mask` is True for every cell that FAILS the rule. A hit is emitted only
+    when at least one cell fails, so `leak_detector` can turn each into a
+    `Finding` and `StandinVetter.vet` can OR the masks into the suppression
+    set — the same computation feeding both answers.
+    """
+    rule: str
+    mask: pd.Series
+    detail: str
+    audit_detail: str
+
+
+def _suppression_hits(df: pd.DataFrame, threshold: int, dom_threshold: float,
+                      influence_threshold: float,
+                      keys: tuple[str, ...] | None) -> list[_RuleHit]:
+    """The five cell-level suppression rules, computed ONCE.
+
+    These rules have two consumers that must agree exactly: the findings, which
+    say a rule fired, and the suppression mask, which withholds the offending
+    cells. They used to be written out twice — `leak_detector` building
+    findings from one set of comparisons and `vet` rebuilding the mask from
+    another — so "a finding fires **iff** the cells are withheld" rested on two
+    hand-written code paths staying in lockstep, asserted only by a comment.
+    They had already drifted in one detail: the findings coerced the witness
+    columns with `to_numeric` and the mask compared them raw. Drift here is the
+    defect that releases a cell while the audit log records it as suppressed,
+    so there is now one definition and two readers of it.
+
+    Every rule fails **closed**: a witness the engine could not resolve
+    (NULL/NaN/±inf) fails the comparison and the cell is withheld, because an
+    uncomputed check must never read as a pass.
+    """
+    hits: list[_RuleHit] = []
+
+    # small cells (a NaN count means "unknown size" -> unsafe)
+    for c in _count_cols(df):
+        count = pd.to_numeric(df[c], errors="coerce")
+        mask = count.isna() | (count < threshold)
+        if mask.any():
+            hits.append(_RuleHit(
+                "small_cell", mask,
+                f"cells with fewer than {threshold} underlying individuals "
+                f"were suppressed",
+                f"{int(mask.sum())} cell(s) in '{c}' below threshold "
+                f"{threshold}"))
+
+    # dominance (p%-rule): one contributor dominates a cell's sum/mean.
+    # Missing/NaN dominance is fail-closed (the engine fills unresolved cells
+    # with +inf, which trips this rule) so an uncomputed check cannot pass.
+    if "dominance" in {str(c) for c in df.columns}:
+        dom = pd.to_numeric(df["dominance"], errors="coerce")
+        mask = dom.isna() | (dom > dom_threshold)
+        if mask.any():
+            hits.append(_RuleHit(
+                "dominance", mask,
+                f"cells where one contributor exceeds {dom_threshold:.0%} of "
+                f"the total (or the check was unresolved) were suppressed",
+                f"{int(mask.sum())} cell(s) where one contributor exceeds "
+                f"{dom_threshold:.0%} of the total (or was unresolved)"))
+
+    # influence (corr analogue of the p%-rule): one donor drives a correlation.
+    # Same fail-closed treatment: an unresolved influence (NaN/inf) is a violation.
+    if "influence" in {str(c) for c in df.columns}:
+        inf = pd.to_numeric(df["influence"], errors="coerce")
+        mask = inf.isna() | (inf > influence_threshold)
+        if mask.any():
+            hits.append(_RuleHit(
+                "influence", mask,
+                f"correlation cells where removing one donor shifts r by more "
+                f"than {influence_threshold} (or the check was unresolved) "
+                f"were suppressed",
+                f"{int(mask.sum())} correlation cell(s) where removing one "
+                f"donor shifts r by more than {influence_threshold} (or was "
+                f"unresolved)"))
+
+    # A released AGGREGATE payload must be a finite number (hardening #42).
+    # Every other rule here fails closed on an unresolved witness; the payload
+    # itself was never checked at all, and `value` appeared in this module only
+    # to be classified as not-a-cell-key. An infinite total is not an
+    # aggregate, it is the statement "an extreme or invalid record is in this
+    # cell" — and it arrives without exotic data: a single -inf, or finite
+    # magnitudes whose sum overflows, both released with a dominance witness
+    # of ~0.
+    #
+    # Scoped to frames carrying a count column, i.e. engine cell tables, which
+    # is where a payload is an aggregate over records. A fitted model's output
+    # is a different shape with legitimate structural gaps — an ANOVA table's
+    # `Residual` row has no F and no p by definition — and its numbers are a
+    # deterministic function of already-vetted cells (P21) checked against a
+    # declared output contract (R14). Treating those NaNs as disclosure risk
+    # suppressed a benign model, which is a control firing on the arithmetic
+    # rather than on the data.
+    for c in (_payload_cols(df) if _count_cols(df) else []):
+        mask = _nonfinite(df[c])
+        if mask.any():
+            hits.append(_RuleHit(
+                "nonfinite_value", mask,
+                "cells whose released value is not a finite number were "
+                "suppressed",
+                f"{int(mask.sum())} cell(s) with a non-finite '{c}'"))
+
+    # A released cell key must be a declared category (hardening #43).
+    # Hardening #29 established that a value outside its column's declared
+    # domain is disclosive by its NAME — a hostile string smuggled into a
+    # field, a data-entry typo — and dropped such values from the published
+    # marginals. The release path never got the same treatment, so a typo'd
+    # category carried by enough donors to clear the threshold printed the
+    # string anyway. Only the codebook vocabulary may appear as a key; a
+    # missing key is left alone, because "unknown" is not a name that leaks.
+    #
+    # This runs on the query's DECLARED group-by keys and never on the dtype
+    # heuristic. Only the query knows which frame column is which catalogue
+    # dimension: a hand-built frame whose column happens to be called `region`
+    # is not necessarily the catalogue's `region`, and projecting it onto that
+    # domain would suppress cells for a name collision. Every service-path
+    # release carries its keys (`CellContext`), so the production path is fully
+    # covered; a caller with no query context gets the rest of the rules.
+    for c in keys or ():
+        if c not in df.columns:
+            continue
+        domain = declared_domain(str(c))
+        if domain is None:
+            continue
+        column = df[c]
+        mask = ~(column.isin(domain) | column.isna())
+        if mask.any():
+            hits.append(_RuleHit(
+                "undeclared_cell_key", mask,
+                "cells whose key is not a declared category were suppressed",
+                f"{int(mask.sum())} cell(s) with an undeclared '{c}' key"))
+
+    return hits
 
 
 def leak_detector(df: pd.DataFrame | None, threshold: int | None = None,
@@ -170,104 +309,14 @@ def leak_detector(df: pd.DataFrame | None, threshold: int | None = None,
     if "free_text" in cols:
         findings.append(Finding("high", "free_text_egress", "free-text column present"))
 
-    # small cells (a NaN count means "unknown size" -> unsafe)
-    for c in _count_cols(df):
-        small = df[df[c].isna() | (df[c] < threshold)]
-        if len(small) > 0:
-            findings.append(Finding(
-                "high", "small_cell", suppressable=True,
-                detail=f"cells with fewer than {threshold} underlying individuals "
-                       f"were suppressed",
-                audit_detail=f"{len(small)} cell(s) in '{c}' below threshold "
-                             f"{threshold}"))
-
-    # dominance (p%-rule): one contributor dominates a cell's sum/mean.
-    # Missing/NaN dominance is fail-closed (the engine fills unresolved cells with
-    # +inf, which trips this rule) so an uncomputed check cannot pass.
-    if "dominance" in cols:
-        dom = pd.to_numeric(df["dominance"], errors="coerce")
-        dominated = df[dom.isna() | (dom > dom_threshold)]
-        if len(dominated) > 0:
-            findings.append(Finding(
-                "high", "dominance", suppressable=True,
-                detail=f"cells where one contributor exceeds {dom_threshold:.0%} of "
-                       f"the total (or the check was unresolved) were suppressed",
-                audit_detail=f"{len(dominated)} cell(s) where one contributor "
-                             f"exceeds {dom_threshold:.0%} of the total (or was "
-                             f"unresolved)"))
-
-    # influence (corr analogue of the p%-rule): one donor drives a correlation.
-    # Same fail-closed treatment: an unresolved influence (NaN/inf) is a violation.
-    if "influence" in cols:
-        inf = pd.to_numeric(df["influence"], errors="coerce")
-        influential = df[inf.isna() | (inf > influence_threshold)]
-        if len(influential) > 0:
-            findings.append(Finding(
-                "high", "influence", suppressable=True,
-                detail=f"correlation cells where removing one donor shifts r by more "
-                       f"than {influence_threshold} (or the check was unresolved) "
-                       f"were suppressed",
-                audit_detail=f"{len(influential)} correlation cell(s) where removing "
-                             f"one donor shifts r by more than {influence_threshold} "
-                             f"(or was unresolved)"))
-
-    # A released AGGREGATE payload must be a finite number (hardening #42).
-    # Every other rule here fails closed on an unresolved witness; the payload
-    # itself was never checked at all, and `value` appeared in this module only
-    # to be classified as not-a-cell-key. An infinite total is not an
-    # aggregate, it is the statement "an extreme or invalid record is in this
-    # cell" — and it arrives without exotic data: a single -inf, or finite
-    # magnitudes whose sum overflows, both released with a dominance witness
-    # of ~0.
-    #
-    # Scoped to frames carrying a count column, i.e. engine cell tables, which
-    # is where a payload is an aggregate over records. A fitted model's output
-    # is a different shape with legitimate structural gaps — an ANOVA table's
-    # `Residual` row has no F and no p by definition — and its numbers are a
-    # deterministic function of already-vetted cells (P21) checked against a
-    # declared output contract (R14). Treating those NaNs as disclosure risk
-    # suppressed a benign model, which is a control firing on the arithmetic
-    # rather than on the data.
-    for c in (_payload_cols(df) if _count_cols(df) else []):
-        bad = df[_nonfinite(df[c])]
-        if len(bad) > 0:
-            findings.append(Finding(
-                "high", "nonfinite_value", suppressable=True,
-                detail="cells whose released value is not a finite number were "
-                       "suppressed",
-                audit_detail=f"{len(bad)} cell(s) with a non-finite '{c}'"))
-
-    # A released cell key must be a declared category (hardening #43).
-    # Hardening #29 established that a value outside its column's declared
-    # domain is disclosive by its NAME — a hostile string smuggled into a
-    # field, a data-entry typo — and dropped such values from the published
-    # marginals. The release path never got the same treatment, so a typo'd
-    # category carried by enough donors to clear the threshold printed the
-    # string anyway. Only the codebook vocabulary may appear as a key; a
-    # missing key is left alone, because "unknown" is not a name that leaks.
-    #
-    # This runs on the query's DECLARED group-by keys and never on the dtype
-    # heuristic. Only the query knows which frame column is which catalogue
-    # dimension: a hand-built frame whose column happens to be called `region`
-    # is not necessarily the catalogue's `region`, and projecting it onto that
-    # domain would suppress cells for a name collision. Every service-path
-    # release carries its keys (`CellContext`), so the production path is fully
-    # covered; a caller with no query context gets the rest of the rules.
-    for c in keys or ():
-        if c not in df.columns:
-            continue
-        domain = declared_domain(str(c))
-        if domain is None:
-            continue
-        column = df[c]
-        undeclared = df[~(column.isin(domain) | column.isna())]
-        if len(undeclared) > 0:
-            findings.append(Finding(
-                "high", "undeclared_cell_key", suppressable=True,
-                detail="cells whose key is not a declared category were "
-                       "suppressed",
-                audit_detail=f"{len(undeclared)} cell(s) with an undeclared "
-                             f"'{c}' key"))
+    # The five cell-level suppression rules, from the one definition that also
+    # produces the suppression mask (`_suppression_hits`). Each hit is a rule
+    # that withheld at least one cell.
+    for hit in _suppression_hits(df, threshold, dom_threshold,
+                                 influence_threshold, keys):
+        findings.append(Finding(
+            "high", hit.rule, suppressable=True,
+            detail=hit.detail, audit_detail=hit.audit_detail))
 
     # Excessive granularity: too many cells to be a summary (hardening #56).
     #
@@ -297,17 +346,27 @@ def leak_detector(df: pd.DataFrame | None, threshold: int | None = None,
     return findings
 
 
-# the stand-in's own suppression-resolved rules, kept as a name set because the
-# red-team corpus and the Alloy models refer to them by name
+# The stand-in's suppression-resolved rules BY NAME, because the red-team
+# corpus, the Alloy models and the docs refer to them that way. It is a
+# description, not a decision input: `Finding.suppressable` is what the code
+# reads (see `is_suppressable`), and `test_suppressable_flag_and_name_set_agree`
+# holds the two in step. Two spellings of one rule invite the drift where a
+# finding is settled by one consumer and deny-class to another.
 SUPPRESSABLE = {"small_cell", "dominance", "influence", "nonfinite_value",
                 "undeclared_cell_key"}
 
 
 def is_suppressable(finding: Finding) -> bool:
-    """Whether suppressing cells resolves this finding, so it need not
-    escalate. A vetter says so on the finding; the stand-in's own rules are
-    also recognised by name."""
-    return finding.suppressable or finding.rule in SUPPRESSABLE
+    """Whether suppressing cells resolves this finding, so it need not escalate.
+
+    The finding itself is the authority. It used to be "the flag OR the name is
+    in `SUPPRESSABLE`", while `StandinVetter.vet` decided `deny` from the name
+    alone — so a vetter that set the flag on a rule the set does not name was
+    settled here and deny-class there. Nothing triggered it (the stand-in's
+    five rules set both), but an external checker's findings carry names this
+    module has never seen, which is exactly the case the flag exists for.
+    """
+    return finding.suppressable
 
 
 @dataclass(frozen=True)
@@ -432,24 +491,19 @@ class StandinVetter(CellVetter):
         keys = context.keys if context is not None else None
         findings = leak_detector(df, params.threshold, params.max_rows,
                                  dominance, params.influence_threshold, keys)
-        deny = any(f.severity == "high" and f.rule not in SUPPRESSABLE
+        # the flag, not the name set: one authority for "suppressing resolves
+        # this" (see `is_suppressable`)
+        deny = any(f.severity == "high" and not f.suppressable
                    for f in findings)
-        # a cell survives only if it passes every applicable rule, so the
-        # suppression mask is the complement — and an unresolved witness
-        # (NaN/inf) fails every comparison, which is the fail-closed default
+        # A cell is withheld when any rule failed it. These are the SAME masks
+        # the findings above were built from — `_suppression_hits` is computed
+        # once and read twice — so "a finding fired" and "its cells were
+        # withheld" cannot drift apart. An unresolved witness (NaN/inf) fails
+        # every comparison there, which is the fail-closed default.
         suppress = pd.Series(False, index=df.index)
-        for column in _count_cols(df):
-            suppress |= ~(df[column] >= params.threshold)
-        if "dominance" in df.columns:
-            suppress |= ~(df["dominance"] <= dominance)
-        if "influence" in df.columns:
-            suppress |= ~(df["influence"] <= params.influence_threshold)
-        for column in (_payload_cols(df) if _count_cols(df) else []):
-            suppress |= _nonfinite(df[column])
-        for column in keys or ():
-            domain = declared_domain(str(column))
-            if column in df.columns and domain is not None:
-                suppress |= ~(df[column].isin(domain) | df[column].isna())
+        for hit in _suppression_hits(df, params.threshold, dominance,
+                                     params.influence_threshold, keys):
+            suppress |= hit.mask
         return Verdicts(suppress=suppress, findings=findings, deny=deny)
 
 
@@ -502,7 +556,8 @@ def build_vetter(name: str, checker_cmd: str = "") -> CellVetter:
         from .external_checker import ExternalCheckerVetter
 
         return CompositeVetter(StandinVetter(),
-                               ExternalCheckerVetter(command=checker_cmd.split()))
+                               ExternalCheckerVetter(command=checker_cmd.split(),
+                                                     shared=True))
     raise ValueError(f"no vetter named {name!r}")
 
 
@@ -920,34 +975,15 @@ class SessionAuditor:
         a filter naming a value no record holds drops exactly the donors who
         carry a NULL. Both were live before this changed.
         """
-        # **This layer compares within one view only, and hardening #95 is the
-        # open finding that says so.** A catalogue publishes several views of
-        # the SAME people — here `spend` (per event) and `donor_spend` (that
-        # donor's total of exactly those events) — and a differencing pair with
-        # one leg in each is compared by neither this layer nor the totals
-        # layer. Reproduced: two individually safe releases, 2065.77 and
-        # 1944.84, differ by one person, and the difference is that
-        # individual's exact annual spend of GBP 120.93, error 0.000000. The
-        # identical pair inside one view is denied.
-        #
-        # It is NOT fixed by dropping the dataset from the key, which is what
-        # round 11 first tried. Differencing needs the two released values to
-        # be COMMENSURABLE, and a correlation on `wellbeing` minus a mean spend
-        # on `spend` recovers nothing however close the two cohorts are — so a
-        # blanket cross-view comparison denies ordinary analysis (measured: the
-        # demo's benign correlation denied because an unrelated spend query had
-        # been released earlier in the session) while adding no safety. The
-        # comparison is only meaningful between measures that are the same
-        # QUANTITY through different views, and that equivalence is a fact
-        # about the catalogue — `donor_spend.total_spend_gbp` is defined as the
-        # per-donor sum of `spend.amount_gbp` — which the dataset definition
-        # knows and this code cannot infer.
-        #
-        # The fix is therefore a declared measure equivalence, threaded through
-        # `record_cohort` and the audit row's accounting block (which today
-        # stores `[dataset, filters]` pairs and would need a migration, #58's
-        # lesson). Roadmap item 0.0. Until then this is stated, reproduced and
-        # open rather than papered over.
+        # OPEN GAP, stated where it lives: the `prev_dataset != dataset` skip
+        # below means this layer compares WITHIN ONE VIEW ONLY. A catalogue
+        # publishes several views of the same people, and a differencing pair
+        # with one leg in each is caught by neither this layer nor the totals
+        # layer — reproduced, one individual's exact annual spend recovered
+        # from two individually safe releases. Hardening #95 has the numbers,
+        # why dropping the dataset from the key is NOT the fix (the two values
+        # must be commensurable, which only the catalogue knows), and the
+        # declared-measure-equivalence design that is. Roadmap item 0.0.
         for prev_dataset, prev_filters in self._cohorts:
             if prev_dataset != dataset or prev_filters == filters:
                 continue

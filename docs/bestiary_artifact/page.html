@@ -1,0 +1,491 @@
+<!-- EDITABLE SOURCE for the bestiary artifact.
+     The words are in plain text between the tags below — edit them here.
+     Card images are referenced by path (kept out of this file so it stays
+     small and readable); fonts + design live in garamond.css / theme.css.
+     After editing, rebuild the self-contained artifact:
+         uv run python scripts/make_bestiary_page.py
+     then republish artifacts/bestiary_page.html. -->
+<title>A bestiary of caged beasts</title>
+<link rel="stylesheet" href="garamond.css">
+<link rel="stylesheet" href="theme.css">
+
+
+
+<header class="hero">
+  <div class="wrap">
+    <p class="hero__eyebrow">A field guide</p>
+    <h1>A bestiary of caged beasts</h1>
+    <p class="hero__sub">The ways a safe data gateway can leak, drawn as
+      creatures — because people do not remember lists, they remember
+      characters. Every beast carries the number of the finding it indexes.</p>
+    <div class="hero__meta">
+      <span><b>96</b> findings recorded</span>
+      <span><b>24</b> specimens illustrated</span>
+      <span><b>4</b> still at large</span>
+      <span>safe-tre-agent · synthetic data</span>
+    </div>
+    <div class="spines"><!--auto--></div>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <div class="head">
+      <h2>Why a bestiary at all?</h2>
+      <p>AI is now very smart. It can track lots more things than I can keep in
+        my head at any moment. When directed to find and patch security holes in
+        this project, it is overwhelming. I am but a mere human — far more
+        comfortable dealing with striking stories, characters and interpersonal
+        interactions. So one way to make AI understandable in general (and this
+        application in particular) is to make some sort of story out of the
+        security audits. Hence the bestiary&hellip;</p>
+      <p>This project has (or had) 96 numbered hardening findings, seven
+        decision records, 19 threats in the security model and 28 red-team
+        scenarios. That material is complete, precise, and nearly impossible to
+        hold in working memory at once (perhaps your memory is better than mine
+        — but AI is going to keep getting better and that number will keep
+        getting bigger). We need to keep track of these somehow.</p>
+      <p>The human mind does not store lists; it stores <b>characters and
+        stories</b>. So this page does three things:</p>
+    </div>
+    <ol class="habits">
+      <li><span><b>Compresses attack classes into creatures.</b> A creature is a
+        mnemonic with affordances. For example, &ldquo;The Subtractor&rdquo; is
+        easier to reason about than &ldquo;differencing via
+        symmetric-difference-of-cohorts&rdquo;, because you already know how
+        subtracting works, what it needs (two nearly-equal things), and what
+        stops it (never let the two things be nearly equal).</span></li>
+      <li><span><b>Keeps the metaphor at the class level, the truth at the
+        specimen level.</b> Every creature below carries its literal finding
+        numbers, code habitat, cage (the control) and keepers (the tests). The
+        metaphor is an index into the real record, never a substitute for it.
+        Obviously your TRE is not really being attacked by a ghost.</span></li>
+      <li><span><b>Cages, not kills.</b> This is a bit subtle and I might change
+        it later but&hellip; statistical-disclosure attacks are rarely
+        exterminated; the <em>shape</em> of the attack is usually still
+        expressible, somewhere, under the controls&rsquo; assumptions. For now,
+        we <em>cage</em> them, name the cage, and &mdash; most importantly
+        &mdash; name the <b>keeper</b>: the test, enumeration or formal check
+        that must notice if the cage door opens. A cage without a keeper is a
+        hope, not a control. Hardening <span class="ref">#48</span>
+        (&ldquo;The Blind Zookeeper&rdquo;) is the story of what happens when
+        the keepers themselves fall asleep.</span></li>
+    </ol>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="head">
+      <h2>What the reserve is</h2>
+      <p>A safe haven holds sensitive records. Nobody may read one person’s data.
+        Researchers ask questions about groups, and a gateway decides what may
+        leave. This page is about the ways that arrangement can still go wrong.</p>
+    </div>
+    <div class="tri">
+      <div>
+        <h3>Nobody reads a record</h3>
+        <p>Questions are about groups. The answers are counts, averages and
+          totals — never a row about a person.</p>
+      </div>
+      <div>
+        <h3>The assistant is not trusted</h3>
+        <p>An AI turns English into a formal request. It can only tick boxes on
+          a fixed form, and every box is checked again afterwards.</p>
+      </div>
+      <div>
+        <h3>Nothing here is exterminated</h3>
+        <p>Attacks of this kind are penned, not killed. A pen is only as good as
+          whoever notices the door opening.</p>
+      </div>
+    </div>
+    <ul class="legend"><li><span class="chip chip--not">Not expressible</span><span>The attack cannot be stated — the request form has no word for it</span></li><li><span class="chip chip--deterministic">Deterministic gate</span><span>It can be stated, and a fixed check refuses or reshapes it</span></li><li><span class="chip chip--behavioural">Behavioural pen</span><span>It can be run, but the record of what you have already asked catches the pattern</span></li></ul>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="head">
+      <h2>The plates</h2>
+      <p>Thirteen families. Each entry gives what the creature wants, how it
+        actually got in, and what stops it now — with the finding number, so the
+        claim can be checked against the record.</p>
+    </div>
+    <div class="plates">
+    <article class="plate" id="plate-1">
+      <div class="plate__mount">
+        <img src="../figures/bestiary/01_the_subtractor.webp" alt="Card illustration: The Subtractor" loading="lazy" width="420">
+      </div>
+      <div class="plate__body">
+        <p class="plate__num">Plate I</p>
+        <h3>The Subtractor</h3>
+        <p class="wants"><span class="lbl">Wants</span>Two answers that differ by one person</p>
+        <div class="story"><p>Ask how much everyone in a region spent. Then ask again, excluding the over-50s. Subtract one answer from the other and you have the spending of a handful of people — without ever asking about them.</p><p>Every question was reasonable. Only the subtraction was theft.</p></div>
+        <div class="cage cage--behavioural">
+          <p class="lbl">The cage <em>behavioural pen</em></p>
+          <p>The gateway remembers what it has already told you, and refuses an answer whose difference from an earlier one would isolate too few people. <span class="ref">#40</span></p>
+        </div>
+      </div>
+    </article>
+    <article class="plate" id="plate-2">
+      <div class="plate__mount">
+        <img src="../figures/bestiary/02_the_whale.webp" alt="Card illustration: The Whale" loading="lazy" width="420">
+      </div>
+      <div class="plate__body">
+        <p class="plate__num">Plate II</p>
+        <h3>The Whale</h3>
+        <p class="wants"><span class="lbl">Wants</span>To be personally visible inside a total</p>
+        <div class="story"><p>In a group of twenty, one person accounts for most of the spending. Publish the group total and you have very nearly published theirs.</p><p>The group passed the “at least ten people” rule, so counting alone never notices — you have to look at who is inside the number.</p></div>
+        <div class="cage cage--deterministic">
+          <p class="lbl">The cage <em>deterministic gate</em></p>
+          <p>A group is suppressed when one person is more than half of it, measured by size — so a large refund counts as much as a large payment. <span class="ref">#41</span></p>
+        </div>
+      </div>
+    </article>
+    <article class="plate" id="plate-3">
+      <div class="plate__mount">
+        <img src="../figures/bestiary/03_the_masker.webp" alt="Card illustration: The Masker" loading="lazy" width="420">
+      </div>
+      <div class="plate__body">
+        <p class="plate__num">Plate III</p>
+        <h3>The Masker</h3>
+        <p class="wants"><span class="lbl">Wants</span>To act while wearing someone else’s name</p>
+        <div class="story"><p>Someone knocks and says “I am Dr Smith”. If the badge is taken on trust, anyone can be Dr Smith — and the record of what they did will carry Dr Smith’s name.</p><p>Worse: the limits on how much any one person may ask are counted per name. A new name is a fresh allowance.</p></div>
+        <div class="cage cage--deterministic">
+          <p class="lbl">The cage <em>deterministic gate</em></p>
+          <p>The badge must be countersigned by the doorkeeper. Sharing a corridor with the system is not proof of identity. <span class="ref">#45</span></p>
+        </div>
+      </div>
+    </article>
+    <article class="plate" id="plate-4">
+      <div class="plate__mount">
+        <img src="../figures/bestiary/04_the_nixie.webp" alt="Card illustration: The Nixie" loading="lazy" width="420">
+      </div>
+      <div class="plate__body">
+        <p class="plate__num">Plate IV</p>
+        <h3>The Nixie</h3>
+        <p class="wants"><span class="lbl">Wants</span>To make the system print a name</p>
+        <div class="story"><p>Sometimes the secret is not the number, it is the label beside it. “People aged 41 in this small county: 12” has already said something before you read the 12.</p><p>A typo, or a hostile string typed into a form, is a label too.</p></div>
+        <div class="cage cage--deterministic">
+          <p class="lbl">The cage <em>deterministic gate</em></p>
+          <p>Only words from the official codebook may be printed as labels — anything else is withheld, however many people it covers. <span class="ref">#43</span></p>
+        </div>
+      </div>
+    </article>
+    <article class="plate" id="plate-5">
+      <div class="plate__mount">
+        <img src="../figures/bestiary/05_the_sphinx.webp" alt="Card illustration: The Sphinx" loading="lazy" width="420">
+      </div>
+      <div class="plate__body">
+        <p class="plate__num">Plate V</p>
+        <h3>The Sphinx</h3>
+        <p class="wants"><span class="lbl">Wants</span>To talk its way past you</p>
+        <div class="story"><p>The system has an assistant that turns your English into a formal request. The Sphinx does not attack the rules; it asks the assistant nicely for the raw records and hopes it obliges.</p><p>You cannot fix this by making the assistant more sensible.</p></div>
+        <div class="cage cage--not">
+          <p class="lbl">The cage <em>not expressible</em></p>
+          <p>The assistant can only tick boxes on a fixed form. There is no box for “raw records”, so there is nothing for it to agree to. <span class="ref ref--none">by construction</span></p>
+        </div>
+      </div>
+    </article>
+    <article class="plate" id="plate-6">
+      <div class="plate__mount">
+        <img src="../figures/bestiary/06_the_white_rabbit.webp" alt="Card illustration: The White Rabbit" loading="lazy" width="420">
+      </div>
+      <div class="plate__body">
+        <p class="plate__num">Plate VI</p>
+        <h3>The White Rabbit</h3>
+        <p class="wants"><span class="lbl">Wants</span>To read the clock, not the answer</p>
+        <div class="story"><p>You can learn things from how long a reply takes. A question about a big group takes longer than one about a small group — so timing can put secret groups in size order, which is exactly what hiding their sizes was for.</p></div>
+        <div class="cage cage--deterministic">
+          <p class="lbl">The cage <em>deterministic gate</em></p>
+          <p>Every reply waits for the same clock tick before it is sent, and work that runs too long is refused at that same moment rather than when it finishes. <span class="ref">#54</span></p>
+        </div>
+      </div>
+    </article>
+    <article class="plate" id="plate-7">
+      <div class="plate__mount">
+        <img src="../figures/bestiary/07_the_ghost.webp" alt="Card illustration: The Ghost" loading="lazy" width="420">
+      </div>
+      <div class="plate__body">
+        <p class="plate__num">Plate VII</p>
+        <h3>The Ghost</h3>
+        <p class="wants"><span class="lbl">Wants</span>To happen without being written down</p>
+        <div class="story"><p>Every request is meant to leave a line in a tamper-proof log. If some can slip through unlogged — a crash, say — then that is precisely where you would do the thing you did not want recorded.</p><p>A log of almost everything has a hole exactly where it matters.</p></div>
+        <div class="cage cage--deterministic">
+          <p class="lbl">The cage <em>deterministic gate</em></p>
+          <p>Every request writes exactly one line, crashes included, and the line records the failure’s type but never its message. <span class="ref">#37</span></p>
+        </div>
+      </div>
+    </article>
+    <article class="plate" id="plate-8">
+      <div class="plate__mount">
+        <img src="../figures/bestiary/08_the_hydra.webp" alt="Card illustration: The Hydra" loading="lazy" width="420">
+      </div>
+      <div class="plate__body">
+        <p class="plate__num">Plate VIII</p>
+        <h3>The Hydra</h3>
+        <p class="wants"><span class="lbl">Wants</span>To survive the fix aimed at it</p>
+        <div class="story"><p>A problem is reported, fixed, and the fix is checked against the reported case. It passes. Meanwhile the same trick works one street over, through a door nobody thought was interesting.</p><p>That happened here, and the second door was found only because somebody asked what else had the same shape.</p></div>
+        <div class="cage cage--behavioural">
+          <p class="lbl">The cage <em>behavioural pen</em></p>
+          <p>After every security fix, hunt the shape rather than the instance — and write the hunt down. <span class="ref">#40</span></p>
+        </div>
+      </div>
+    </article>
+    <article class="plate" id="plate-9">
+      <div class="plate__mount">
+        <img src="../figures/bestiary/09_the_mirror.webp" alt="Card illustration: The Mirror" loading="lazy" width="420">
+      </div>
+      <div class="plate__body">
+        <p class="plate__num">Plate IX</p>
+        <h3>The Mirror</h3>
+        <p class="wants"><span class="lbl">Wants</span>To answer a question you did not ask</p>
+        <div class="story"><p>You ask for spending by region. You are given spending by age group. It is a real answer, correctly computed, beautifully formatted, and not what you asked for — so you may believe something untrue about the data and never know.</p></div>
+        <div class="cage cage--deterministic">
+          <p class="lbl">The cage <em>deterministic gate</em></p>
+          <p>A request is refused unless the formal query provably answers the question that was asked. A plausible substitute is not accepted. <span class="ref ref--none">by construction</span></p>
+        </div>
+      </div>
+    </article>
+    <article class="plate" id="plate-10">
+      <div class="plate__mount">
+        <img src="../figures/bestiary/10_the_imp.webp" alt="Card illustration: The Imp" loading="lazy" width="420">
+      </div>
+      <div class="plate__body">
+        <p class="plate__num">Plate X</p>
+        <h3>The Imp</h3>
+        <p class="wants"><span class="lbl">Wants</span>The detail nobody counts as an answer</p>
+        <div class="story"><p>Numbers are rounded before release so they cannot be too precise. But the order of the rows was not rounded. Nor was which row got dropped, nor a statistic computed from the exact count.</p><p>Each leaks a little more precision than the rounding allows.</p></div>
+        <div class="cage cage--deterministic">
+          <p class="lbl">The cage <em>deterministic gate</em></p>
+          <p>Everything a reader can see must be computed from the published, rounded numbers alone — checked by a test that perturbs the hidden values and demands an identical result. <span class="ref">#27</span></p>
+        </div>
+      </div>
+    </article>
+    <article class="plate" id="plate-11">
+      <div class="plate__mount">
+        <img src="../figures/bestiary/11_the_parrot.webp" alt="Card illustration: The Parrot" loading="lazy" width="420">
+      </div>
+      <div class="plate__body">
+        <p class="plate__num">Plate XI</p>
+        <h3>The Parrot</h3>
+        <p class="wants"><span class="lbl">Wants</span>To repeat hostile text into a trusted place</p>
+        <div class="story"><p>The data may contain text somebody else typed. If it is ever echoed — into a message on screen, or into the permanent log — then whoever wrote it has put words into the system’s mouth.</p><p>The log is meant to be the trustworthy record. That is the target.</p></div>
+        <div class="cage cage--deterministic">
+          <p class="lbl">The cage <em>deterministic gate</em></p>
+          <p>Anything echoed back is projected onto a short list of expected words. Anything else is replaced, and the original is stored nowhere. <span class="ref">#44</span></p>
+        </div>
+      </div>
+    </article>
+    <article class="plate" id="plate-12">
+      <div class="plate__mount">
+        <img src="../figures/bestiary/12_the_stampede.webp" alt="Card illustration: The Stampede" loading="lazy" width="420">
+      </div>
+      <div class="plate__body">
+        <p class="plate__num">Plate XII</p>
+        <h3>The Stampede</h3>
+        <p class="wants"><span class="lbl">Wants</span>To exhaust what everyone shares</p>
+        <div class="story"><p>No single request is an attack. A thousand cheap ones can be — especially aimed at the one job every other request has to queue behind, such as verifying the log.</p></div>
+        <div class="cage cage--behavioural">
+          <p class="lbl">The cage <em>behavioural pen</em></p>
+          <p>Every route is rate-limited, the shared integrity scan more tightly still, and each session has a budget of answers. <span class="ref">#47</span></p>
+        </div>
+      </div>
+    </article>
+    <article class="plate" id="plate-13">
+      <div class="plate__mount">
+        <img src="../figures/bestiary/13_the_doppelganger.webp" alt="Card illustration: The Doppelgänger" loading="lazy" width="420">
+      </div>
+      <div class="plate__body">
+        <p class="plate__num">Plate XIII</p>
+        <h3>The Doppelgänger</h3>
+        <p class="wants"><span class="lbl">Wants</span>To be two requests at once</p>
+        <div class="story"><p>The rule “have I already answered something too similar?” works by looking at what has been answered so far. Send both halves of a pair at the same instant and each looks first, sees nothing, and proceeds.</p><p>Two requests, one gap, both allowed.</p></div>
+        <div class="cage cage--behavioural">
+          <p class="lbl">The cage <em>behavioural pen</em></p>
+          <p>One person’s requests are handled one at a time, across the whole check-then-record step. <span class="ref">#18</span></p>
+        </div>
+      </div>
+    </article><article class="plate" id="plate-14">
+<div class="plate__mount">
+<img src="../figures/bestiary/14_the_sleeping_dials.webp" alt="Card illustration: The Sleeping Dials" loading="lazy" width="420">
+</div>
+<div class="plate__body">
+<p class="plate__num">Plate XIV</p>
+<h3>The Sleeping Dials</h3>
+<p class="wants"><span class="lbl">Wants</span>A control switched off and left with its label still reading &ldquo;on&rdquo;</p>
+<div class="story"><p>Not a creature so much as an unlocked cage door with a sign on it. One safety dial could never actually fire; others would accept settings that quietly disabled them &mdash; a minimum group size of one, no rounding &mdash; and still pass every test, because the tests read the defaults, not the configuration the service was really running.</p></div>
+<div class="cage cage--deterministic">
+<p class="lbl">The cage <em>deterministic gate</em></p>
+<p>Floors are enforced on the resolved configuration, the effective policy is logged at startup, and the only override is a loud environment variable the config file cannot set for itself. <span class="ref">#56 &middot; 46</span></p>
+</div>
+</div>
+</article></div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="head">
+      <h2>Pack hunts</h2>
+      <p>The dangerous entries in the record are rarely one creature. These four
+        are worth being able to retell, because each generalises.</p>
+    </div>
+    <div class="hunts">
+    <article class="hunt">
+      <div class="plate__mount plate__mount--wide">
+        <img src="../figures/bestiary/16_pack_hunt_nixie_rabbit.webp" alt="Card illustration: Two harmless things that are not" loading="lazy" width="420">
+      </div>
+      <div class="hunt__body">
+        <h3>Two harmless things that are not</h3>
+        <p>Alone, each of these was a shrug. One page listed which exact ages appear in the study — including ages held by a single person. It never said who. Separately, refusals were chatty: the wording told you a little about why a question could not be answered.</p><p>Together, the first picks the target for free and the second interrogates them one yes-or-no at a time. Eight questions, every one refused, no data released — and one person’s region, sex, income band and the type of phone they use, all identified.</p>
+        <p class="lesson">The explanation is an output too. Refusals, error text and even the word “denied” spend from the same budget as the data. <span class="ref">#29 · 30</span></p>
+      </div>
+    </article>
+    <article class="hunt">
+      <div class="plate__mount plate__mount--wide">
+        <img src="../figures/bestiary/17_pack_hunt_masker_subtractor.webp" alt="Card illustration: Impersonation buys unlimited attempts" loading="lazy" width="420">
+      </div>
+      <div class="hunt__body">
+        <h3>Impersonation buys unlimited attempts</h3>
+        <p>The limits on what one analyst may accumulate — how many answers, and which combinations are too close together — are counted per name.</p><p>So forging a name did not merely let someone act as a colleague. It handed them a fresh allowance and an empty history, on demand, as often as they liked. An identity problem and a bookkeeping problem, each modest, combined into no limits at all.</p>
+        <p class="lesson">Whatever your safety counters are keyed on has just become part of your identity system, whether you meant it to or not. <span class="ref">#45</span></p>
+      </div>
+    </article><article class="hunt">
+<div class="plate__mount plate__mount--wide">
+<img src="../figures/bestiary/18_pack_hunt_ghost_rabbit.webp" alt="Card illustration: The Ghost feeds the Rabbit" loading="lazy" width="420">
+</div>
+<div class="hunt__body">
+<h3>A crash is an answer too</h3>
+<p>Every request is meant to leave one line in the tamper-proof log. A request that crashed left none &mdash; and whether a given request crashes depends on the data, so the crash itself is a signal you can read.</p><p>The unlogged failure and the chatty refusal are one family: a way to learn something with no released number to account for it.</p>
+<p class="lesson">Failure paths are outputs. Audit them, and make a crash indistinguishable from a data-derived refusal. <span class="ref">#37</span></p>
+</div>
+</article>
+<article class="hunt">
+<div class="plate__mount plate__mount--wide">
+<img src="../figures/bestiary/19_pack_hunt_subtractor_hydra.webp" alt="Card illustration: The Subtractor and the Hydra" loading="lazy" width="420">
+</div>
+<div class="hunt__body">
+<h3>Some cages only hold in pairs</h3>
+<p>The round-eight headline attack worked only because two weaknesses lined up: totals counted rows rather than people, so a one-person difference hid inside them; and internal range filters could cut between the published age bands, so a slice could land anywhere.</p><p>Fixing either one alone left a working variant. Only closing both, and reviewing them as one structure, actually shut the attack.</p>
+<p class="lesson">Some cages are load-bearing pairs. Review them together &mdash; which is exactly what decision record D7 exists to force. <span class="ref">#38 &middot; 39</span></p>
+</div>
+</article></div>
+  </div>
+</section>
+
+<section class="zoo">
+  <div class="wrap zoo__inner">
+    <div class="plate__mount">
+      <img src="../figures/bestiary/15_the_blind_zookeeper.webp" alt="Card illustration: The Blind Zookeeper" loading="lazy" width="620">
+    </div>
+    <div class="zoo__body">
+      <h2>The Blind Zookeeper</h2>
+      <p class="zoo__lead">For seven rounds, this project tested its own defences
+        with a suite that could not fail.</p>
+      <p>It asked the gateway’s own report whether anything had leaked — a
+        question that, by construction, could only come back “no”. And it counted
+        any alarm going off anywhere as a pass, which an attacker can arrange by
+        adding one harmless noisy request.</p>
+      <p>Eleven of the problems on this page survived that long because the gaps
+        and the blind test covered for each other.</p>
+      <p class="zoo__cage">The test now reads the raw data itself — and is
+        deliberately given broken defences, to check it still says no.
+        <span class="ref">#48</span></p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="head">
+      <h2>Still at large</h2>
+      <p>The honest section. Each of these is measured, priced, and has a named
+        fix that would close it properly — a map without them would be a lie.</p>
+    </div>
+    <ul class="loose-grid">
+      <li class="loose">
+        <div class="plate__mount plate__mount--small">
+          <img src="../figures/bestiary/20_the_straddler.webp" alt="Card illustration: The Straddler" loading="lazy" width="420">
+        </div>
+        <h4>The Straddler</h4>
+        <p>Timing still leaks a little. A passive sweep could order none of the hidden groups by size; an attacker that spends its attempts where they pay off can order two of fifteen. Measured every run, and the number is watched.</p>
+      </li>
+      <li class="loose">
+        <div class="plate__mount plate__mount--small">
+          <img src="../figures/bestiary/21_the_colluder.webp" alt="Card illustration: The Colluder" loading="lazy" width="420">
+        </div>
+        <h4>The Colluder</h4>
+        <p>Two people, each within their own limits, combining their answers afterwards. A per-person budget cannot see it. Closing this properly needs accounting that spans people, not sessions.</p>
+      </li>
+      <li class="loose">
+        <div class="plate__mount plate__mount--small">
+          <img src="../figures/bestiary/22_the_residual_head.webp" alt="Card illustration: The Residual Head" loading="lazy" width="420">
+        </div>
+        <h4>The Residual Head</h4>
+        <p>Some combinations look safe by the published summaries and are not, because the overlap between two groups is smaller than either. The price of deciding from public numbers alone.</p>
+      </li></ul>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="head">
+      <h2>Caged after they were drawn</h2>
+      <p>Two cards were painted while their subjects were still loose, and both
+        were caught before the ink dried. They are kept because a bestiary that
+        quietly deletes yesterday’s monsters is a worse record than one that
+        dates them.</p>
+    </div>
+    <ul class="loose-grid">
+      <li class="retired">
+        <div class="plate__mount plate__mount--small">
+          <img src="../figures/bestiary/23_the_planted_row.webp" alt="Card illustration: The Planted Row" loading="lazy" width="420">
+        </div>
+        <h4>The Planted Row <span class="ref">#50</span></h4>
+        <p>A shared link that ran itself on opening, writing a request into the permanent log under whoever clicked it. Now the link fills the box and stops; a click is the consent.</p>
+      </li>
+      <li class="retired">
+        <div class="plate__mount plate__mount--small">
+          <img src="../figures/bestiary/24_the_shared_connection.webp" alt="Card illustration: The Shared Connection" loading="lazy" width="420">
+        </div>
+        <h4>The Shared Connection <span class="ref">#51</span></h4>
+        <p>One database connection served every user at once, so a busy moment could hand someone another person’s table. Now each thread works from its own.</p>
+      </li></ul>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="head">
+      <h2>What the beasts taught us</h2>
+      <p>The creatures are the memory aid. These are the habits.</p>
+    </div>
+    <ol class="habits">
+      <li><span><b>Name the beast when you cage it.</b> A finding with a name is
+        remembered in a design review six months later. An unnamed fix gets
+        reverted by an innocent refactor.</span></li>
+      <li><span><b>Every cage needs a keeper — and ask how you know the keeper
+        can fail.</b> Tests that weaken a control on purpose are cheap, and they
+        are the difference between evidence and comfort.</span></li>
+      <li><span><b>Probe the fix, not just the finding.</b> The shape usually
+        outlives the instance. Budget time after every security fix to hunt
+        it.</span></li>
+      <li><span><b>Test on hostile data, not just hostile questions.</b> Real
+        refunds, real arithmetic overflow and real typos supplied several of
+        these without an attacker at all.</span></li>
+      <li><span><b>Price what you cannot close, and say so out loud.</b> A priced
+        residual survives a review. An unmentioned one becomes a finding.</span></li>
+    </ol>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p>Drawn from the project’s own record: 57 numbered findings, 18 threats and
+      seven decision records. The precise versions are the specification, the
+      security model and the hardening log.</p>
+    <p>safe-tre-agent — a research prototype on synthetic data. Not a government
+      service.</p>
+  </div>
+</footer>

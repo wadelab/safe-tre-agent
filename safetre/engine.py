@@ -602,51 +602,25 @@ class QueryEngine:
     def row_symdiff_donors(self, dataset: str, filters_a, filters_b) -> int:
         """Distinct donors behind the rows exactly one of two queries counted.
 
-        The differencing controls used to compare donor **cohorts**, which is
-        the right question only while every filter dimension is an attribute of
-        a donor. `age_rating` is an attribute of the *app*: two cohorts can hold
-        exactly the same people while the rows they aggregate differ by a whole
-        suppressed cell. Both differencing layers then correctly report no
-        difference — the cohorts really are identical — and the released numbers
-        still differ by that cell. Twenty such cells were recoverable on the demo
-        data after hardening #39 closed the `age_years` route (#40).
+        A released value is a function of the ROWS it aggregated, not of the
+        cohort that produced them: two cohorts can hold exactly the same people
+        while their rows differ by a whole suppressed cell, which every
+        donor-set comparison correctly reports as no difference (#40).
 
-        A released value is a function of the rows it aggregated, so that is what
-        the auditor has to difference. This counts the donors contributing at
-        least one row to the symmetric difference of the two row sets.
-
-        For donor-level filters it is exactly ``|A △ B|``: a donor outside both
-        cohorts contributes no rows, and one inside both contributes none to the
-        difference. So it subsumes the cohort comparison rather than trading it
-        for something weaker, and `cohort_symdiff` remains for callers that
+        Load-bearing property: on donor-level filters this equals ``|A △ B|``
+        exactly, so it subsumes the cohort comparison rather than trading it
+        for something weaker. `cohort_symdiff` remains for callers that
         genuinely mean the donor sets.
 
-        Exact rather than simulatable, deliberately — see D7. The bound it
-        replaces overstated the true difference by 13x on the attack it was
-        meant to catch.
-
-        **The bit this leg exposes is not simulatable, and is priced rather
-        than explained away** (hardening #62). This used to claim the bit "is
-        the one a direct query for the difference cell already returns", which
-        is wrong twice over: that direct query is a sub-threshold cell, so it
-        is SUPPRESSED and the analyst never receives it, and the denial is
-        computed from live data the published marginals cannot reproduce.
-        Measured over the demo catalogue's one- and two-filter cohorts
-        (`scripts/measure_exact_leg_channel.py`,
-        `artifacts/exact_leg_channel.json`): the cheap simulatable leg denies
-        120 pairs, this leg denies 34,163 that the cheap leg allowed, so
-        **99.6% of every differencing denial the auditor issues carries a bit
-        an analyst could not have predicted** — 9.3% of all pairs. The
-        differencing control is, in practice, the non-simulatable one.
-
-        Accepted, in the same class as the primary SDC oracle the threat model
-        already accepts, and bounded by two things: the refusal is one bit and
-        never a number, and it is byte-identical to the cheap leg's, so it does
-        not even say which leg decided (pinned by
-        `tests/test_hardening.py::test_the_two_differencing_legs_are_
-        indistinguishable`). `formal/disclosure_policy.als::
-        V8ExactLegIsNotSimulatable` exhibits the same gap as a model instance.
-        Closing it needs the DP accountant (roadmap item 3), not a comment.
+        Exact rather than simulatable, deliberately (decision D7). That is an
+        accepted, measured residual — the denial carries a bit the published
+        marginals cannot reproduce, and 99.6% of differencing denials come from
+        this leg: see hardening #62 for the measurement,
+        `artifacts/exact_leg_channel.json` for the numbers,
+        `formal/disclosure_policy.als::V8ExactLegIsNotSimulatable` for the
+        model instance, and
+        `test_the_two_differencing_legs_are_indistinguishable` for the pin that
+        keeps the refusal byte-identical to the cheap leg's.
         """
         unit = self._unit_view(dataset)
         pa, params_a = _predicate_sql(filters_a)

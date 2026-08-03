@@ -188,13 +188,33 @@ class ExternalCheckerVetter(CellVetter):
                  aggfunc: str | None = None,
                  contributions: pd.DataFrame | None = None,
                  timeout: float = DEFAULT_TIMEOUT, max_starts: int = 3,
-                 lock_wait: float = DEFAULT_LOCK_WAIT):
+                 lock_wait: float = DEFAULT_LOCK_WAIT, shared: bool = False):
+        """`keys`/`aggfunc`/`contributions` describe ONE query, so a vetter
+        given them is single-use: the ACRO comparison harness and the boundary
+        tests build one per table and call `vet` without a context.
+
+        A vetter built from configuration is the opposite — long-lived, shared
+        by every request in flight — and per-query state on such an instance is
+        what produced the cross-user verdict mixup (#33). That instance passes
+        `shared=True`, which makes the stored-table fallback in `vet`
+        unavailable to it: it must be told about each table through the
+        `CellContext` that arrives with the call. The service path already
+        constructs it with no table, so this asserts what was previously only
+        true by coincidence, and says which of the two modes an instance is in.
+        """
+        if shared and (keys or aggfunc or contributions is not None):
+            raise ValueError(
+                "a shared checker cannot hold one query's keys, aggfunc or "
+                "contributions: that state belongs to a single request and "
+                "this instance serves all of them (hardening #33). Pass them "
+                "per call in a CellContext")
         if not command:
             raise ValueError(
                 "an external checker needs a command to start it; there is no "
                 "default, because a checker the operator did not choose is not "
                 "a checker they can vouch for")
         self.command = list(command)
+        self.shared = shared
         self.contributions = contributions
         self.keys = list(keys or [])
         self.aggfunc = aggfunc
@@ -330,6 +350,10 @@ class ExternalCheckerVetter(CellVetter):
             contributions = context.contributions
             keys = list(context.keys)
             aggfunc = context.aggfunc
+        elif self.shared:
+            # a shared vetter has no per-query state to fall back on, by
+            # construction (#33); with no context there is nothing to check
+            contributions, keys, aggfunc = None, [], None
         else:
             contributions, keys, aggfunc = (
                 self.contributions, list(self.keys), self.aggfunc)

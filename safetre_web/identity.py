@@ -158,26 +158,40 @@ def _presented_login(request: Request) -> str | None:
     return login
 
 
-def configuration_problems() -> list[str]:
-    """Production settings that read as controls but are not configured.
+def configuration_report() -> dict[str, list[str]]:
+    """Production settings that read as controls but are not configured,
+    grouped by what an operator has to DO about each.
 
-    Reported at startup so an operator learns before an analyst does. The
-    request path fails closed on each of these independently; this exists so
-    the failure is explicable rather than a wall of 403s.
+    They used to arrive as one flat list logged at a single level, so "nobody
+    can log in until you set an allowlist" and "you have deliberately turned
+    rounding off" read identically. The three groups differ in kind:
+
+      `blocking`  the deployment does not work until this is fixed. The request
+                  path fails closed on each independently, so the symptom is a
+                  wall of 403s or a refusal to start; this exists to make that
+                  explicable in advance.
+      `advisory`  the deployment works and a control is weaker than it looks.
+      `waived`    a control is off because someone asked for it to be off. Not
+                  a mistake — but it must be visible, and #99 is what happens
+                  when it is not.
+
+    `configuration_problems()` flattens all three for callers that just want
+    the lines (including #73's deploy-unit test, which scrapes variable names
+    out of them).
     """
-    problems = []
+    blocking, advisory = [], []
     if _require_identity():
         if not os.environ.get("SAFETRE_PROXY_SHARED_SECRET", ""):
-            problems.append(
+            blocking.append(
                 "SAFETRE_REQUIRE_IDENTITY=1 without SAFETRE_PROXY_SHARED_SECRET: "
                 "the identity header is forgeable by any process that can reach "
                 "the socket, loopback included, so it is not trusted")
         if not _allowlist():
-            problems.append(
+            blocking.append(
                 "SAFETRE_REQUIRE_IDENTITY=1 without SAFETRE_ALLOWLIST: the Safe "
                 "People gate admits nobody until an allowlist is set")
         if not os.environ.get("SAFETRE_AUDIT_HEAD_ANCHOR", "").strip():
-            problems.append(
+            advisory.append(
                 "SAFETRE_REQUIRE_IDENTITY=1 without SAFETRE_AUDIT_HEAD_ANCHOR: "
                 "the chain is checked only for internal consistency, so a "
                 "wholesale rewrite by someone holding the key verifies. An "
@@ -188,12 +202,19 @@ def configuration_problems() -> list[str]:
     anchor = os.environ.get("SAFETRE_AUDIT_HEAD_ANCHOR", "").strip()
     if anchor and (len(anchor) != 64
                    or any(c not in "0123456789abcdef" for c in anchor.lower())):
-        problems.append(
+        # blocking, not advisory: the app refuses to start on this one
+        blocking.append(
             "SAFETRE_AUDIT_HEAD_ANCHOR is not 64 hex characters, so it cannot "
             "match any chain head: the app will refuse to start and report the "
             "chain unverified. Copy the `head` from /api/audit/verify")
-    problems += waived_controls()
-    return problems
+    return {"blocking": blocking, "advisory": advisory,
+            "waived": waived_controls()}
+
+
+def configuration_problems() -> list[str]:
+    """Every configuration problem as a flat list, worst first."""
+    report = configuration_report()
+    return report["blocking"] + report["advisory"] + report["waived"]
 
 
 # Every environment variable whose whole purpose is to turn a control OFF, and
@@ -236,7 +257,16 @@ def waived_controls() -> list[str]:
 
 
 def identity_is_verifiable() -> bool:
-    """Whether a presented login can be BELIEVED in this deployment.
+    """The STRONGER, key-grade check: is a login sound to key state on here?
+
+    Read the name as "verifiable" in the strict sense — a secret exists to
+    verify it against — not as the weaker "we are willing to act on this
+    header", which is `_header_trustworthy`. The two are easy to confuse and
+    the difference is the whole of #91, so: this one is never vacuous, and it
+    is the one to reach for when a caller-supplied string will become a key.
+    (Not renamed despite the ambiguity: hardening #91 records the fix by this
+    name, and a log entry pointing at a function that no longer exists costs
+    more than the ambiguity does.)
 
     `_header_trustworthy` answers "is the header good enough to act on", and
     outside production it says yes vacuously: `_secret_ok` returns

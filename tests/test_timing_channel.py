@@ -141,3 +141,43 @@ def test_an_overrun_does_not_reveal_how_far_it_overran():
     assert not result["reveals_overrun_size"], (
         "8x the work is visible in the answer time, which is #34 again: "
         f"{result['observed']}")
+
+
+# --- #91/#45: the abandoned-task key applies identity.py's rule ----------------
+
+def _scope(headers, client=("10.0.0.9", 51234)):
+    return {"type": "http", "headers": headers, "client": client}
+
+
+def test_abandoned_task_key_refuses_ambiguous_and_unlisted_logins(monkeypatch):
+    """The pool key names a user only when identity.py's rule says it may.
+
+    #91 keyed per caller so one caller's stalls cannot move another's pool.
+    That only holds if naming somebody else is hard: this function took the
+    LAST of a repeated header (an appending proxy makes the client's forged
+    value win, which #45 refuses outright) and consulted no allowlist, so an
+    unlisted or ambiguous identity could still claim a named user's bucket.
+    """
+    from safetre_web.timing import ResponseTimeBoundary
+
+    monkeypatch.setenv("SAFETRE_PROXY_SHARED_SECRET", "s3cret")
+    monkeypatch.setenv("SAFETRE_ALLOWLIST", "real@org")
+    key = ResponseTimeBoundary._caller
+    auth = (b"x-safetre-proxy-auth", b"s3cret")
+    login = lambda v: (b"tailscale-user-login", v)          # noqa: E731
+
+    # the good case still names the user
+    assert key(_scope([login(b"real@org"), auth])) == "user:real@org"
+
+    # ambiguity is refused rather than resolved (both halves of #45)
+    assert key(_scope([login(b"real@org"), login(b"victim@org"), auth])) \
+        == "peer:10.0.0.9"
+    assert key(_scope([login(b"real@org, victim@org"), auth])) == "peer:10.0.0.9"
+
+    # a login outside the allowlist cannot claim a named bucket
+    assert key(_scope([login(b"stranger@org"), auth])) == "peer:10.0.0.9"
+
+    # and the secret is still what proves the header at all
+    assert key(_scope([login(b"real@org")])) == "peer:10.0.0.9"
+    assert key(_scope([login(b"real@org"),
+                       (b"x-safetre-proxy-auth", b"wrong")])) == "peer:10.0.0.9"

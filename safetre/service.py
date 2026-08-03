@@ -216,6 +216,14 @@ class QueryService:
             exact leg falls back to the DONOR-set symmetric difference, which
             is the right question there and the one the cross-view attack
             defeats (round 11, #95). Within one view nothing changes.
+
+            UNREACHABLE TODAY, and deliberately kept: the only caller,
+            `SessionAuditor.observe_cohort`, skips every prior cohort from
+            another dataset (`if prev_dataset != dataset: continue`, see
+            `disclosure.py`), so this leg never runs in production and #95 is
+            OPEN, not closed. The machinery is what #95 will be built on —
+            but nothing here defends cross-view differencing yet, and a
+            reviewer should not read the branch as though it did.
             """
             if prev_dataset != this_dataset:
                 # the simulatable marginal bound is stated per dataset, so it

@@ -33,6 +33,7 @@ import concurrent.futures as cf
 import json
 import os
 import time
+from unittest import mock
 
 import numpy as np
 import pandas as pd
@@ -420,6 +421,35 @@ def test_internal_age_filters_must_be_band_aligned(flt, ok):
     else:
         with pytest.raises(ValidationError):
             QuerySpec(**spec)
+
+
+def test_internal_filter_without_range_rule_is_refused():
+    """The forward invariant, which was previously enforced nowhere.
+
+    #39 band-aligns `age_years`, but the check only ran for columns that had
+    an `INTERNAL_RANGE_RULES` entry: a NEW internal filter declared without
+    one fell through to the generic numeric branch, which permits `==`, `!=`
+    and arbitrary values -- the exact-age probe #39 exists to prevent. The
+    shipped catalogue was never wrong; the rule for future ones was missing.
+    """
+    from pydantic import ValidationError
+
+    from safetre import query as q
+
+    dims = dict(q.CATALOGUE["spend"].get("internal_filters", {}))
+    dims["pgsi_raw"] = "int"                      # an internal filter with no rule
+    patched = dict(q.CATALOGUE["spend"]) | {"internal_filters": dims}
+    with mock.patch.dict(q.CATALOGUE, {"spend": patched}):
+        # it is a permitted filter column ...
+        assert "pgsi_raw" in (q.CATALOGUE["spend"]["dims"]
+                              | q.CATALOGUE["spend"]["internal_filters"])
+        # ... and every operator on it is refused, including the ones the
+        # generic numeric branch would have allowed
+        for flt in ({"column": "pgsi_raw", "op": "==", "value": 7},
+                    {"column": "pgsi_raw", "op": ">=", "value": 7},
+                    {"column": "pgsi_raw", "op": "in", "value": [7, 8]}):
+            with pytest.raises(ValidationError, match="band-alignment rule"):
+                QuerySpec(dataset="spend", measure={"fn": "count"}, filters=[flt])
 
 
 def test_model_specs_share_the_band_alignment_rule():

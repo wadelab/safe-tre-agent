@@ -39,7 +39,7 @@ from .body import DEFAULT_MAX_BODY_BYTES, RequestSizeLimit
 from .channel import channel_allowed
 from .headers import CSP
 from .identity import (
-    configuration_problems, current_user, is_production, rate_limit_key,
+    configuration_report, current_user, is_production, rate_limit_key,
 )
 from .rate import RateLimiter
 from .session import SessionStore
@@ -121,8 +121,13 @@ _log.info("active dataset: %s (%d base table(s), %d public dataset(s)) from %s",
           _definition.name, len(_definition.tables), len(_definition.datasets),
           dataset_mod.active_source())
 _log.info("effective disclosure policy: %s", _cfg.digest())
-for _problem in configuration_problems():
-    _log.warning("Safe People misconfiguration: %s", _problem)
+_report = configuration_report()
+for _problem in _report["blocking"]:
+    _log.error("deployment will not work until fixed: %s", _problem)
+for _problem in _report["advisory"]:
+    _log.warning("control is weaker than it looks: %s", _problem)
+for _problem in _report["waived"]:
+    _log.warning("control deliberately OFF: %s", _problem)
 
 # Put the effective policy INSIDE the tamper-evident chain, at the point it
 # takes effect (hardening #55). A released row records the request, the spec
@@ -241,9 +246,7 @@ class QueryRequest(BaseModel):
         return value
 
 
-# Runs INSIDE the response-time padding (an unpadded 429 would be its own
-# signal) and AFTER the channel gate (a request off the channel should not
-# spend a bucket at all).
+# Position is load-bearing; see MIDDLEWARE_ORDER at the foot of this module.
 @app.middleware("http")
 async def rate_limit(request: Request, call_next):
     """Rate-limit every route, not only `/api/query` (hardening #47).
@@ -319,13 +322,11 @@ async def restricted_channel(request: Request, call_next):
     return await call_next(request)
 
 
-# Registered LAST of the `@app.middleware` functions, which makes it the
-# OUTERMOST of them — so the headers land on responses the other layers
-# generate themselves, not only on router output. They used to reach neither
-# the 403s, the 413, the 429 nor the 503 refusal, while the module docstring
-# claimed strict headers throughout; `nosniff` was missing on every one
-# (round 10, #77). The bodies are fixed JSON so nothing was live, but a
-# refusal is a response like any other.
+# Outermost of the decorated functions, so the headers land on responses the
+# other layers generate themselves, not only on router output: they used to
+# reach neither the 403s, the 413, the 429 nor the 503 refusal while the module
+# docstring claimed strict headers throughout (round 10, #77). Position is
+# load-bearing; see MIDDLEWARE_ORDER at the foot of this module.
 @app.middleware("http")
 async def security_headers(request: Request, call_next):
     resp = await call_next(request)
@@ -390,7 +391,10 @@ def query(request: Request, body: QueryRequest):
                                             classes="agg", escape=True,
                                             formatters=formatters)
         table_html = table_html.replace(' style="text-align: right;"', "")
-    spent = getattr(sess.auditor, "_spent", 0)
+    # the public property, not `getattr(..., "_spent", 0)`: reaching past it
+    # to a private attribute meant a rename would silently report a budget of
+    # zero spent -- a wrong number where the honest answer is an error
+    spent = sess.auditor.spent
     return templates.TemplateResponse(request, "_result.html", {
         "r": result, "table_html": table_html,
         "budget_left": max(0, sess.auditor.budget - spent),
@@ -453,22 +457,77 @@ def audit_verify(request: Request):
             "anchored": _audit_head_anchor is not None}
 
 
-# Added LAST so it is the OUTERMOST layer: the channel rejection, the rate
-# limit, the identity gate and template rendering all happen inside its window.
-# It is raw ASGI rather than an `@app.middleware("http")` function because only
-# that can answer while the inner application is still running — see
-# `safetre_web/timing.py` for the two measurements that forced it (#34, #54).
-# The settings are read per request, not captured, so `config.yaml` and the
-# environment stay the values that bite (R10) — and so the dials remain
-# testable without rebuilding the application.
 app.add_middleware(ResponseTimeBoundary,
                    settings=lambda: (_cfg.response_quantum_ms,
                                      _cfg.response_ceiling_ms))
-
-# And this one outside even that (hardening #64). The body ceiling is a cost
-# control, not a disclosure control: a 413 tells the sender only how big their
-# own request was. Padding it would mean holding an oversized body for the full
-# quantum, which is the denial of service paying for itself.
 app.add_middleware(RequestSizeLimit,
                    max_bytes=int(os.environ.get("SAFETRE_MAX_BODY_BYTES",
                                                 DEFAULT_MAX_BODY_BYTES)))
+
+
+# --- the middleware stack, in one place --------------------------------------
+#
+# Six controls whose CORRECTNESS DEPENDS ON THEIR ORDER, assembled by two
+# different mechanisms (`@app.middleware("http")` and `add_middleware`) whose
+# shared rule — last registered is outermost — is Starlette's, not this
+# module's. The order used to be documented in four comment blocks beside four
+# registrations, so checking it meant knowing that rule and reading the file in
+# reverse. It is stated once here and then ASSERTED, because an ordering
+# invariant that only a comment defends is one refactor from silently changing.
+#
+# Outermost first; a request enters at the top, a response leaves through it.
+#
+#   1. RequestSizeLimit     outside the padding on purpose (#64). The body
+#                           ceiling is a cost control, not a disclosure one: a
+#                           413 tells the sender only how big their own request
+#                           was, and padding it would mean holding an oversized
+#                           body for a full quantum — the denial of service
+#                           paying for itself.
+#   2. ResponseTimeBoundary everything below answers inside its window, so
+#                           every refusal the lower layers generate is padded
+#                           and quantised like any answer. Raw ASGI rather than
+#                           `@app.middleware`, because only that can answer
+#                           while the inner app is still running (#34, #54).
+#   3. security_headers     outermost of the decorated functions, so CSP and
+#                           `nosniff` land on the 403/413/429/503 the layers
+#                           below generate themselves, not only on router
+#                           output (#77).
+#   4. restricted_channel   a request off the channel is refused before it can
+#                           spend anything.
+#   5. same_site_only       CSRF-shaped refusal, above the bucket for the same
+#                           reason.
+#   6. rate_limit           innermost, so a 429 is still padded (an unpadded
+#                           one would be its own signal) and so a request the
+#                           channel already refused never spends a bucket
+#                           (#47).
+#
+# Only the response-time boundary reads its settings per request rather than
+# capturing them, so `config.yaml` and the environment stay the values that
+# bite (R10) and the dials stay testable without rebuilding the application.
+MIDDLEWARE_ORDER = ("RequestSizeLimit", "ResponseTimeBoundary",
+                    "security_headers", "restricted_channel",
+                    "same_site_only", "rate_limit")
+
+
+def middleware_order() -> tuple[str, ...]:
+    """The live stack, outermost first, named as `MIDDLEWARE_ORDER` names it."""
+    names = []
+    for mw in app.user_middleware:
+        dispatch = (getattr(mw, "kwargs", None) or {}).get("dispatch")
+        names.append(dispatch.__name__ if dispatch is not None
+                     else mw.cls.__name__)
+    return tuple(names)
+
+
+def _assert_middleware_order() -> None:
+    live = middleware_order()
+    if live != MIDDLEWARE_ORDER:
+        raise RuntimeError(
+            "middleware stack is not in the documented order: expected "
+            f"{MIDDLEWARE_ORDER}, got {live}. Registration order decides this "
+            "(last registered is outermost), and several controls are only "
+            "correct in position — see the block above app.py's "
+            "MIDDLEWARE_ORDER before changing it")
+
+
+_assert_middleware_order()

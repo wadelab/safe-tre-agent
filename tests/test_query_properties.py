@@ -71,6 +71,12 @@ def _filter_for(draw, dataset: str) -> dict:
         op = draw(st.sampled_from(rule["ops"]))
         return {"column": column, "op": op,
                 "value": draw(st.sampled_from(rule["edges"][op]))}
+    # An internal filter with no range rule is refused outright, so there is
+    # no valid spec to generate for one; only public dimensions reach the
+    # generic branch below (see test_internal_filter_without_range_rule_is_refused).
+    assert column not in CATALOGUE[dataset].get("internal_filters", {}), (
+        f"{column!r} is an internal filter with no band-alignment rule; "
+        f"valid QuerySpecs cannot filter on it")
     ops = CAT_OPS if kind in ("cat", "bool") else NUM_OPS
     op = draw(st.sampled_from(sorted(ops)))
     scalar = _scalar_for(kind)

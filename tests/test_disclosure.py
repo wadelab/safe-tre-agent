@@ -261,3 +261,103 @@ def test_a_genuine_float_measure_is_not_mistaken_for_a_cell_key():
 
     frame = pd.DataFrame({"region": ["a", "b"], "value": [1.25, 3.5], "n": [40, 30]})
     assert _group_columns(frame) == ["region"]
+
+
+# --- the findings and the suppression mask come from ONE computation ----------
+
+def test_findings_and_suppression_mask_cannot_disagree():
+    """A rule fires **iff** its cells are withheld.
+
+    The five cell-level rules used to be written out twice: `leak_detector`
+    built findings from one set of comparisons and `StandinVetter.vet` rebuilt
+    the mask from another, so the whole safety story rested on two hand-written
+    paths staying in lockstep -- and they had already drifted, the findings
+    coercing the witness columns with `to_numeric` while the mask compared them
+    raw. Drift here releases a cell while the log records it as suppressed.
+
+    This pins the invariant on a frame that trips every rule at once, including
+    the unresolved-witness cases that must fail closed.
+    """
+    import numpy as np
+    import pandas as pd
+
+    from safetre.disclosure import (
+        SUPPRESSABLE, CellContext, StandinVetter, VettingParameters,
+    )
+
+    # one row per rule, so the mask pins which rule caught which cell
+    df = pd.DataFrame({
+        "region":    ["London", "London", "Wales", "Nowhere", "Scotland", "London"],
+        "n":         [50,       3,        80,      60,        70,         np.nan],
+        "value":     [1.0,      2.0,      np.inf,  4.0,       5.0,        6.0],
+        "dominance": [0.1,      0.1,      0.2,     0.2,       0.9,        0.1],
+        "influence": [0.01,     0.01,     0.02,    0.02,      0.02,       np.nan],
+    })
+    #  row 0  clean                     -> released
+    #  row 1  n below threshold         -> small_cell
+    #  row 2  non-finite payload        -> nonfinite_value
+    #  row 3  key outside the codebook  -> undeclared_cell_key
+    #  row 4  one contributor dominates -> dominance
+    #  row 5  unresolved witnesses      -> small_cell + influence (fail closed)
+    params = VettingParameters(threshold=10, max_rows=100, dom_threshold=0.5,
+                               influence_threshold=0.1)
+    verdicts = StandinVetter().vet(df, params, CellContext(keys=("region",)))
+
+    fired = {f.rule for f in verdicts.findings} & SUPPRESSABLE
+    assert fired == SUPPRESSABLE, (
+        f"the fixture should trip every suppressable rule, got {sorted(fired)}")
+
+    # every cell the rules objected to, and no others
+    expected = pd.Series([False, True, True, True, True, True])
+    assert list(verdicts.suppress) == list(expected), (
+        f"mask {list(verdicts.suppress)} does not match the findings")
+
+    # and a clean frame trips nothing and suppresses nothing
+    clean = pd.DataFrame({"region": ["London", "Wales"], "n": [50, 80],
+                          "value": [1.0, 2.0], "dominance": [0.1, 0.2],
+                          "influence": [0.01, 0.02]})
+    ok = StandinVetter().vet(clean, params, CellContext(keys=("region",)))
+    assert not any(ok.suppress)
+    assert not ({f.rule for f in ok.findings} & SUPPRESSABLE)
+
+
+def test_suppressable_flag_and_name_set_agree():
+    """`Finding.suppressable` decides; `SUPPRESSABLE` describes.
+
+    The flag and the name set used to be two decision inputs: `is_suppressable`
+    accepted either, while `vet`'s `deny` consulted only the set, so a vetter
+    that set the flag on a rule the set does not name was settled by one and
+    deny-class to the other. The stand-in's five rules set both, which is why
+    nothing tripped -- but an external checker returns names this module has
+    never seen, and that is what the flag is for. One authority now, with the
+    set held in step here because the corpus and the Alloy models use the names.
+    """
+    import numpy as np
+    import pandas as pd
+
+    from safetre.disclosure import (
+        SUPPRESSABLE, CellContext, Finding, StandinVetter, VettingParameters,
+        is_suppressable,
+    )
+
+    df = pd.DataFrame({
+        "region":    ["London", "London", "Wales", "Nowhere", "Scotland", "Wales"],
+        "n":         [50,       3,        80,      60,        70,         90],
+        "value":     [1.0,      2.0,      np.inf,  4.0,       5.0,        6.0],
+        "dominance": [0.1,      0.1,      0.2,     0.2,       0.9,        0.1],
+        "influence": [0.01,     0.01,     0.02,    0.02,      0.02,       0.9],
+    })
+    params = VettingParameters(threshold=10, max_rows=100, dom_threshold=0.5,
+                               influence_threshold=0.1)
+    findings = StandinVetter().vet(df, params, CellContext(keys=("region",))).findings
+
+    named = {f.rule for f in findings if f.rule in SUPPRESSABLE}
+    assert named == SUPPRESSABLE, "the fixture should trip all five by name"
+    for f in findings:
+        assert f.suppressable == (f.rule in SUPPRESSABLE), (
+            f"{f.rule!r} disagrees: flag={f.suppressable}, "
+            f"in SUPPRESSABLE={f.rule in SUPPRESSABLE}")
+
+    # the flag alone decides, including for a name this module has never seen
+    assert is_suppressable(Finding("high", "acro_nk_rule", "x", suppressable=True))
+    assert not is_suppressable(Finding("high", "acro_nk_rule", "x"))

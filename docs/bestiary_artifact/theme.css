@@ -1,0 +1,226 @@
+/* Reset + design for the bestiary artifact. Fonts live in garamond.css,
+   the words in content.yaml. Rebuild: uv run python scripts/make_bestiary_page.py */
+
+/* --- reset --- */
+:root{color-scheme:light}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}
+
+/* --- design --- */
+:root {
+  --ground: #EFE7D7;
+  --ground-deep: #E4DAC5;
+  --panel: #F8F3E8;
+  --ink: #1E1913;
+  --ink-soft: #4A4034;
+  --muted: #756950;
+  --rule: #CFC2A5;
+  --gilt: #8A6716;
+  --verdigris: #3D6350;
+  --rust: #943D20;
+  --mount: #14110D;
+  --shadow: rgba(40, 30, 12, .16);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground: #0B0A08;
+    --ground-deep: #060505;
+    --panel: #16130E;
+    --ink: #EEE3CB;
+    --ink-soft: #C3B79B;
+    --muted: #93856A;
+    --rule: #332C21;
+    --gilt: #C9A24A;
+    --verdigris: #7FA48D;
+    --rust: #C97553;
+    --mount: #000000;
+    --shadow: rgba(0, 0, 0, .6);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --ground: #0B0A08; --ground-deep: #060505; --panel: #16130E;
+  --ink: #EEE3CB; --ink-soft: #C3B79B; --muted: #93856A; --rule: #332C21;
+  --gilt: #C9A24A; --verdigris: #7FA48D; --rust: #C97553; --mount: #000000;
+  --shadow: rgba(0, 0, 0, .6); color-scheme: dark;
+}
+:root[data-theme="light"] {
+  --ground: #EFE7D7; --ground-deep: #E4DAC5; --panel: #F8F3E8;
+  --ink: #1E1913; --ink-soft: #4A4034; --muted: #756950; --rule: #CFC2A5;
+  --gilt: #8A6716; --verdigris: #3D6350; --rust: #943D20; --mount: #14110D;
+  --shadow: rgba(40, 30, 12, .16); color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--ground); color: var(--ink);
+  font-family: 'Garamond Book', 'EB Garamond', Georgia, serif;
+  font-size: clamp(17px, 1.05vw + 13px, 20px); line-height: 1.62;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap { width: min(1180px, 92vw); margin-inline: auto; }
+h1, h2, h3, h4 { text-wrap: balance; margin: 0; font-weight: 700; line-height: 1.14; }
+p { margin: 0; }
+img { max-width: 100%; height: auto; display: block; }
+a { color: var(--gilt); }
+:focus-visible { outline: 2px solid var(--gilt); outline-offset: 3px; }
+
+.lbl {
+  font-family: 'Garamond Caps', 'Garamond Book', Georgia, serif;
+  letter-spacing: .08em; color: var(--muted); font-size: .78em;
+  display: block; margin-bottom: .15em;
+}
+.ref {
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: .72em; color: var(--gilt); letter-spacing: .02em;
+  white-space: nowrap;
+}
+.ref--none { color: var(--muted); font-style: italic;
+  font-family: 'Garamond Book', Georgia, serif; }
+
+/* — hero ————————————————————————————————————— */
+.hero {
+  background: var(--ground-deep); border-bottom: 1px solid var(--rule);
+  padding: clamp(3.5rem, 8vw, 7rem) 0 0;
+}
+.hero__eyebrow {
+  font-family: 'Garamond Caps', Georgia, serif; letter-spacing: .16em;
+  color: var(--gilt); font-size: .8rem;
+}
+.hero h1 {
+  font-size: clamp(2.9rem, 7.4vw, 5.6rem); margin: .28em 0 .18em;
+  letter-spacing: -.012em;
+}
+.hero__sub { max-width: 34em; color: var(--ink-soft); font-size: 1.12em; }
+.hero__meta {
+  display: flex; flex-wrap: wrap; gap: .5rem 2rem; margin-top: 1.9rem;
+  padding-top: 1.1rem; border-top: 1px solid var(--rule); color: var(--muted);
+  font-size: .84em;
+}
+.hero__meta b { color: var(--ink); font-weight: 700; }
+.spines {
+  display: flex; gap: clamp(.5rem, 1.4vw, 1.1rem); margin-top: 2.6rem;
+  overflow-x: auto; padding-bottom: 2.2rem; scrollbar-width: thin;
+}
+.spines img {
+  width: clamp(96px, 12vw, 150px); flex: 0 0 auto; border-radius: 2px;
+  border: 1px solid var(--rule); box-shadow: 0 6px 18px var(--shadow);
+}
+
+/* — sections ————————————————————————————————— */
+section { padding: clamp(3rem, 6vw, 5.5rem) 0; }
+section + section { border-top: 1px solid var(--rule); }
+.head { max-width: 40em; display: flex; flex-direction: column; gap: .85rem; }
+.head h2 { font-size: clamp(1.9rem, 3.3vw, 2.7rem); }
+.head p { color: var(--ink-soft); }
+
+.tri { display: grid; gap: 2rem; margin-top: 2.6rem;
+  grid-template-columns: repeat(auto-fit, minmax(255px, 1fr)); }
+.tri > div { display: flex; flex-direction: column; gap: .5rem; }
+.tri h3 { font-size: 1.16rem; }
+.tri p { color: var(--ink-soft); font-size: .96em; }
+
+.legend { list-style: none; padding: 0; margin: 2.4rem 0 0;
+  display: grid; gap: .9rem; max-width: 46em; }
+.legend li { display: flex; gap: 1rem; align-items: baseline;
+  flex-wrap: wrap; color: var(--ink-soft); font-size: .95em; }
+.chip {
+  font-family: 'Garamond Caps', Georgia, serif; font-size: .76rem;
+  letter-spacing: .08em; padding: .18em .7em; border-radius: 1px;
+  border-left: 3px solid var(--gilt); background: var(--panel);
+  color: var(--ink); white-space: nowrap;
+}
+.chip--not { border-left-color: var(--verdigris); }
+.chip--deterministic { border-left-color: var(--gilt); }
+.chip--behavioural { border-left-color: var(--rust); }
+
+/* — plates ————————————————————————————————— */
+.plates { display: flex; flex-direction: column; gap: clamp(3rem, 5vw, 4.6rem);
+  margin-top: 3rem; }
+.plate { display: grid; gap: clamp(1.5rem, 3vw, 3rem); align-items: start;
+  grid-template-columns: minmax(210px, 300px) minmax(0, 1fr); }
+.plate__mount {
+  background: var(--mount); padding: 10px; border-radius: 2px;
+  border: 1px solid var(--rule); box-shadow: 0 10px 30px var(--shadow);
+}
+.plate__mount img { border-radius: 1px; }
+.plate__mount--wide { max-width: 340px; }
+.plate__mount--small { max-width: 100%; }
+.plate__body { display: flex; flex-direction: column; gap: .9rem;
+  max-width: 40em; }
+.plate__num {
+  font-family: 'Garamond Caps', Georgia, serif; letter-spacing: .14em;
+  color: var(--muted); font-size: .8rem;
+}
+.plate h3 { font-size: clamp(1.6rem, 2.6vw, 2.15rem); }
+.wants { color: var(--gilt); font-style: italic; font-size: 1.05em; }
+.wants .lbl { font-style: normal; }
+.story { display: flex; flex-direction: column; gap: .7rem;
+  color: var(--ink-soft); }
+.cage {
+  background: var(--panel); border-left: 3px solid var(--gilt);
+  padding: .95rem 1.15rem; display: flex; flex-direction: column; gap: .3rem;
+  margin-top: .4rem;
+}
+.cage--not { border-left-color: var(--verdigris); }
+.cage--behavioural { border-left-color: var(--rust); }
+.cage .lbl em { font-style: normal; color: var(--ink-soft); }
+.cage p:last-child { font-size: .96em; }
+
+/* — hunts ————————————————————————————————— */
+.hunts { display: flex; flex-direction: column; gap: 3.4rem; margin-top: 3rem; }
+.hunt { display: grid; gap: clamp(1.5rem, 3vw, 3rem); align-items: start;
+  grid-template-columns: minmax(210px, 320px) minmax(0, 1fr); }
+.hunt__body { display: flex; flex-direction: column; gap: .8rem; max-width: 42em; }
+.hunt h3 { font-size: clamp(1.5rem, 2.3vw, 1.95rem); }
+.hunt p { color: var(--ink-soft); }
+.lesson { color: var(--ink); font-style: italic; border-top: 1px solid var(--rule);
+  padding-top: .8rem; margin-top: .3rem; }
+
+/* — the zookeeper ————————————————————————— */
+.zoo { background: var(--ground-deep); border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule); }
+.zoo__inner { display: grid; gap: clamp(1.8rem, 4vw, 3.5rem); align-items: center;
+  grid-template-columns: minmax(240px, 400px) minmax(0, 1fr); }
+.zoo h2 { font-size: clamp(2rem, 3.6vw, 3rem); margin-bottom: .7rem; }
+.zoo__lead { font-size: 1.14em; margin-bottom: .9rem; }
+.zoo p { color: var(--ink-soft); }
+.zoo__body { display: flex; flex-direction: column; gap: .8rem; max-width: 40em; }
+.zoo__cage { border-left: 3px solid var(--gilt); padding-left: 1.1rem;
+  color: var(--ink); font-style: italic; margin-top: .4rem; }
+
+/* — loose & retired ————————————————————— */
+.loose-grid { list-style: none; padding: 0; margin: 2.8rem 0 0;
+  display: grid; gap: 2.4rem;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+.loose, .retired { display: flex; flex-direction: column; gap: .7rem; }
+.loose h4, .retired h4 { font-size: 1.2rem; display: flex; gap: .6rem;
+  align-items: baseline; flex-wrap: wrap; }
+.loose p, .retired p { color: var(--ink-soft); font-size: .95em; }
+.loose .plate__mount { border-color: var(--rust); }
+.retired .plate__mount { opacity: .82; }
+
+.habits { list-style: none; padding: 0; margin: 2.4rem 0 0;
+  display: grid; gap: 1.2rem; max-width: 44em; counter-reset: h; }
+.habits li { display: grid; grid-template-columns: 2.1rem 1fr; gap: .7rem;
+  color: var(--ink-soft); }
+.habits li::before {
+  counter-increment: h; content: counter(h);
+  font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .78em;
+  color: var(--gilt); padding-top: .35em;
+}
+.habits b { color: var(--ink); }
+
+footer { padding: 3rem 0 4rem; color: var(--muted); font-size: .88em;
+  border-top: 1px solid var(--rule); }
+footer p + p { margin-top: .5rem; }
+
+@media (max-width: 720px) {
+  .plate, .hunt, .zoo__inner { grid-template-columns: 1fr; }
+  .plate__mount, .plate__mount--wide { max-width: 300px; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .plate, .hunt, .loose, .retired { animation: rise .5s ease-out both;
+    animation-timeline: view(); animation-range: entry 0% cover 22%; }
+  @keyframes rise { from { opacity: 0; transform: translateY(14px); }
+    to { opacity: 1; transform: none; } }
+}

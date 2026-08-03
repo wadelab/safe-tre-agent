@@ -3,6 +3,105 @@
 A dated record of self-red-team findings and the fixes applied. New findings get
 appended; the table is the quick index, the notes below give detail.
 
+## 2026-08-03 — clarification pass (secure code is understandable code)
+
+Not a red-team round. A read-only review of the decision path asked a different
+question: where is the code now *unnecessarily* hard to follow, such that a
+reviewer could misjudge whether a control holds? The findings and the full
+tiered plan are in [complexity-review.md](complexity-review.md); tier 1 landed
+here. Three of the five items are pure clarification and change no behaviour.
+Two tighten it, and are numbered because they close forward-looking gaps.
+
+| # | Finding | Sev | Status | Fix | Where |
+|---|---|---|---|---|---|
+| 102 | **Band alignment (#39) was enforced only where a rule already existed, so the invariant it rests on was enforced nowhere.** `check_filters` snapped a range filter to the declared band edges when `INTERNAL_RANGE_RULES` had an entry for the column, and otherwise fell through to the generic numeric branch — which permits `==`, `!=`, `in` and arbitrary values, the exact-age probe #39 exists to close. The shipped catalogue was never wrong (`age_years` has a rule); what was missing is the rule for the *next* internal filter, which would silently reopen the sweep. The property-test strategy actively generated the fall-through as a legal spec, so the suite encoded the fail-open rather than catching it | Med | **Fixed** | an internal filter column with no range rule is refused at validation: declaring an internal filter is now a commitment to declaring its band edges, and the omission fails closed. `test_internal_filter_without_range_rule_is_refused` pins it, and the Hypothesis strategy asserts the fall-through is unreachable instead of exercising it | `safetre/query.py`, `tests/test_hardening.py`, `tests/test_query_properties.py` |
+| 103 | **The abandoned-task pool key claimed to apply `identity.py`'s rule and applied a weaker one.** #91 fixed `timing._caller` to verify the proxy secret, and its docstring says "the rule is `identity.py`'s". It was not: it took the LAST of a repeated `Tailscale-User-Login` — where #45 refuses ambiguity outright, because an appending proxy makes the client's forged value win — and consulted no allowlist, so an ambiguous or unlisted identity could still name a bucket. Not a disclosure channel on its own (the key selects a resource bucket, and the padding boundary answers every caller identically), but it is the #91 pool-key surface, and a docstring asserting a rule the code does not apply is how the surface was mis-set the first time | Low | **Fixed** | `_caller` refuses a repeated or comma-joined header and consults the same allowlist, falling back to the peer key, which is the fail-closed direction. The one remaining difference — no `identity_is_verifiable()` check, because raw ASGI has no `Request` — is now stated in the docstring, with why the proxy secret is a sound stand-in for a resource bucket and why this shape must not be copied into an authorisation decision | `safetre_web/timing.py`, `tests/test_timing_channel.py` |
+
+### Clarifications that change no behaviour
+
+- **The disclosure gateway computed its five suppression rules twice.**
+  `StandinVetter.vet` called `leak_detector` for the *findings*, then rebuilt
+  the *suppression mask* for the same five rules from a second set of
+  comparisons. "A finding fires **iff** its cells are withheld" therefore
+  rested on two hand-written code paths staying in lockstep, asserted only by
+  a comment — and they had already drifted in one detail: the findings coerced
+  the witness columns with `to_numeric`, the mask compared them raw. Drift
+  there is the defect that releases a cell while the audit log records it as
+  suppressed. `_suppression_hits` is now the single definition; findings and
+  mask are two readers of it, and `test_findings_and_suppression_mask_cannot_disagree`
+  pins the equivalence on a frame that trips every rule at once. On numeric
+  data the two forms were already identical, so no decision changes; on a
+  non-numeric witness the surviving form is the fail-closed one.
+- **The manifest could announce a policy the gateway was not enforcing.**
+  `public_manifest` and its three siblings defaulted `policy=None` and fell
+  back to `load_policy_config()` — a second resolution of config.yaml — with a
+  comment saying request-path callers "MUST" pass the resolved policy, which
+  the signature did not enforce. That is #89's defect, left reachable. The
+  argument is now required, and a caller that genuinely wants a fresh read asks
+  for it by name (`manifest_for_current_config()`); `planner_system` resolves
+  once, explicitly, at its own boundary rather than passing `None` downwards.
+- **The cross-view differencing branch read as live and is unreachable.**
+  `_difference_bound` handles `prev_dataset != this_dataset` and
+  `cohort_symdiff`'s `dataset_b` exists to serve it, but `observe_cohort` skips
+  every cross-dataset prior, so the leg never runs and #95 is OPEN. The branch
+  now says so, naming the guard that makes it unreachable, so the scaffolding
+  #95 will build on stops reading as a defence that is already in place.
+
+### Tier 2 — clarifications that change no behaviour
+
+- **The middleware order is asserted, not just described.** Six controls are
+  only correct in position — a padded 429, the 413 deliberately outside the
+  padding, CSP landing on refusals the lower layers generate — and the order is
+  decided by registration sequence through two mechanisms whose shared rule
+  (last registered is outermost) is Starlette's, not ours. It was documented in
+  four comment blocks beside four registrations. `MIDDLEWARE_ORDER` states it
+  once and `_assert_middleware_order()` checks the live stack against it at
+  import, so a reordering refactor fails loudly instead of silently.
+- **The three spec validators shared five rules by copy-paste.** GLMSpec and
+  AnovaSpec each wrote out response admissibility, term allowlisting,
+  response-is-not-a-term, filter checking and response-is-not-filtered.
+  `check_model_allowlist` holds them once; the two genuine differences — the
+  family a tool permits (GLM asks, ANOVA is gaussian by definition) and GLM's
+  reserved filter slot — now sit visibly in the callers instead of hiding among
+  the duplicates.
+- **A shared external checker can no longer hold one query's state.** #33 was
+  per-call state on an instance shared by every request in flight. The fix kept
+  it in locals, but the constructor still accepted `keys`/`aggfunc`/
+  `contributions`, and the service path avoided the fallback only by passing
+  none of them. `shared=True` makes that a property of the object: the
+  dangerous combination raises at construction, and a shared vetter with no
+  `CellContext` fails closed rather than reaching for stored state. (The
+  reviewer's proposal was to delete the stored-table mode outright, on the
+  premise that nothing used it; the ACRO comparison harness and ~15 boundary
+  tests do, so the mode stays and the hazard is closed instead.)
+- **One authority for "suppressable."** `is_suppressable` accepted the finding's
+  flag OR membership of the `SUPPRESSABLE` name set, while `vet`'s `deny`
+  consulted the set alone — so a vetter that set the flag on a rule the set does
+  not name was settled by one consumer and deny-class to the other. Nothing
+  tripped it, because the stand-in's five rules set both; an external checker
+  returns names this module has never seen, which is what the flag is for. The
+  flag decides; the set is a description, held in step by a test.
+- **`getattr(sess.auditor, "_spent", 0)` reached past a public property to a
+  private attribute with a silent-zero fallback** — a wrong number where the
+  honest answer is an error, which this project's own rules forbid. It reads
+  `.spent`.
+- **`configuration_problems()` mixed three kinds of message.** "Nobody can log
+  in until you set an allowlist" logged identically to "you have deliberately
+  turned rounding off". `configuration_report()` groups them as blocking /
+  advisory / waived and startup logs each at its own level; the flat list
+  remains for #73's deploy-unit test, which scrapes variable names from it.
+- **The waivable floors now name the hard floor beneath them.** An operator
+  setting `SAFETRE_ALLOW_UNSAFE_POLICY=1` can see what `_validate` still
+  enforces unconditionally, so the waiver reads as "weak policy", not
+  "no policy".
+- **Archaeology moved out of two decision points.** `row_symdiff_donors` (48
+  lines of docstring over a 9-line query) and `observe_cohort` (28 lines of
+  comment over a 9-line loop) each restated a hardening-log entry in full.
+  Both now state the current invariant and the open gap in a few lines and
+  point at #62 and #95 for the measurements. `_looks_like_a_measure`'s double
+  negative is written positively.
+
+
 ## 2026-07-31 — round 11 (the fixture was doing the work, and the catalogue had a second door)
 
 The first full-surface audit since the repository went public, run across five

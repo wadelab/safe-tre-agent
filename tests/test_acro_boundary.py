@@ -421,3 +421,33 @@ def test_a_hanging_checker_does_not_stall_other_users(tmp_path):
     assert victim["elapsed"] < 2.0, (
         f"the second user waited {victim['elapsed']:.1f}s behind the first")
     assert any("busy" in d for d in victim["findings"]), victim["findings"]
+
+
+def test_a_shared_checker_cannot_hold_one_querys_state():
+    """#33's defect, closed by construction rather than by coincidence.
+
+    A vetter built from configuration is long-lived and shared by every request
+    in flight, so per-query state on it belongs to whichever request set it
+    last -- which is how one analyst's verdicts were returned about another's
+    table. The service builds it with no table today, so the stored-table
+    fallback was unreachable there by accident. `shared=True` makes that a
+    property of the object instead: the two modes are now named, and the
+    dangerous combination cannot be constructed at all.
+    """
+    import pytest
+
+    for kwargs in ({"keys": ["region"]}, {"aggfunc": "sum"},
+                   {"contributions": CONTRIBUTIONS}):
+        with pytest.raises(ValueError, match="shared checker"):
+            ExternalCheckerVetter(["/bin/true"], shared=True, **kwargs)
+
+    # a shared vetter with no context has nothing to check, and fails closed
+    shared = ExternalCheckerVetter(["/bin/true"], shared=True)
+    verdicts = shared.vet(CELLS, PARAMS)
+    assert verdicts.deny
+    assert all(verdicts.suppress)
+    assert [f.rule for f in verdicts.findings] == ["checker_uninformed"]
+
+    # and the single-use harness mode is unaffected
+    assert ExternalCheckerVetter(["/bin/true"], ["region"], "sum",
+                                 CONTRIBUTIONS).contributions is not None

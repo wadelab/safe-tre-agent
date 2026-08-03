@@ -30,6 +30,7 @@ from pydantic import ValidationError
 from safetre import analyst, dataset, engine, query, schema
 from safetre.dataset import DatasetDefinition
 from safetre.manifest import public_manifest, public_schema
+from safetre.config import load_policy_config
 from safetre.planner import planner_system
 from safetre.query import QuerySpec
 from safetre.service import WITHHELD_MESSAGE, QueryService
@@ -325,7 +326,7 @@ def test_planner_prompt_is_generated_from_the_active_definition(clinic):
 
 
 def test_manifest_and_public_schema_follow_the_active_definition(clinic):
-    manifest = public_manifest()
+    manifest = public_manifest(load_policy_config())
     assert set(manifest["datasets"]) == {"visits", "patient_cost"}
     public = public_schema()
     assert set(public["datasets"]) == {"visits", "patient_cost"}

@@ -422,8 +422,19 @@ MODEL_REGISTRY: dict[str, ModelProcedure] = {}
 
 
 def model_registry() -> dict[str, ModelProcedure]:
-    """The model-procedure registry. Imports the implementations lazily so
-    registration is deterministic without import-order tricks."""
+    """The model-procedure registry, populated on first use.
+
+    The asymmetry with `REGISTRY` above is forced, not a design choice, and is
+    worth stating because "one registry is a dict and the other is a function"
+    otherwise reads as an inconsistency to tidy up. The aggregate procedures
+    are defined in THIS module, so they can be instantiated eagerly at import.
+    The model procedures live in `glm` and `anova`, which import their base
+    class and the aggregate machinery from here — so importing them at module
+    scope would be a cycle. Deferring the import to the first call registers
+    them deterministically without import-order tricks, and every caller goes
+    through this function rather than touching `MODEL_REGISTRY` directly, so
+    there is no way to observe it half-populated.
+    """
     from . import anova, glm  # noqa: F401  (self-register on import)
 
     return MODEL_REGISTRY
