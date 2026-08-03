@@ -48,13 +48,24 @@ def _fit_centred(slide, path: str, left, top, max_w, max_h) -> None:
     with a hand's width of nothing beneath them. `make_decks._image_fit` centres
     horizontally only, which is right for screenshots — they are all one shape.
     """
+    import io
+
     from PIL import Image
 
-    with Image.open(path) as im:
+    # The committed .png are ~3 MB print masters; a slide needs nowhere near
+    # that. Prefer the 600 px .webp derivative and hand python-pptx a small
+    # in-memory JPEG (it cannot read webp), which keeps the deck emailable.
+    stem = os.path.splitext(path)[0]
+    webp = stem + ".webp"
+    src = webp if os.path.exists(webp) else path
+    with Image.open(src) as im:
         iw, ih = im.size
+        buf = io.BytesIO()
+        im.convert("RGB").save(buf, "JPEG", quality=88, optimize=True)
+    buf.seek(0)
     scale = min(max_w / iw, max_h / ih)
     w, h = int(iw * scale), int(ih * scale)
-    slide.shapes.add_picture(path, left + (max_w - w) // 2, top + (max_h - h) // 2,
+    slide.shapes.add_picture(buf, left + (max_w - w) // 2, top + (max_h - h) // 2,
                              width=w, height=h)
 
 
@@ -211,6 +222,18 @@ CREATURES = [
      "One person's requests are handled one at a time, across the whole "
      "check-then-record step (#18).",
      BLUE),
+
+    ("14_the_sleeping_dials.png", "The Sleeping Dials",
+     "a control switched off and left with its label still reading 'on'",
+     ["Not a creature so much as an unlocked cage door with a sign on it.",
+      "One safety dial could never actually fire; others would accept settings",
+      "that quietly disabled them \u2014 a minimum group size of one, no",
+      "rounding \u2014 and still pass every test, because the tests read the",
+      "defaults, not the configuration the service was really running."],
+     "Floors are enforced on the resolved configuration, the effective policy "
+     "is logged at startup, and the only override is a loud environment "
+     "variable the config file cannot set for itself (#56, #46).",
+     GREY),
 ]
 
 PACK_HUNTS = [
@@ -242,6 +265,29 @@ PACK_HUNTS = [
       "into no limits at all."],
      "Lesson: whatever your safety counters are keyed on has just become part "
      "of your identity system, whether you meant it to or not."),
+
+    ("18_pack_hunt_ghost_rabbit.png", "A crash is an answer too",
+     ["Every request is meant to leave one line in the tamper-proof log.",
+      "",
+      "A request that crashed left none \u2014 and whether a given request",
+      "crashes depends on the data, so the crash itself is a signal you can",
+      "read.",
+      "",
+      "The unlogged failure and the chatty refusal are one family: a way to",
+      "learn something with no released number to account for it (#37)."],
+     "Lesson: failure paths are outputs. Audit them, and make a crash "
+     "indistinguishable from a data-derived refusal."),
+
+    ("19_pack_hunt_subtractor_hydra.png", "Some cages only hold in pairs",
+     ["The round-8 headline attack worked only because two weaknesses lined",
+      "up: totals counted rows rather than people, so a one-person difference",
+      "hid inside them; and internal range filters could cut between the",
+      "published age bands, so a slice could land anywhere.",
+      "",
+      "Fixing either alone left a working variant. Only closing both, and",
+      "reviewing them as one structure, shut the attack (#38 + #39)."],
+     "Lesson: some cages are load-bearing pairs. Review them together, which "
+     "is exactly what decision record D7 exists to force."),
 ]
 
 
@@ -262,7 +308,7 @@ def build(out: str) -> None:
     ], accent=GREEN)
 
     bullets_slide(prs, "Why monsters?", [
-        "The real record is 57 numbered findings, 18 threats and 7 decision records.",
+        "The real record is 96 numbered findings, 19 threats and 28 red-team scenarios.",
         "That is complete, precise, and impossible to hold in your head at once —",
         "which matters, because reviews fail when nobody can keep the shape in mind.",
         "People do not remember lists. They remember characters.",
@@ -301,7 +347,7 @@ def build(out: str) -> None:
     slide = prs.slides.add_slide(prs.slide_layouts[6])
     _bg(slide, INK)
     _bar(slide, BLUE, Inches(0.25))
-    art = os.path.join(CARDS, "14_the_blind_zookeeper.png")
+    art = os.path.join(CARDS, "15_the_blind_zookeeper.png")
     if os.path.exists(art):
         _fit_centred(slide, art, Inches(0.7), Inches(1.2), Inches(4.6), Inches(5.6))
     _text(slide, Inches(5.7), Inches(1.1), Inches(7.0), Inches(1.0),

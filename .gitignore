@@ -53,6 +53,7 @@ nohup.out
 # would be wrong. A stray `.ppt` is therefore something to notice in review.
 artifacts/*.pptx
 artifacts/*.pdf
+artifacts/*.html
 .DS_Store
 .~lock.*#
 # LaTeX build artifacts (the preprint PDF is distributed via releases)
