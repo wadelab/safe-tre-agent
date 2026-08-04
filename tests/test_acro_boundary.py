@@ -451,3 +451,29 @@ def test_a_shared_checker_cannot_hold_one_querys_state():
     # and the single-use harness mode is unaffected
     assert ExternalCheckerVetter(["/bin/true"], ["region"], "sum",
                                  CONTRIBUTIONS).contributions is not None
+
+
+def test_the_checker_environment_is_an_allowlist(monkeypatch):
+    # The checker is distrusted with poisoned input (#44). A denylist let every
+    # secret it did not name -- the LLM key, cloud/db creds -- cross to it; it
+    # now gets an allowlist of runtime state and nothing else (#97, V-2).
+    import safetre.external_checker as ec
+
+    monkeypatch.setenv("PATH", "/usr/bin")
+    monkeypatch.setenv("SAFETRE_LLM_API_KEY", "sk-must-not-cross")
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "must-not-cross")
+    monkeypatch.setenv("SAFETRE_AUDIT_KEY", "must-not-cross")
+    monkeypatch.setenv("SAFETRE_PROXY_SHARED_SECRET", "must-not-cross")
+    monkeypatch.setenv("AN_UNLISTED_VAR", "must-not-cross")
+
+    env = ec._checker_env()
+
+    # what a program needs to start still crosses
+    assert env.get("PATH") == "/usr/bin"
+    # no secret, no app config, nothing unlisted -- it is an allowlist
+    for blocked in ("SAFETRE_LLM_API_KEY", "AWS_SECRET_ACCESS_KEY",
+                    "SAFETRE_AUDIT_KEY", "SAFETRE_PROXY_SHARED_SECRET",
+                    "AN_UNLISTED_VAR"):
+        assert blocked not in env
+    # every key that DID cross is one we explicitly allow
+    assert set(env).issubset(set(ec._CHECKER_ENV_ALLOW))

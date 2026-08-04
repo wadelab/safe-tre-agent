@@ -154,21 +154,39 @@ def parse_response(payload: str, request_id: int | None = None
     return verdicts, version
 
 
-# Secrets the checker has no use for and must not inherit (round 11, #97).
-# `Popen` with no `env=` hands the child the WHOLE parent environment, and the
-# shipped unit loads both of these into it with `EnvironmentFile=`. The checker
-# is a third-party dependency that the threat model treats as receiving
-# poisoned, untrusted cell-key strings (#44) — handing it the key that makes the
-# audit chain forgery-resistant, and the secret that makes the identity header
-# believable, gives away both controls to the one process most likely to be
-# exploited. Orthogonal to #65: that is about the key sharing a HOST with the
-# log, this is about handing it to a process we distrust on that host.
-_WITHHELD_FROM_CHECKER = ("SAFETRE_AUDIT_KEY", "SAFETRE_PROXY_SHARED_SECRET")
+# The environment handed to the checker subprocess: an ALLOWLIST, not a
+# denylist (round 11, #97; tightened round 12, V-2). `Popen` with no `env=`
+# would give the child the WHOLE parent environment, and the checker is a
+# third-party dependency the threat model treats as receiving poisoned,
+# untrusted cell-key strings (#44) — so it is the process most likely to be
+# exploited. A denylist withheld only the two named secrets, so every OTHER
+# secret in the parent environment — `SAFETRE_LLM_API_KEY`, and whatever cloud
+# or database credential an operator's unit happens to carry — still crossed to
+# it. The data the checker needs arrives over stdin (see `_start`), never the
+# environment, so what it legitimately needs is only enough OS/runtime state to
+# start a program; everything else, the app's own `SAFETRE_*` config included,
+# is dropped. Orthogonal to #65: that is about the key sharing a HOST with the
+# log; this is about handing it to a process we distrust on that host.
+#
+# An operator whose checker runtime needs more than this extends the list here.
+# The direction that fails is a checker that will not start, never a secret
+# that leaks.
+_CHECKER_ENV_ALLOW = (
+    "PATH", "HOME", "USER", "LOGNAME", "SHELL", "PWD",
+    "TMPDIR", "TMP", "TEMP",
+    "LANG", "LANGUAGE", "LC_ALL", "LC_CTYPE", "TZ",
+    "VIRTUAL_ENV", "PYTHONPATH", "PYTHONHOME", "PYTHONUNBUFFERED",
+    "PYTHONDONTWRITEBYTECODE", "SSL_CERT_FILE", "SSL_CERT_DIR",
+)
 
 
 def _checker_env() -> dict[str, str]:
-    return {k: v for k, v in os.environ.items()
-            if k not in _WITHHELD_FROM_CHECKER}
+    """The subprocess environment for the checker: an allowlist (#97, V-2).
+
+    Only the runtime variables a program needs to start cross the boundary; no
+    secret and no `SAFETRE_*` config does, whether or not it was named.
+    """
+    return {k: os.environ[k] for k in _CHECKER_ENV_ALLOW if k in os.environ}
 
 
 class ExternalCheckerVetter(CellVetter):
