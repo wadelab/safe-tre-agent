@@ -136,6 +136,45 @@ def test_auditor_cohort_lineage_allows_separated_and_identical():
                             bound=lambda pd_, a_, d_, b_: 1 / 0) == []
 
 
+def test_cross_view_differencing_is_the_open_gap_95():
+    """#95 as a named, first-class keeper: the lineage auditor compares WITHIN
+    ONE VIEW only.
+
+    A catalogue publishes several views of the same people whose measures are
+    commensurable -- `donor_spend.total_spend_gbp` is the per-donor sum of
+    `spend.amount_gbp` -- so a differencing pair with one leg in each view is
+    caught by neither this layer (the `prev_dataset != dataset` skip in
+    `observe_cohort`) nor the totals layer.
+
+    The cross-view `bound` here RAISES if it is ever computed, so a green run
+    proves the second leg was skipped, not merely found under threshold. The
+    within-view control below runs the same near-cohort shape inside one view
+    and IS flagged, which isolates the gap to the cross-view skip specifically.
+
+    When #95 is closed (declared-measure equivalence, roadmap 0.0), the
+    cross-view pair must be refused and the first assertion must flip -- its
+    failure is the reminder that this keeper is here. Complements the note in
+    `observe_cohort` and the lineage tests above.
+    """
+    a = SessionAuditor()
+    cohort = (("region", "==", "London"), ("sex", "==", "M"))
+    near = (("region", "==", "London"), ("sex", "==", "M"),
+            ("income_band", "!=", ">150k"))
+    a.record_cohort("spend", cohort)
+
+    # second leg in a DIFFERENT view of the same people: never compared, so the
+    # exploding bound is never evaluated -> released, unflagged (the open gap)
+    def _explode(prev_ds, prev_f, ds, f):
+        raise AssertionError("cross-view bound was computed -- has #95 been "
+                             "closed? update this keeper")
+    assert a.observe_cohort("donor_spend", near, bound=_explode) == []
+
+    # control: the SAME shape within one view IS compared and flagged, so the
+    # gap is the cross-view skip, not the pair being far apart
+    flags = a.observe_cohort("spend", near, bound=lambda pd_, a_, d_, b_: 1)
+    assert any(f.rule == "differencing" for f in flags)
+
+
 def test_secondary_suppression_single_dim():
     # one primary-suppressed cell is recoverable from the grand total
     # (obtainable as a coarser query), so the next-smallest cell must go too
