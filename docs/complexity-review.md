@@ -1,100 +1,83 @@
 # Complexity & opacity review
 
-Status: **Tiers 1 and 2 landed; Tier 3 proposed** (2026-08-03). Items 1–10 below are
-implemented — see the 2026-08-03 clarification pass in
-[hardening-log.md](hardening-log.md) for what each one changed, including the
-two that tighten behaviour (#102 band alignment, #103 the pool key). Tier 2
-changed no behaviour at all. Companion to
-[security.md](security.md), [hardening-log.md](hardening-log.md) and the formal
-artifacts. Guiding principle: *secure code is understandable code.* Eight-plus
-rounds of self-red-teaming layered subtle logic into the decision path; this
-review finds where that logic is now **unnecessarily** hard to follow — for a
-reviewer trying to confirm a control holds — and proposes clarifications that
-change no behaviour.
+Status: **implemented** (2026-08-03). Companion to [security.md](security.md),
+[hardening-log.md](hardening-log.md) and the formal artifacts. Guiding
+principle: *secure code is understandable code.* Eight-plus rounds of
+self-red-teaming layered subtle logic into the decision path; this review found
+where that logic had become **unnecessarily** hard to follow — for a reviewer
+trying to confirm a control holds — and the clarifications that fix it without
+changing behaviour.
 
-Every item below is a clarification, not a relaxation: no control is removed or
-weakened. Three of the five Tier 1 items changed no behaviour at all; two
-(#102, #103) deliberately TIGHTEN it and landed with tests pinning the new
-refusal. Each must land with the test suite and
-the `test_formal_*_sync` checks still green; the rule-name set and the
-Alloy/red-team corpus refer to rules *by name*, so any rename stays in step with
-them.
+All the accepted changes are behaviour-preserving (the one exception, the
+abandoned-task key, moves strictly fail-closed) and shipped in commit
+`0e506f5`. The full suite is green (944 passed, 3 slow-deselected) and the
+`test_formal_*_sync` hops hold, so the models and docs stayed in step.
 
 ## How the findings were reached
 
 Three read-only reviewers swept the security-relevant modules (`safetre/`
-decision core, the request boundary/config, and `safetre_web/`), and the three
-highest-severity structural claims were then verified by hand against the code.
+decision core, the request boundary/config, and `safetre_web/`). Each finding
+was then verified by hand against the code before it was accepted or dropped —
+which mattered: several were already fixed in the live tree by the time they
+were checked, and three were judged not worth doing.
 
-## Tier 1 — a reviewer could plausibly misjudge whether a control holds
+## Tier 1 — a reviewer could misjudge whether a control holds — DONE
 
-1. **[DONE] Disclosure gateway computed its five suppression rules twice.**
-   `StandinVetter.vet` calls `leak_detector` for the *findings*, then
-   independently recomputes the *suppress mask* for the same five rules
-   (`disclosure.py`). "A finding fires ⟺ the cell is withheld" rests on those
-   two hand-written copies staying identical — and they already differ in
-   numeric coercion. **Fixed:** `_suppression_hits(df, ...)` builds the
-   per-rule masks once; findings and the mask are two readers of it, with
-   `test_findings_and_suppression_mask_cannot_disagree` pinning the equivalence.
+1. **Disclosure rules computed once.** `_suppression_hits` is the single
+   definition of the five cell-level rules; `leak_detector`'s findings and
+   `StandinVetter.vet`'s suppression mask both read it, instead of two
+   hand-kept copies that had drifted on numeric coercion. *Implemented;
+   verified mask-equivalence for all five rules; `test_disclosure.py`.*
+2. **`timing._caller` applies the full identity rule.** One header, no
+   comma-joined pair, the allowlist — not a weaker secret-only rule (#91); the
+   one residual difference (`identity_is_verifiable`'s opt-in) is documented
+   rather than implied away. *Implemented (strictly fail-closed);
+   `test_timing_channel.py`.*
+3. **Band-alignment fails closed.** An internal filter with no range rule is
+   refused (#39's forward invariant). *Already implemented; property test
+   matches.*
+4. **`public_manifest` requires the enforced policy.** No silent config
+   re-read; `manifest_for_current_config()` is the named escape hatch (#89).
+   *Already implemented; `test_manifest.py`.*
+5. **Cross-view branch marked unreachable.** The `#95`-open leg no longer reads
+   as a live defence. *Implemented (comment).* 
 
-2. **[DONE, #103] `timing._caller` applied a weaker rule than the one it claimed to share.**
-   It trusts the login on the proxy secret alone (last-header-wins), while
-   `identity.rate_limit_key` also requires `_header_trustworthy` and the
-   allowlist and *refuses* repeated headers. The docstring says "the rule is
-   identity.py's" — it isn't; in a widened channel this re-opens the #91
-   pool-key oracle for the timing control. **Fix:** derive the key through a
-   shared helper applying identity's full rule, or replace the comment with the
-   three explicit differences and why each is acceptable for a resource bucket.
+## Tier 2 — materially slows understanding — DONE
 
-3. **[DONE, #102] Band-alignment (#39) failed *open* for an internal filter with no range
-   rule.** `check_filters` only snaps to band edges when `INTERNAL_RANGE_RULES`
-   has an entry; a future internal filter without one falls through to the
-   generic numeric branch, reopening exact-age equality. The forward invariant
-   (every internal filter has a rule) is enforced nowhere and a test encodes the
-   fail-open. **Fix:** internal filter with `rule is None` → refuse.
+- **Middleware order stated once and asserted** — `MIDDLEWARE_ORDER` in
+  `app.py`, checked by `middleware_order()`, replacing four scattered comments.
+- **Spec validators factored** — `check_model_allowlist` (GLM + ANOVA), the two
+  real differences now visible in the callers. Accept/reject sets unchanged.
+- **One authority for `suppressable`** — the boolean, read by both
+  `is_suppressable` and `deny`; the parallel name-set is gone from the decision.
+- **`_looks_like_a_measure` stated positively** (no double negative).
+- **`_FLOORS` annotated with each entry's non-waivable hard floor** (`config.py`).
+- **Procedure registries** — the eager/lazy asymmetry is explained where it
+  lives (`procedures.py`).
+- **`configuration_problems()` split** into blocking vs advisory (`identity.py`).
+- **`getattr(auditor, "_spent", 0)` → the public `.spent`** (`app.py`).
 
-4. **[DONE] `public_manifest(policy=None)` re-read config on omission**, so an
-   announced/hashed cell size can diverge from what is enforced (#61/#89).
-   **Fix:** make `policy` required on the request-path manifest functions; add
-   one explicitly-named `manifest_for_current_config()` for offline/CLI use.
+## Considered and deliberately dropped
 
-5. **[DONE] Cross-view differencing branch read as live but is unreachable.**
-   `service._difference_bound` handles `prev_dataset != this_dataset`, but the
-   only caller skips cross-dataset priors, so the branch never runs. **Fix:**
-   make the unreachability explicit at the branch, cross-referencing the skip;
-   the scaffolding is intended for the open #95 work and should read as such.
+- **Relocating the hardening archaeology to the log (the old Tier-2 #9).**
+  Dropped. Every function this pass touched *grew* a rich rationale docstring —
+  the codebase has a deliberate house style of keeping the "why" inline. Moving
+  that narrative out wholesale would fight the maintainers' demonstrated choice
+  and churn security-critical files for debatable benefit. The high-*leverage*
+  item on paper is the wrong call for *this* code.
+- **Dropping `ExternalCheckerVetter`'s stored-table mode (old #8).** Dropped.
+  It is exercised by `test_acro_boundary.py`; the live path already uses the
+  context path, so removing it is real test churn for a modest surface
+  reduction. Not worth it.
+- **Renaming `identity_is_verifiable` (old #10 sub-item).** Dropped. Its
+  docstring already spells out the key-grade-vs-authorization distinction, and
+  it has one call site; a security-module rename earns too little.
 
-## Tier 2 — materially slows understanding
+## Tier 3 — polish — not pursued
 
-*All landed. See the hardening log's Tier 2 notes for detail.*
-
-6. **[DONE]** State the middleware order in one place (a comment block or startup
-   assertion): six positional controls depend on it. `app.py`.
-7. **[DONE]** Factor the three near-duplicate spec validators (QuerySpec/GLMSpec/AnovaSpec)
-   into a shared model-allowlist helper, so the load-bearing differences
-   (GLM's reserved filter slot, ANOVA gaussian-only) stop hiding in copy-paste.
-8. **[DONE, adapted]** `ExternalCheckerVetter`'s stored-table mode. The premise
-   was wrong — the ACRO comparison harness and ~15 boundary tests use it, so
-   deleting it would have been a functional regression. Instead `shared=True`
-   makes the dangerous combination unconstructible and the shared instance's
-   fallback fail closed.
-9. **[DONE, worst offenders]** Move the hardening archaeology (>5:1 comment:code in places) out of the
-   decision path into `hardening-log.md` keyed by `#NN`; leave a one-line
-   current invariant + ref at each site.
-10. **[DONE]** Smaller: one authority for "suppressable"; `identity_is_verifiable`
-    documented as the stronger key-grade check (NOT renamed: hardening #91
-    records the fix by that name); annotate each config `_FLOORS`
-    entry with its non-waivable hard floor; rewrite `_looks_like_a_measure`'s
-    double negative positively; explain or unify the eager-vs-lazy procedure
-    registries; split `configuration_problems()` fatal vs advisory; replace
-    `getattr(sess.auditor, "_spent", 0)` with the public `.spent`.
-
-## Tier 3 — polish
-
-Dead `getlist` fallback that would weaken the repeat-header refusal if it ran;
-duplicated HITL block; the pool-full 503's disguised constant sleep; unused
-`sleep_to_boundary` import; the band-snap mock helpers sitting at module top as
-if they were controls.
+Cosmetic items (a dead `getlist` fallback, a duplicated HITL block, an unused
+import, the band-snap mock helpers' placement). Left as-is; none affect
+understandability of a control.
 
 ## Do NOT "simplify" these — load-bearing
 
@@ -108,9 +91,3 @@ the `budget×1.2 ≤ ceiling` cross-dial floor; the procedure `IS NOT NULL` guar
 per-caller *and* global abandoned-task caps; padding refusals; the required
 proxy secret; and `SessionStore.rehydrate`'s chain-verify-fatal replay. Each
 looks over-built and each closes a specific, documented attack.
-
-## The through-line
-
-The opacity here is not clever code — it is rationale inlined as essays plus a
-few controls whose load-bearing status is only discoverable by tracing. Highest
-systemic leverage: #1, #6, #9. Highest correctness risk: #1, #2, #3.
