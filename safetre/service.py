@@ -184,6 +184,20 @@ class Result:
     plans: list[str] = field(default_factory=list)
 
 
+def _hitl(findings: list, trace: list[str]) -> str:
+    """The documented human-in-the-loop decision (R7), shared by both paths.
+
+    Suppression has already settled anything suppressable; this escalates on
+    what is LEFT -- a residual medium goes to a human checker, a residual high
+    denies -- and records the decision on the trace so the step stays visible
+    in the audited path even when (as today) nothing medium can reach it.
+    """
+    residual = [f for f in findings if not D.is_suppressable(f)]
+    decision = D.hitl_decision(residual)
+    trace.append(f"hitl: {decision}")
+    return decision
+
+
 class QueryService:
     def __init__(self, tables, policy: D.DisclosurePolicy | None = None):
         self.engine = QueryEngine(tables)
@@ -482,9 +496,7 @@ class QueryService:
         # residual medium/high finding escalates (and a residual high denies).
         # This keeps the documented HITL step present in the secure path — today
         # nothing medium can reach here, so it is future-proofing + fail-closed.
-        residual = [f for f in findings if not D.is_suppressable(f)]
-        decision = D.hitl_decision(residual)
-        trace.append(f"hitl: {decision}")
+        decision = _hitl(findings, trace)
         if decision == "deny":
             record("denied", spec.model_dump(), findings, None)
             return Result("denied", message="blocked at human-in-the-loop",
@@ -663,9 +675,7 @@ class QueryService:
         # The documented HITL step, on the model path too (R7). Suppression
         # already settled anything suppressable; a residual medium escalates
         # and a residual high denies, exactly as on the plain path.
-        residual = [f for f in notes if not D.is_suppressable(f)]
-        decision = D.hitl_decision(residual)
-        trace.append(f"hitl: {decision}")
+        decision = _hitl(notes, trace)
         if decision != "auto":
             spec_dict = spec.model_dump() | {
                 "aggregates": [a.measure_key() for a in aggregates]}

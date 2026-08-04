@@ -146,10 +146,17 @@ def _presented_login(request: Request) -> str | None:
     as one login, so `"a@org, b@org"` became a session key and an audit
     identity of its own (hardening #45).
     """
+    # A real request's headers are a Starlette Headers with getlist, which
+    # is how a repeated `tailscale-user-login` is SEEN and then refused
+    # below. A plain mapping (only ever a unit-test stub) cannot represent
+    # a repeated header at all, so .get is exact there -- not the fail-open
+    # collapse it would be on a genuinely multi-valued source (#45).
     headers = request.headers
-    getlist = getattr(headers, "getlist", None)
-    values = list(getlist(_HEADER)) if getlist is not None else (
-        [v] if (v := headers.get(_HEADER)) is not None else [])
+    if hasattr(headers, "getlist"):
+        values = list(headers.getlist(_HEADER))
+    else:
+        v = headers.get(_HEADER)
+        values = [v] if v is not None else []
     if len(values) != 1:
         return None if not values else ""       # "" -> present but ambiguous
     login = values[0].strip()
