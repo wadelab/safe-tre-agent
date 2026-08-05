@@ -6,9 +6,9 @@ subtitle: |
   issues crop up. AI finds and fixes these issues but keep ing track of them is
   hard....
 stats:
-  - "**96** findings recorded"
-  - "**24** specimens illustrated"
-  - "**4** still at large"
+  - "**{{findings}}** findings recorded"
+  - "**{{specimens}}** specimens illustrated"
+  - "**{{at_large}}** still at large"
   - "safe-tre-agent · synthetic data"
 legend:
   - [not, "Not expressible", "The attack cannot be stated — the request form has no word for it"]
@@ -16,7 +16,7 @@ legend:
   - [behavioural, "Behavioural pen", "It can be run, but the record of what you have already asked catches the pattern"]
 ---
 
-<!-- Edit the prose freely. Section kinds are the <!--kind--> markers; leave them. Rebuild: uv run python scripts/make_bestiary_page.py -->
+<!-- Edit the prose freely. Section kinds are the <!--kind--> markers; leave them. {{findings}}/{{threats}}/{{decisions}}/{{specimens}}/{{at_large}} are auto-filled from the repo at build time -- do not hand-type those numbers. Rebuild: uv run python scripts/make_bestiary_page.py -->
 
 # Why a bestiary at all? <!--prose-->
 
@@ -300,6 +300,6 @@ The creatures are the memory aid. These are the habits.
 
 # footer <!--footer-->
 
-Drawn from the project’s own record: 57 numbered findings, 18 threats and seven decision records. The precise versions are the specification, the security model and the hardening log.
+Drawn from the project’s own record: {{findings}} numbered findings, {{threats}} threats and {{decisions}} decision records. The precise versions are the specification, the security model and the hardening log.
 
 safe-tre-agent — a research prototype on synthetic data. Not a government service.

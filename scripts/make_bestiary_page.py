@@ -29,6 +29,27 @@ ROMAN = ["I","II","III","IV","V","VI","VII","VIII","IX","X","XI","XII","XIII",
 def _read(name): 
     with open(os.path.join(SRC, name), encoding="utf-8") as fh: return fh.read()
 
+def _project_counts():
+    """Live counts derived from the repository, so the artifact never cites a
+    stale number. Each fails loud if its source moves rather than reporting 0.
+    """
+    hl = open(os.path.join(ROOT, "docs", "hardening-log.md"), encoding="utf-8").read()
+    nums = [int(n) for n in re.findall(r"#(\d+)", hl)]
+    if not nums:
+        raise SystemExit("no #N findings in docs/hardening-log.md")
+    sec = open(os.path.join(ROOT, "docs", "security.md"), encoding="utf-8").read()
+    m = re.search(r"## Threats and controls(.*?)(?=\n## |\Z)", sec, S)
+    if not m:
+        raise SystemExit("no 'Threats and controls' section in docs/security.md")
+    rows = [l for l in m.group(1).splitlines()
+            if l.strip().startswith("|") and "---" not in l]
+    dec = os.path.join(ROOT, "docs", "decisions")
+    decisions = [f for f in os.listdir(dec) if re.match(r"D\d+.*\.md$", f)]
+    return {"findings": max(nums),
+            "threats": max(0, len(rows) - 1),   # drop the header row
+            "decisions": len(decisions)}
+
+
 def _full(stem):
     with open(os.path.join(CARDS, stem + ".webp"), "rb") as fh:
         return "data:image/webp;base64," + base64.b64encode(fh.read()).decode()
@@ -205,6 +226,18 @@ def build():
                      for s in plate_stems if s)
     page = "\n".join(html).replace('<div class="spines" data-spines></div>',
                                     f'<div class="spines">{spines}</div>')
+
+    # live counts: {{findings}} etc. in content.md are filled from the repo,
+    # so the hero and footer update as the project changes (never hand-typed).
+    counts = dict(_project_counts(),
+                  specimens=page.count('alt="Card illustration:'),
+                  at_large=page.count('<li class="loose">'))
+    for k, v in counts.items():
+        page = page.replace("{{" + k + "}}", str(v))
+    leftover = sorted(set(re.findall(r"\{\{(\w+)\}\}", page)))
+    if leftover:
+        raise SystemExit(f"unknown count placeholder(s) in content.md: {leftover}")
+    print("  counts:", ", ".join(f"{k}={v}" for k, v in counts.items()))
 
     # validate: nothing silently dropped
     ncards = page.count('alt="Card illustration:')
