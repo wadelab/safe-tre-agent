@@ -17,6 +17,9 @@ import argparse, base64, io, os, re, sys
 import yaml, markdown
 from PIL import Image
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import project_counts
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, "docs", "bestiary_artifact")
 CARDS = os.path.join(ROOT, "docs", "figures", "bestiary")
@@ -29,25 +32,6 @@ ROMAN = ["I","II","III","IV","V","VI","VII","VIII","IX","X","XI","XII","XIII",
 def _read(name): 
     with open(os.path.join(SRC, name), encoding="utf-8") as fh: return fh.read()
 
-def _project_counts():
-    """Live counts derived from the repository, so the artifact never cites a
-    stale number. Each fails loud if its source moves rather than reporting 0.
-    """
-    hl = open(os.path.join(ROOT, "docs", "hardening-log.md"), encoding="utf-8").read()
-    nums = [int(n) for n in re.findall(r"#(\d+)", hl)]
-    if not nums:
-        raise SystemExit("no #N findings in docs/hardening-log.md")
-    sec = open(os.path.join(ROOT, "docs", "security.md"), encoding="utf-8").read()
-    m = re.search(r"## Threats and controls(.*?)(?=\n## |\Z)", sec, S)
-    if not m:
-        raise SystemExit("no 'Threats and controls' section in docs/security.md")
-    rows = [l for l in m.group(1).splitlines()
-            if l.strip().startswith("|") and "---" not in l]
-    dec = os.path.join(ROOT, "docs", "decisions")
-    decisions = [f for f in os.listdir(dec) if re.match(r"D\d+.*\.md$", f)]
-    return {"findings": max(nums),
-            "threats": max(0, len(rows) - 1),   # drop the header row
-            "decisions": len(decisions)}
 
 
 def _full(stem):
@@ -229,7 +213,7 @@ def build():
 
     # live counts: {{findings}} etc. in content.md are filled from the repo,
     # so the hero and footer update as the project changes (never hand-typed).
-    counts = dict(_project_counts(),
+    counts = dict(project_counts.counts(),
                   specimens=page.count('alt="Card illustration:'),
                   at_large=page.count('<li class="loose">'))
     for k, v in counts.items():

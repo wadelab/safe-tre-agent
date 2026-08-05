@@ -308,7 +308,7 @@ def build(out: str) -> None:
     ], accent=GREEN)
 
     bullets_slide(prs, "Why monsters?", [
-        "The real record is 96 numbered findings, 19 threats and 28 red-team scenarios.",
+        "The real record is 101 numbered findings, 19 threats and 28 red-team scenarios.",
         "That is complete, precise, and impossible to hold in your head at once —",
         "which matters, because reviews fail when nobody can keep the shape in mind.",
         "People do not remember lists. They remember characters.",
