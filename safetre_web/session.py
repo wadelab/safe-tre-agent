@@ -123,7 +123,7 @@ class SessionStore:
         for user, sess in self._sessions.items():        # oldest first
             if user == exclude:
                 continue
-            if sess.auditor.spent == 0 and not sess.auditor._cohorts:
+            if sess.auditor.spent == 0 and sess.auditor.cohort_count == 0:
                 return user
         return None
 
@@ -147,7 +147,7 @@ class SessionStore:
                             "MAX_SESSIONS above the number of distinct "
                             "identities in a window.",
                             self._max_sessions, victim,
-                            dropped.auditor.spent, len(dropped.auditor._cohorts))
+                            dropped.auditor.spent, dropped.auditor.cohort_count)
             else:
                 self._sessions.move_to_end(user)
             return sess
@@ -280,7 +280,7 @@ class SessionStore:
                     "restored more identities (%d) than the session cache "
                     "holds (%d): dropped %s with %d spent and %d cohort(s)",
                     len(rebuilt), self._max_sessions, victim,
-                    dropped.auditor.spent, len(dropped.auditor._cohorts))
+                    dropped.auditor.spent, dropped.auditor.cohort_count)
         return len(self._sessions)
 
     @staticmethod

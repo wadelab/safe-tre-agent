@@ -6,7 +6,7 @@ document: the [specification](specification.md), the
 [security model](security.md) and the [hardening log](hardening-log.md) are
 the record; this page is how to hold the record in your head.*
 
-Map datum: `MANIFEST_VERSION 2026-07-28.aggregate+glm+anova.v8` — the same
+Map datum: `MANIFEST_VERSION 2026-08-05.aggregate+glm+anova.v12` — the same
 version tag shown on the web page. If that tag has moved, check the hardening
 log for newer specimens before trusting this map.
 
@@ -14,7 +14,7 @@ log for newer specimens before trusting this map.
 
 ## Why a bestiary at all?
 
-Security text scales badly. This project has 101 numbered hardening findings,
+Security text scales badly. This project has 106 numbered hardening findings,
 seven decision records, 19 threats in the security model and 28 red-team
 scenarios. That material is complete, precise, and nearly impossible to hold
 in working memory at once — which matters, because the failure mode of a

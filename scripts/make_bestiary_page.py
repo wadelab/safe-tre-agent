@@ -13,8 +13,14 @@ free Markdown; plates/hunts/zoo/loose/retired carry `### items` with `- card:`
 etc. See the header comment in content.md.
 """
 from __future__ import annotations
-import argparse, base64, io, os, re, sys
-import yaml, markdown
+import argparse
+import base64
+import io
+import os
+import re
+import sys
+import yaml
+import markdown
 from PIL import Image
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -30,7 +36,8 @@ ROMAN = ["I","II","III","IV","V","VI","VII","VIII","IX","X","XI","XII","XIII",
 
 
 def _read(name): 
-    with open(os.path.join(SRC, name), encoding="utf-8") as fh: return fh.read()
+    with open(os.path.join(SRC, name), encoding="utf-8") as fh:
+        return fh.read()
 
 
 
@@ -40,12 +47,15 @@ def _full(stem):
 
 def _thumb(stem, w=150):
     with Image.open(os.path.join(CARDS, stem + ".webp")) as im:
-        im = im.convert("RGB"); h = round(im.height * w / im.width)
-        buf = io.BytesIO(); im.resize((w, h)).save(buf, "WEBP", quality=80)
+        im = im.convert("RGB")
+        h = round(im.height * w / im.width)
+        buf = io.BytesIO()
+        im.resize((w, h)).save(buf, "WEBP", quality=80)
     return "data:image/webp;base64," + base64.b64encode(buf.getvalue()).decode()
 
 def _card(stem, cls="card"):
-    if not stem: return ""
+    if not stem:
+        return ""
     name = stem.split("_", 1)[-1].replace("_", " ").title()
     return (f'<img class="{cls}" loading="lazy" alt="Card illustration: {name}" '
             f'src="{_full(stem)}">')
@@ -83,13 +93,15 @@ def _fields(item_body):
     fields, labels, prose = {}, {}, []
     for block in re.split(r"\n\s*\n", item_body.strip()):
         b = block.strip()
-        if not b: continue
+        if not b:
+            continue
         mb = re.match(r"-\s*(\w+):\s*(.*)", b, S)
         ml = re.match(r"\*\*(\w+):\*\*\s*(.*)", b, S)
         if mb and "\n- " in ("\n" + b):     # a bullet list of fields
             for line in b.splitlines():
                 m = re.match(r"-\s*(\w+):\s*(.*)", line)
-                if m: fields[m.group(1).lower()] = m.group(2).strip()
+                if m:
+                    fields[m.group(1).lower()] = m.group(2).strip()
             continue
         if mb:
             fields[mb.group(1).lower()] = re.sub(r"\s+", " ", mb.group(2)).strip()
@@ -103,7 +115,8 @@ def _fields(item_body):
 def build():
     raw = _read("content.md")
     m = re.match(r"^---\n(.*?)\n---\n(.*)$", raw, S)
-    meta = yaml.safe_load(m.group(1)); body = m.group(2)
+    meta = yaml.safe_load(m.group(1))
+    body = m.group(2)
 
     # hero
     stats = "".join(f"<span>{_inline(s)}</span>" for s in meta.get("stats", []))
@@ -141,8 +154,8 @@ def build():
             intro, items = _items(sbody)
             tri = "".join(f"<div><h3>{_inline(h)}</h3>{_md(b)}</div>" for h, b in items)
             legend = "".join(
-                f'<li><span class="chip chip--{k}">{_inline(l)}</span>'
-                f'<span>{_inline(d)}</span></li>' for k, l, d in meta.get("legend", []))
+                f'<li><span class="chip chip--{k}">{_inline(lab)}</span>'
+                f'<span>{_inline(d)}</span></li>' for k, lab, d in meta.get("legend", []))
             html.append(f'<section><div class="wrap"><div class="head"><h2>{title}</h2>'
                         f'{_md(intro)}</div><div class="tri">{tri}</div>'
                         f'<ul class="legend">{legend}</ul></div></section>')
@@ -238,11 +251,13 @@ def build():
 
 
 def main():
-    ap = argparse.ArgumentParser(); ap.add_argument("--out", default=OUT)
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--out", default=OUT)
     args = ap.parse_args()
     page = build()
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
-    with open(args.out, "w", encoding="utf-8") as fh: fh.write(page)
+    with open(args.out, "w", encoding="utf-8") as fh:
+        fh.write(page)
     print(f"wrote {os.path.relpath(args.out, ROOT)} ({os.path.getsize(args.out)/1e6:.1f} MB)")
     return 0
 

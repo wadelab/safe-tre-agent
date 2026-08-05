@@ -6,7 +6,9 @@ When a hardening round adds a finding, or a threat/decision/scenario changes,
 this fails until those two are brought level -- so a stale number cannot ship
 unnoticed. `scripts/project_counts.py` is the single source of truth.
 """
-import os, re, sys
+import os
+import re
+import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "scripts"))

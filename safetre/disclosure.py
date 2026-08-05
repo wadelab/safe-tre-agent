@@ -148,7 +148,7 @@ class _RuleHit:
 def _suppression_hits(df: pd.DataFrame, threshold: int, dom_threshold: float,
                       influence_threshold: float,
                       keys: tuple[str, ...] | None) -> list[_RuleHit]:
-    """The five cell-level suppression rules, computed ONCE.
+    """The five cell-level suppression rules, in ONE definition.
 
     These rules have two consumers that must agree exactly: the findings, which
     say a rule fired, and the suppression mask, which withholds the offending
@@ -495,11 +495,13 @@ class StandinVetter(CellVetter):
         # this" (see `is_suppressable`)
         deny = any(f.severity == "high" and not f.suppressable
                    for f in findings)
-        # A cell is withheld when any rule failed it. These are the SAME masks
-        # the findings above were built from — `_suppression_hits` is computed
-        # once and read twice — so "a finding fired" and "its cells were
-        # withheld" cannot drift apart. An unresolved witness (NaN/inf) fails
-        # every comparison there, which is the fail-closed default.
+        # A cell is withheld when any rule failed it. These masks come from
+        # the same definition the findings above were built from —
+        # `_suppression_hits` is one deterministic definition with two
+        # readers, this loop and `leak_detector`, each executing it afresh —
+        # so "a finding fired" and "its cells were withheld" cannot drift
+        # apart. An unresolved witness (NaN/inf) fails every comparison
+        # there, which is the fail-closed default.
         suppress = pd.Series(False, index=df.index)
         for hit in _suppression_hits(df, params.threshold, dominance,
                                      params.influence_threshold, keys):
@@ -899,6 +901,17 @@ class SessionAuditor:
     @property
     def spent(self) -> int:
         return self._spent
+
+    @property
+    def cohort_count(self) -> int:
+        """How many released cohorts this session's lineage remembers.
+
+        The public read for eviction decisions (hardening #106): a session is
+        idle only when `spent == 0 and cohort_count == 0`, and reaching past
+        this property to `_cohorts` is a rename away from evicting a stateful
+        session as if it were idle.
+        """
+        return len(self._cohorts)
 
     def over_budget(self) -> bool:
         """True once the session has already spent its query budget.

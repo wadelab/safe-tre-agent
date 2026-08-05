@@ -3,6 +3,87 @@
 A dated record of self-red-team findings and the fixes applied. New findings get
 appended; the table is the quick index, the notes below give detail.
 
+
+## 2026-08-05 — round 12 (the final pass, and the version tag had gone stale)
+
+A re-verification of the external audit's fifteen findings against the current
+tree, plus a fresh adversarial pass over the recent refactors — the complexity
+pass (#102/#103), the `_suppression_hits` single-definition, the `_hitl`
+extraction, and the checker environment allowlist (V-2) — and the imaginative
+surface (chained residuals, the future DP switch, the audit log as an injection
+vector, time as a channel). The full write-up is in
+the security audit report (security_audit_report.md); this entry records
+what the round found and what it cleared.
+
+The round's real finding is the one that had been sitting in plain sight since
+round 8: **the webpage version tag stopped tracking the code.** AGENTS.md
+requires a version tag visible in the webpage so that we can see which build
+produced the interface we are using; the page renders the package version
+(0.5.0) and the manifest carries `MANIFEST_VERSION = 2026-07-28...v8`, and
+neither has moved since round 8 — while rounds 9, 10, 11 and the complexity
+pass shipped security changes. A planner reading the manifest believes it is
+talking to the v8 surface. That is the #61/#89 drift class in a metadata
+surface, and it is the one thing this round found that wants a fix rather than
+a note.
+
+| # | Finding | Sev | Status | Fix | Where |
+|---|---|---|---|---|---|
+| 104 | **The webpage version tag stopped tracking the code.** The page renders `v{{ version }}` from the installed package version (0.5.0) and `MANIFEST_VERSION` is a manual literal last bumped in round 8 (`2026-07-28.aggregate+glm+anova.v8`), while rounds 9–11 and the complexity pass shipped security changes. AGENTS.md makes the tag load-bearing — "so that we can see which version of the code produced the interface" — and the manifest version is embedded in the planner system prompt, so a planner reading it believes it is talking to the v8 surface. The #61/#89 class: a wrong number in a metadata surface is worse than a missing one because a consumer decides what to ask for from it | Low | **Fixed** | `MANIFEST_VERSION` is `2026-08-05.aggregate+glm+anova.v12` and the package is 0.5.1; the bestiary's map datum moved with it, and `project_counts.py` now reads finding numbers from the table rows themselves, so a round whose prose skips its own numbers cannot stall the tally the drift test pins. Deriving the tag from the git commit stays open for a future round | `safetre/manifest.py`, `pyproject.toml`, `docs/bestiary.md`, `scripts/project_counts.py` |
+| 105 | **`_suppression_hits` says "computed ONCE" and is executed twice per vet call.** `StandinVetter.vet` calls it once inside `leak_detector` and once directly to build the suppression mask. The function is deterministic and pure, so the two executions cannot disagree — the single-definition refactor is sound — but the docstring overclaims, and a reviewer reading "computed once" could believe there is a single call site. That is the #91/#103 shape: a docstring asserting a property the code does not have | Low | **Fixed** | the summary line now claims what the body already proved — "in ONE definition" — and the `vet` comment says two readers each execute it afresh, which deterministic purity makes safe | `safetre/disclosure.py` |
+| 106 | **`_evictable` reads the private `_cohorts` attribute.** The complexity pass fixed the identical pattern in `app.py` (`getattr(auditor, "_spent", 0)` → `.spent`) on the rule that reaching past a public property to a private attribute is a wrong number waiting to happen. No public property exists for the cohort list, so a rename would silently change eviction behaviour — a stateful session could be evicted as if it were idle | Low | **Fixed** | `SessionAuditor.cohort_count` is the public read, and all three `session.py` sites use it — the eviction predicate and both eviction log lines | `safetre/disclosure.py`, `safetre_web/session.py` |
+
+### Notes
+
+**What this round did NOT find.** No SQL injection, no identifier egress, no
+schema escape — the twelfth round, and the QuerySpec boundary remains the only
+layer that has never broken. The `_suppression_hits` refactor is sound (two
+readers of one deterministic definition cannot disagree). The `_hitl`
+extraction is behaviour-preserving on both paths, and #96 holds (`notes.extend`
+on the model path). The checker environment allowlist (V-2) is sound: no secret
+and no `SAFETRE_*` config crosses, and the direction that fails is a checker
+that will not start, never a secret that leaks. The middleware-order assertion
+runs at import and checks the live stack. The docs' timing claims (26–70
+samples, 0/15 orderable) match the current config defaults. The `_caller` vs
+`rate_limit_key` divergence is documented honestly and is unforgeable in
+practice (the secret requirement stands in for the identity check).
+
+**The imaginative threads, and what they composed to.** The chained-residual
+campaign (cross-view #95 × marginal-absence bit × eviction reset × timing
+buckets) composes documented residuals but adds no new disclosure capability
+beyond #95 — the bits make targeting more efficient, not more powerful. The
+audit log as an injection vector: no consumer renders the request field as
+HTML, markdown or terminal output, and `rehydrate` parses the `accounting`
+block with `isinstance` checks and fail-closed casts (a forged huge `cost`
+only over-budgets the session, which is the safe direction). Time as a
+channel: the 24-hour window applies only at rehydrate (a restart), and the
+live auditor never ages out records, so a differencing pair cannot be split
+across a window boundary without an operator-controlled restart. The
+DoS-as-posture-change thread (crash loops, log growth, session filling) is
+each bounded by an existing control; the one residual worth naming is V-14's
+log growth, which the user-string length asymmetry below amplifies slightly.
+
+**The DP switch, and what to decide before flipping it.** Roadmap item 3's
+differential-privacy accountant will compose with the existing controls, and
+seven current design decisions will silently conflict with a DP guarantee if
+they are not settled first: the per-identity budget (DP needs a global budget
+across colluding analysts); deterministic base-5 rounding is not noise (a DP
+accountant must add noise or prove the deterministic mechanism's guarantee);
+the exact-leg denial (#62) is a query on the data and must be budgeted as one;
+cross-view #95 breaks any per-dataset privacy ledger; the published marginals
+are queries and consume budget; the 24-hour window is a privacy-period
+question; and the lineage/totals layers are deterministic checks that must
+either be replaced by the accountant or have their refusals accounted for.
+None of these is a defect in the current system — they are the list of things
+the DP work must answer before the switch is safe to flip.
+
+**A consistency nit, folded into V-14.** `rate_limit_key` and `timing._caller`
+bound the login to 200 characters, but `current_user`/`_presented_login` do
+not — the session key and the audit `user` field are bounded only by the HTTP
+header limit. The session store is bounded by `MAX_SESSIONS` (count, not
+bytes: 4096 × ~16 kB ≈ 64 MB worst case, inside `MemoryMax=1G`), and a long
+login amplifies V-14's log-growth rate. Not a disclosure; worth folding into
+the V-14 closure.
+
 ## 2026-08-03 — clarification pass (secure code is understandable code)
 
 Not a red-team round. A read-only review of the decision path asked a different

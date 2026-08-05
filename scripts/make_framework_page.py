@@ -9,8 +9,14 @@ docs/figures/framework/standalone/*.png, inlined as downscaled webp.
     uv run python scripts/make_framework_page.py
 """
 from __future__ import annotations
-import argparse, base64, io, os, re, sys
-import yaml, markdown
+import argparse
+import base64
+import io
+import os
+import re
+import sys
+import yaml
+import markdown
 from PIL import Image
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -121,7 +127,8 @@ def build():
 
 
 def main():
-    ap = argparse.ArgumentParser(); ap.add_argument("--out", default=OUT)
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--out", default=OUT)
     a = ap.parse_args()
     html = build()
     os.makedirs(os.path.dirname(a.out), exist_ok=True)

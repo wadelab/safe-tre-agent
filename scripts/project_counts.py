@@ -8,7 +8,8 @@ the deck cites a number that no longer matches. Each derivation fails loud if
 its source moves rather than reporting a wrong count.
 """
 from __future__ import annotations
-import os, re
+import os
+import re
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -19,7 +20,12 @@ def _read(*parts):
 
 
 def counts() -> dict:
-    nums = [int(n) for n in re.findall(r"#(\d+)", _read("docs", "hardening-log.md"))]
+    log = _read("docs", "hardening-log.md")
+    # A finding is numbered in its table row (`| 104 | ...`); narrative "#N"
+    # mentions also count, but an entry whose prose happens not to cite its own
+    # number must not make the tally stop short (round 12 did exactly that).
+    nums = [int(n) for n in re.findall(r"#(\d+)", log)]
+    nums += [int(n) for n in re.findall(r"(?m)^\|\s*(\d+)\s*\|", log)]
     if not nums:
         raise RuntimeError("no #N findings in docs/hardening-log.md")
 
@@ -27,8 +33,8 @@ def counts() -> dict:
                   _read("docs", "security.md"), re.S)
     if not m:
         raise RuntimeError("no 'Threats and controls' section in docs/security.md")
-    rows = [l for l in m.group(1).splitlines()
-            if l.strip().startswith("|") and "---" not in l]
+    rows = [line for line in m.group(1).splitlines()
+            if line.strip().startswith("|") and "---" not in line]
 
     decisions = [f for f in os.listdir(os.path.join(ROOT, "docs", "decisions"))
                  if re.match(r"D\d+.*\.md$", f)]

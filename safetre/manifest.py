@@ -21,7 +21,7 @@ from .query import (
 )
 from .schema import ROLE_LABELS, column_description, declared_domain, role_of
 
-MANIFEST_VERSION = "2026-07-28.aggregate+glm+anova.v8"
+MANIFEST_VERSION = "2026-08-05.aggregate+glm+anova.v12"
 
 
 def public_schema() -> dict[str, Any]:
