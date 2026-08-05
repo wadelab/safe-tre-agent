@@ -127,6 +127,13 @@ def build():
             rendered = _md(sbody)
             ol = re.search(r"<ol>.*?</ol>", rendered, S)
             ol_html = ol.group(0).replace("<ol>", '<ol class="habits">') if ol else ""
+            if ol_html:
+                # .habits li is a number+content grid; the content must be one
+                # grid item (a span), and the CSS styles <b>, not <strong>.
+                ol_html = re.sub(r"<li>(.*?)</li>",
+                                 lambda m: "<li><span>" + m.group(1).strip() + "</span></li>",
+                                 ol_html, flags=S)
+                ol_html = ol_html.replace("<strong>", "<b>").replace("</strong>", "</b>")
             head = rendered.replace(ol.group(0), "") if ol else rendered
             html.append(f'<section><div class="wrap"><div class="head"><h2>{title}</h2>'
                         f'{head}</div>{ol_html}</div></section>')

@@ -22,19 +22,19 @@ legend:
 
 AI is now very smart. It can track lots more things than I can keep in my head at any moment. When directed to find and patch security holes in this project, it is overwhelming. I am but a mere human — far more comfortable dealing with striking stories, characters and interpersonal interactions. So one way to make AI understandable in general (and its application to this project in particular) is to make some sort of story out of the security audits. Hence the 'bestiary'…
 
-Along the way, this project has (or had) 96 numbered hardening findings ('bugs' in old money), seven decision records, 19 threats in the security model and 28 red-team scenarios. I can't hold that list in working memory (perhaps your memory is better than mine — but AI is going to keep getting better and that number will keep getting bigger). I need to keep track of these somehow. Yes, yes, 'notes' you say...
+So far this project has collected {{findings}} numbered findings ('bugs', in old money), {{decisions}} decision records, {{threats}} threats in the security model and {{redteam}} red-team scenarios — and the list only grows. I can't hold that in my head, and plain notes never stick.
 
-But at some point I need to 'understand' : The human mind does not store lists; it stores **characters and stories**. So this page does three things:
+At some point I need to *understand* it, not just file it away. The human mind does not store lists; it stores **characters and stories**. So this page does three things:
 
 
 1. **Compresses attack classes into 'creatures'.** A creature is a mnemonic with affordances. For example, “The Subtractor” is easier to reason about than “differencing via symmetric-difference-of-cohorts”, because you already know how subtracting works, what it needs (two nearly-equal things), and what stops it (never let the two things be nearly equal).
 2. **Keeps the metaphor at the class level, the truth at the specimen level.** Every creature below carries its literal finding numbers, code habitat, cage (the control) and keepers (the tests). The metaphor is an index into the real record, never a substitute for it. Obviously your TRE is not really being attacked by a ghost.
-3. **Cages, not kills.** This is a bit subtle and I might change it later but… statistical-disclosure attacks are rarely exterminated; the *shape* of the attack is usually still expressible, somewhere, under the controls’ assumptions. For now, we *cage* them, name the cage, and — most importantly — name the **keeper**: the test, enumeration or formal check that must notice if the cage door opens. A cage without a keeper is a hope, not a control. Hardening [#48] (“The Blind Zookeeper”) is the story of what happens when the keepers themselves fall asleep.
+3. **Cages, not kills.** These attacks are rarely wiped out for good — the *shape* of one usually survives somewhere, given the right assumptions. So we *cage* them: name the cage, and — most importantly — name the **keeper**, the test or formal check that must cry out if the cage door opens. A cage without a keeper is a hope, not a control. Hardening [#48] (“The Blind Zookeeper”) is what happens when the keepers themselves fall asleep.
 
 
 # What the reserve is <!--reserve-->
 
-AI Written from now on....
+*From here on, the plain-language descriptions were written by the AI and checked by me — which is rather the point.*
 
 A safe haven holds sensitive records. Nobody may read one person’s data. Researchers ask questions about groups, and a gateway decides what may leave. This page is about the ways that arrangement can still go wrong.
 
