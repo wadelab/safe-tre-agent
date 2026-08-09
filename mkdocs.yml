@@ -30,6 +30,17 @@ markdown_extensions:
           class: mermaid
           format: !!python/name:pymdownx.superfences.fence_code_format
 
+# Source material for the standalone artifact builders
+# (scripts/make_framework_page.py and its bestiary counterpart), not pages of
+# this site. Their image links are bare filenames resolved against
+# docs/figures/, which is right for the builders and unresolvable here — so
+# mkdocs was publishing them as orphan pages and failing --strict on four
+# broken links. Excluded rather than repointed: fixing the links would break
+# the builders, which are the only intended consumers.
+exclude_docs: |
+  bestiary_artifact/
+  framework_artifact/
+
 nav:
   - Home: index.md
   - Research argument:
