@@ -159,6 +159,13 @@ the reasoning.
   and nothing else. Any other study supplies CSVs; there is deliberately no
   fallback, because inventing data for a study whose files are missing is the
   wrong answer to a configuration mistake.
+
+    [Shadow data](shadow-data.md) are not that fallback and must not be used as
+    one. They are generated from *this file* — declared domains, kinds and band
+    edges — for researchers to design analyses against, and every column is
+    drawn independently, so they carry no correlation structure and no
+    disclosure structure. Serving them as if they were the study would answer
+    every query with noise.
 - **The offline planner stub.** `MockLLM` writes demo-shaped pandas code. It
   feeds the legacy code-writing path that the red-team harness keeps as a
   counter-example, not the secure path, so it does not affect a real

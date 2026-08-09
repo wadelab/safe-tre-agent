@@ -57,6 +57,7 @@ nav:
       - Test deployment: test-deployment.md
       - Deployment: deployment.md
       - Serving a different study: datasets.md
+      - Shadow data: shadow-data.md
       - Certification & hardware: certification.md
       - Development: development.md
       - Maintenance guidelines: maintenance.md

@@ -112,6 +112,45 @@ and fixes are in [docs/hardening-log.md](docs/hardening-log.md).
     checking the home page four times (#100); and the one unpinned third-party
     execution in CI (#101).
 
+### Added
+
+- **Shadow data (`safetre/shadow.py`, `scripts/make_shadow.py`,
+  [docs](docs/shadow-data.md)).** A researcher cannot see the real rows, which
+  is the point of the system and also what makes it awkward to use: you write
+  an analysis against data you have never looked at and find out afterwards
+  whether the factor had the levels you assumed. Shadow data carry a study's
+  *shape* — column names, types, factor levels — and none of its content, so
+  the analysis can be got working in a familiar tool and only the finished spec
+  submitted to the gateway.
+
+  The generator's only input is the dataset definition. It never opens the real
+  tables and has no parameter through which real rows could be passed; every
+  value comes from a declared domain, a declared kind or band edge, or a fixed
+  fallback range that is *reported as invented*. Nothing is fitted — a
+  synthesiser trained on real records would make the synthetic dataset itself a
+  release, and one the gateway cannot check: it checks frames of aggregates,
+  whereas a synthesised table is thousands of correlated statistics with no
+  cell structure and no budget entry. Measured value sets are worse, since the
+  existence of a rare category is disclosive — which is exactly what the
+  fixture's eight Northern Ireland donors exist to demonstrate.
+
+  The property is enforced rather than promised: `verify_shadow()` runs on
+  every build and refuses to return a shadow containing any value the
+  definition does not account for, and re-checks that no public frame carries a
+  direct identifier or a person id.
+
+  Public datasets are materialised through the definition's own
+  `public_view_sql()`, so the shadow's columns cannot drift from the real
+  view's. Values are drawn with coverage so every declared factor level is
+  present — a level missing from the shadow would make a contrast estimable
+  here and not in the real run. `--derive age_band=age_years` couples a banded
+  column to the column it bands; never inferred, since two declarations of
+  equal length are not evidence that they describe the same banding.
+
+  Explicitly *not* a testbed for disclosure control: every column is drawn
+  independently, so there are no correlations, no small cells and no dominance.
+  `safetre/synth.py` remains the fixture with hazards planted on purpose.
+
 ### Fixed
 
 - The red-team corpus grew to 33 scenarios and four documents did not follow.

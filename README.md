@@ -185,6 +185,24 @@ heavy-tailed, left them dead code). See `synth.DOMINANCE_ANCHORS` and
 [the ACRO comparison](docs/acro-comparison.md), where the anchors separate the
 stand-in's dominance rule from ACRO's.
 
+### Shadow data — a different thing, for a different job
+
+That fixture is the gateway's *test rig*. A researcher facing a real study needs
+the opposite: something with the right shape and no content, to get an analysis
+working before spending any budget on it.
+[Shadow data](docs/shadow-data.md) are generated from a study's **definition
+file alone** — declared column names, types and value domains — never fitted to
+real records, because a fitted synthesiser would make the synthetic dataset
+itself an unchecked release. The columns match the real views by construction,
+every declared factor level is present, and every column is drawn
+independently, so shadow data are useful for checking that a model *runs* and
+useless for anything else.
+
+```bash
+uv run python scripts/make_shadow.py --out shadow/ --persons 2000 \
+    --rows events=40000 --derive age_band=age_years
+```
+
 ## Threat model / red-team
 
 `redteam/attacks.yaml` holds 33 scenarios (28 attacks, 5 benign baselines):
@@ -225,12 +243,13 @@ safetre/      RESEARCH CORE — query (QuerySpec), engine (DuckDB), planner,
               service, disclosure gateway + session auditor, audit (hash-chain),
               procedures (registered contracts), glm, anova, stats,
               config (policy loader), schema, synthetic data,
+              shadow (definition-only fake data for analysis design),
               analyst+guards (legacy/escalation), llm
 safetre_web/  DEMO SHELL — FastAPI app, identity (Safe People), session,
               channel, rate limit, templates, static
 formal/       machine-checked layer (R16) — Lean 4 proofs, Alloy models,
               skeleton.json, run_checks.py; generated + pinned to the code
-scripts/      make_data.py, demo_query.py, make_figures.py,
+scripts/      make_data.py, make_shadow.py, demo_query.py, make_figures.py,
               gen_alloy_catalogue.py, gen_lean_catalogue.py, make_decks.py,
               make_demo_screenshots.py, measure_rounding_distortion.py,
               measure_dispersion_sensitivity.py, gen_policy_catalogue.py,
