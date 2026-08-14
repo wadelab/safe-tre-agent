@@ -2,7 +2,7 @@
 
 The single source of truth for the numbers the bestiary cites -- findings,
 threats, decision records, red-team scenarios -- and for the summary numbers
-the plain-language pages hand-type (scenario split, Alloy checks, test count),
+the plain-language pages hand-type (scenario split, Alloy checks),
 so none of them can drift. The artifact generator (`make_bestiary_page.py`)
 fills its `{{...}}` placeholders from here; `tests/test_counts_current.py`
 fails CI when a hand-written doc or the deck cites a number that no longer
@@ -10,15 +10,14 @@ matches. Each derivation fails loud if its source moves rather than reporting
 a wrong count.
 
 `counts()` is static and cheap -- it only reads files, so generators can call
-it freely. `tests_collected()` shells out to pytest and is for the keeper test
-alone.
+it freely. The suite's own size is not derived here: it depends on which
+optional groups are installed, so `tests/conftest.py` measures it from the
+live collection instead.
 """
 from __future__ import annotations
 import glob
 import os
 import re
-import subprocess
-import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -42,27 +41,6 @@ def _alloy() -> tuple[int, int]:
     if not sum(per_model):
         raise RuntimeError("no 'check' statements in formal/*.als")
     return sum(per_model), sum(1 for n in per_model if n)
-
-
-def tests_collected() -> int:
-    """How many tests the default run selects (`-m 'not slow'` from pyproject).
-
-    Deliberately not part of `counts()`: it spawns a collection pass. Raises
-    rather than guessing if pytest's summary line cannot be parsed -- a wrong
-    number here would be worse than no guard.
-    """
-    proc = subprocess.run(
-        [sys.executable, "-m", "pytest", "--collect-only", "-q", "-p", "no:cacheprovider"],
-        cwd=ROOT, capture_output=True, text=True,
-    )
-    # "969/972 tests collected (3 deselected) in 4.00s", or plain
-    # "972 tests collected in 4.00s" when nothing is deselected.
-    m = re.search(r"(?m)^(\d+)(?:/\d+)? tests collected", proc.stdout)
-    if not m:
-        raise RuntimeError(
-            "could not parse pytest's collection summary; "
-            f"rc={proc.returncode}\n{proc.stdout[-2000:]}\n{proc.stderr[-2000:]}")
-    return int(m.group(1))
 
 
 def counts() -> dict:

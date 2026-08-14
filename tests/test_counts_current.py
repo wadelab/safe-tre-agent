@@ -20,6 +20,8 @@ import sys
 
 import pytest
 
+import conftest
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
 import project_counts  # noqa: E402
@@ -86,19 +88,22 @@ def test_cited_counts_match_the_repository():
     assert not problems, "stale cited counts:\n  " + "\n  ".join(problems)
 
 
-@pytest.mark.slow
 def test_cited_test_count_matches_the_suite():
     """`docs/elif.md` quotes the size of the default suite.
 
-    Marked slow because it runs a second collection pass; the number moves with
-    every test added, so it is checked in the exhaustive run rather than on
-    every default one.
+    Measured from this session's own collection (see `conftest.COLLECTED`), so
+    it costs nothing and cannot disagree with the run it is part of. A narrowed
+    invocation -- one file, or `-k` -- collects a subset, which would look like
+    a shrunken suite; skip rather than check a number that is not the claim.
     """
+    if not conftest.COLLECTED.get("whole_tree"):
+        pytest.skip("narrowed invocation collects a subset; run the whole "
+                    "suite to check the cited test count")
     text = open(os.path.join(ROOT, "docs", "elif.md"), encoding="utf-8").read()
     m = re.search(r"Tests collected in the default suite \|\s*(\d+)", text)
     assert m, ("docs/elif.md no longer cites a default-suite test count in the "
                "expected form (wording changed? update this keeper)")
-    actual = project_counts.tests_collected()
+    actual = conftest.COLLECTED["default_suite"]
     assert int(m.group(1)) == actual, (
         f"docs/elif.md cites {m.group(1)} tests in the default suite, "
-        f"pytest collects {actual}")
+        f"this session collects {actual}")

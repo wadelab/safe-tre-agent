@@ -28,6 +28,30 @@ os.environ.setdefault("SAFETRE_AUDIT_KEY", "test-session-key")
 
 import pytest
 
+# How big the default suite actually is, measured from this session's own
+# collection. `docs/elif.md` quotes the number, so something has to check it.
+# Counted here rather than by shelling out to a second `--collect-only` pass:
+# module-level `importorskip` makes the collectable set depend on which
+# optional groups are installed, so a subprocess can disagree with the run
+# that spawned it (CI's exhaustive job reported 919 against the same tree's
+# 969). The live session cannot disagree with itself.
+COLLECTED: dict[str, object] = {}
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_collection_modifyitems(config, items):
+    """Record the default-suite size before any marker/keyword deselection.
+
+    `tryfirst` puts this ahead of pytest's own `-m` / `-k` filtering, so the
+    tally is the same whether the session is a default run or `-m slow`.
+    """
+    COLLECTED["default_suite"] = sum(
+        1 for i in items if i.get_closest_marker("slow") is None)
+    # Only a whole-tree run sees every test; a narrowed one must not be
+    # mistaken for a shrinking suite.
+    COLLECTED["whole_tree"] = (not config.getoption("file_or_dir")
+                               and not config.option.keyword)
+
 
 class RecordingLog:
     """An audit log that keeps what was written, so a test can assert the
