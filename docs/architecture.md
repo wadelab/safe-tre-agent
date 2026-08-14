@@ -130,9 +130,10 @@ See `safetre/schema.py` for column roles (DI / QI / S / R) and
 | Path | Trigger | Executor | Status |
 |---|---|---|---|
 | **Secure (default)** | web interface, in-catalogue queries | validated QuerySpec → DuckDB | Phase 1, shipped |
-| **Escalation (legacy)** | analyses the DSL can't express | human-authored, reviewed code (`safetre/analyst.py` + `guards.py`) | manual; sandbox is illustrative only |
+| **Escalation (legacy)** | analyses the DSL can't express | human-authored, reviewed code (`redteam/legacy/sandbox.py` + `guards.py`) | manual; sandbox is illustrative only |
 
 The secure path runs with no code execution at all. The legacy "LLM writes
 pandas" path is retained for the red-team narrative and as the model for a
 future human-reviewed escalation queue — it is **not** wired into the web
-interface. See [Security model](security.md).
+interface, and lives under `redteam/legacy/` (illustration, not a secure jail).
+See [Security model](security.md).

@@ -365,9 +365,9 @@ D1–D7). After the [first hardening round](hardening-log.md), what remains:
 - Safepod physical controls are operational, not fully testable in this repo:
   disk encryption, tamper evidence, port blocking, audit anchoring, and
   maintenance process must be implemented per site.
-- The legacy code-execution path (`guards.py`) is **illustration, not a secure
-  jail**; it is not exposed by the web interface and would need real container
-  isolation (gVisor / Firecracker) before any use.
+- The legacy code-execution path (`redteam/legacy/guards.py`) is **illustration,
+  not a secure jail**; it is not exposed by the web interface and would need real
+  container isolation (gVisor / Firecracker) before any use.
 - Human-in-the-loop is a policy stub; production pairs it with a reviewer queue
   and an AI output-checker.
 

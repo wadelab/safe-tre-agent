@@ -182,7 +182,7 @@ Remaining open, in order of value: ~~the temporal session model (budget and `obs
 
 **Impact:** ★★☆☆☆ (low priority — this is a legacy path)
 
-**Current state:** `guards.py` is explicitly marked "PROTOTYPE-GRADE" and the docstring notes it is "defence-in-depth illustration, not a secure sandbox." The main web path uses `QuerySpec` (declarative, validated) rather than `guards.py` (code execution with static checks).
+**Current state:** `redteam/legacy/guards.py` is explicitly marked "PROTOTYPE-GRADE" and the docstring notes it is "defence-in-depth illustration, not a secure sandbox." The main web path uses `QuerySpec` (declarative, validated) rather than that code-execution path.
 
 **If needed:** Replace the `FORBIDDEN` string-matching list with proper abstract interpretation — parse the code into an AST (Python's `ast` module), build a control-flow graph, and prove no I/O, network, or file operations are reachable. This is a well-studied problem in program analysis.
 
@@ -278,7 +278,7 @@ Formal methods have inherent limits in this context. Be clear about the boundari
 | `safetre/schema.py` | Column role labels (DI/QI/S/R) — basis for information-flow types |
 | `safetre/engine.py` | SQL generation from validated spec — target for correctness proof |
 | `safetre/disclosure.py` | Disclosure policy and session auditor — target for model checking |
-| `safetre/guards.py` | Legacy sandbox — low priority for formalization |
+| `redteam/legacy/guards.py` | Legacy sandbox — low priority for formalization |
 | `tests/test_invariants.py` | Existing regression guards — extend with property-based testing |
 | `tests/test_disclosure.py` | Existing disclosure tests — extend with Alloy counterexample search |
 | `tests/test_secure.py` | Query boundary tests — complement with type-level proofs |

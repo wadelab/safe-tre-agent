@@ -110,8 +110,9 @@ Skip any of these and **the build fails** — a test literally enumerates the
 registered procedures and demands each obligation. Then four layers of
 checking run on every change: try *every single* possible request shape
 (there are exactly 767 model shapes — small enough to try them all);
-bombard the pipeline with randomly generated requests; replay 22 scripted
-scenarios with the safety gateway off and on; and hand a mathematical solver
+bombard the pipeline with randomly generated requests; replay 33 scripted
+scenarios (28 attacks, 5 benign) with the safety gateway off and on; and hand a
+mathematical solver
 (Alloy) a bounded model of the whole flow so it can search for *any*
 sequence of events where a model gets fitted despite a blocked cell. It
 finds none — and when we deliberately weaken the rule, it finds the
@@ -131,9 +132,9 @@ the new "declare every released column" contract exists to make impossible.
 |---|---|
 | Requirement / prohibition clauses in the spec | R1–R18, P1–P22 |
 | Model shapes, all machine-checked | 767 (718 GLM + 49 ANOVA) |
-| Tests in the default suite | 500+ (plus an exhaustive `-m slow` pass) |
+| Tests collected in the default suite | 969 (plus an exhaustive `-m slow` pass) |
 | Red-team scenarios, every attack blocked by a named control | 33 (28 attacks, 5 benign) |
-| Solver-checked properties (Alloy, in CI) | 12, across three models |
+| Solver-checked properties (Alloy, in CI) | 18, across three models |
 | Coefficient agreement with reference implementations | ~1e-14 (exact maths), 1e-8 (tested bound) |
 | New runtime dependencies | 0 (the fitter is stdlib-only) |
 

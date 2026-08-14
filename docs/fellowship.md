@@ -92,7 +92,7 @@ The prototype already demonstrates:
 - red-team scenarios showing row-level leaks with the gateway off and blocked
   outputs with the gateway on.
 
-![Bar chart of red-team results: with the gateway off, eight scenarios leak row-level data; with the gateway on, all attacks are blocked and benign queries pass](figures/redteam_results.png)
+![Bar chart of red-team results: with the gateway off, thirteen scenarios leak row-level data; with the gateway on, all attacks are blocked and benign queries pass](figures/redteam_results.png)
 
 ## Near-term fellowship work packages
 

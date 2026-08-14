@@ -79,8 +79,9 @@ uv run python scripts/make_demo_screenshots.py
 The script starts a throwaway server on `127.0.0.1:8801` with `SAFETRE_LLM=mock`
 (the deterministic tests/CI planner, chosen so captures need no model endpoint)
 and a fresh temporary audit log, screenshots each state with headless Chrome,
-and writes `docs/figures/demo-{home,released,redacted,denied}.png`. A running
-demo server on port 8800 is left untouched.
+and writes `docs/figures/demo-{home,released,redacted,denied}.png` plus
+`demo-mobile.png` (the home page at 390px width). A running demo server on
+port 8800 is left untouched.
 
 To capture by hand instead, open these URLs — the fragment pre-fills and
 submits the query on load — and screenshot at 1280px width:

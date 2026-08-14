@@ -228,10 +228,11 @@ and released.
 - **Secure (web / Phase 1):** validated `QuerySpec` → read-only DuckDB. No code
   runs; this is the default and what the web interface uses.
 - **Legacy / escalation (CLI):** the original "LLM writes pandas" path
-  (`safetre/analyst.py` + `guards.py`) is retained for the red-team narrative and
-  as the human-reviewed escalation route for analyses the DSL can't express. Its
-  sandbox is **defence-in-depth illustration, not a secure jail** — that path
-  would need real container isolation (gVisor/Firecracker) before real data.
+  (`redteam/legacy/sandbox.py` + `guards.py`) is retained
+  for the red-team narrative and as the human-reviewed escalation route for
+  analyses the DSL can't express. Its sandbox is **defence-in-depth
+  illustration, not a secure jail** — that path would need real container
+  isolation (gVisor/Firecracker) before real data.
 
 Remaining for production either way: ACRO proper, a trained output-checker model,
 and DP accounting for the session budget.
@@ -244,7 +245,7 @@ safetre/      RESEARCH CORE — query (QuerySpec), engine (DuckDB), planner,
               procedures (registered contracts), glm, anova, stats,
               config (policy loader), schema, synthetic data,
               shadow (definition-only fake data for analysis design),
-              analyst+guards (legacy/escalation), llm
+              analyst (intent vetting + fidelity checks), llm
 safetre_web/  DEMO SHELL — FastAPI app, identity (Safe People), session,
               channel, rate limit, templates, static
 formal/       machine-checked layer (R16) — Lean 4 proofs, Alloy models,
@@ -256,7 +257,8 @@ scripts/      make_data.py, make_shadow.py, demo_query.py, make_figures.py,
               gen_decision_log.py, gen_assurance_case.py,
               measure_composite_cost.py, measure_timing_channel.py,
               restart_web.sh, run_web.sh
-redteam/      attacks.yaml, run_redteam.py
+redteam/      attacks.yaml, run_redteam.py, legacy/ (the quarantined
+              code-writing sandbox — illustration, not a secure jail)
 evals/        planner-quality corpus + runner
 paper/        preprint.tex (builds with make)
 deploy/       safetre-web.service (hardened systemd unit)

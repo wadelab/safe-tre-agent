@@ -57,10 +57,11 @@ The current endpoint is:
 GET /api/manifest
 ```
 
-It currently publishes only one executable tool: `aggregate_query`. That tool
-supports fixed count, mean, sum, and Pearson correlation requests. Correlation
-uses two validated measure columns from one dataset and returns only aggregate
-`value`, `p_value`, and `n`.
+The manifest currently publishes three executable tools: `aggregate_query`,
+`glm`, and `anova`. `aggregate_query` supports fixed count, mean, sum, sum of
+squares, and Pearson correlation requests. Correlation uses two validated
+measure columns from one dataset and returns only aggregate `value`, `p_value`,
+and `n`.
 
 Some fixed tools may use internal analysis variables, such as raw age for
 donor-level age/spend correlation. These variables are not public grouping or
@@ -101,8 +102,8 @@ arbitrary code. The first one is live:
 
 | Tool class | Status | Typical use | Key vetting constraints |
 |---|---|---|---|
-| `glm` | **available (v1, manifest v5)** | gaussian, logistic (binomial), Poisson over categorical terms | fitted from gateway-finalized design cells only (R15/P21); any suppressed cell denies the model (P19); ≤ 3 terms, canonical links, per-dataset response allowlist; releases coefficients + model block + the vetted cell table; no row diagnostics ever (P20) |
-| `anova` | **available (v1, manifest v5)** | one-way analysis of variance from vetted group cells | fitted from the same gateway-finalized mean/`sum_sq`/`n` cells the gaussian GLM plans; any suppressed cell denies the table (P19); reproducible from the released cell table |
+| `glm` | **available (v1, manifest v12)** | gaussian, logistic (binomial), Poisson over categorical terms | fitted from gateway-finalized design cells only (R15/P21); any suppressed cell denies the model (P19); ≤ 3 terms, canonical links, per-dataset response allowlist; releases coefficients + model block + the vetted cell table; no row diagnostics ever (P20) |
+| `anova` | **available (v1, manifest v12)** | one-way analysis of variance from vetted group cells | fitted from the same gateway-finalized mean/`sum_sq`/`n` cells the gaussian GLM plans; any suppressed cell denies the table (P19); reproducible from the released cell table |
 | `regression` | planned | continuous-predictor linear models (moment cells, L2) | min rows per parameter, bounded covariate count, no residual/fitted-value release |
 | `survival` | parked | time-to-event models | extra caution: event counts, censoring patterns, and time granularity can disclose |
 

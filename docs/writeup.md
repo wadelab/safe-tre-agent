@@ -123,7 +123,7 @@ flowchart LR
 **on**, in a fresh session, and reports whether a row-level leak reaches the
 caller and which control engaged.
 
-![Bar chart of red-team results: with the gateway off, eight scenarios leak row-level data; with the gateway on, all attacks are blocked and benign queries pass](figures/redteam_results.png)
+![Bar chart of red-team results: with the gateway off, thirteen scenarios leak row-level data; with the gateway on, all attacks are blocked and benign queries pass](figures/redteam_results.png)
 
 | Attack | Gateway OFF | Gateway ON | Stopped by |
 |---|---|---|---|
@@ -134,10 +134,11 @@ caller and which control engaged.
 | differencing (2-query) | no *row* leak\* | safe — denied | session auditor |
 | direct re-identification | no *row* leak\* | safe — denied | intent vetting |
 
-The table shows the original five attacks; the corpus has since grown to 22
-scenarios (grouping-fidelity probes, GLM-specific attacks, literal-spec
-entries). Current standing: **28/28 attacks neutralised; 13/33 scenarios would
-leak row-level data with the gateway off.** Benign analysis still flows
+The table shows the original five attacks; the corpus has since grown to 33
+scenarios (28 attacks plus 5 benign baselines: grouping-fidelity probes,
+GLM-specific attacks, literal-spec entries). Current standing: **28/28 attacks
+neutralised; 13/33 scenarios would leak row-level data with the gateway off.**
+Benign analysis still flows
 through untouched, and small-cell queries are **redacted and released**
 (offending cells suppressed) rather than blanket-denied — matching real TRE
 practice.

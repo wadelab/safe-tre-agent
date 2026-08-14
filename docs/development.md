@@ -17,8 +17,8 @@ uv run uvicorn safetre_web.app:app --host 127.0.0.1 --port 8800
 
 Dependency groups: `web` (FastAPI stack), `llm` (kept for command compatibility;
 the real model adapter uses stdlib HTTP), and the default `dev` group
-(`pytest`, `matplotlib`, `bandit`, `pip-audit`). The project itself is not
-packaged (`tool.uv.package = false`); `pytest`'s `pythonpath = ["."]` puts
+(`pytest`, `matplotlib`, `bandit`, `pip-audit`). The project is packaged
+(hatchling; `pip install .`), and `pytest`'s `pythonpath = ["."]` puts
 `safetre` / `safetre_web` on the path.
 
 ## Repository layout
@@ -26,10 +26,11 @@ packaged (`tool.uv.package = false`); `pytest`'s `pythonpath = ["."]` puts
 ```
 safetre/            secure path: query (QuerySpec), engine (DuckDB), planner,
                     service, disclosure gateway + session auditor, audit (hash chain),
-                    schema, synth; legacy/escalation: analyst + guards; llm client
+                    schema, synth; analyst (intent vetting + fidelity checks); llm client
 safetre_web/        FastAPI app, identity, session, templates/, static/
 scripts/            make_data.py, demo.py, make_figures.py, run_web.sh
-redteam/            attacks.yaml, run_redteam.py
+redteam/            attacks.yaml, run_redteam.py, legacy/ (the quarantined
+                    code-writing sandbox — illustration, not a secure jail)
 deploy/             safetre-web.service (hardened systemd unit)
 docs/               this documentation + writeup.md + figures/
 tests/              test_disclosure, test_pipeline, test_secure, test_web
@@ -54,8 +55,10 @@ uv run pytest -q
 
 The demo-state images in the docs (`docs/figures/demo-*.png`) are generated,
 not hand-captured: `uv run python scripts/make_demo_screenshots.py` starts a
-throwaway mock-planner server on port 8801 and screenshots the four states
-with headless Chrome. Regenerate them after any UI change and check the diff.
+throwaway mock-planner server on port 8801 and screenshots the four gateway
+states (home, released, redacted, denied) plus a mobile-width capture of the
+home page, with headless Chrome. Regenerate them after any UI change and check
+the diff.
 The states and queries are documented in the
 [screenshot tour](screenshot-tour.md#reproducing-the-captures).
 
@@ -74,8 +77,10 @@ engine or the legacy sandbox.
 The catalogue is the security boundary, so changes are deliberate and reviewed.
 To add a queryable dimension, measure, or tool:
 
-1. Add the column to the relevant dataset in `CATALOGUE` (`safetre/query.py`),
-   with its type (`cat` / `bool` / `int`) for dimensions.
+1. Add the column to the relevant dataset in the active dataset definition
+   (`safetre/demo_dataset.yaml` by default, overridable via `SAFETRE_DATASET`),
+   with its type (`cat` / `bool` / `int`) for dimensions. The catalogue mirror
+   in `safetre/query.py` is populated from the definition, not edited by hand.
 2. Make sure the column is **selected by the corresponding view** in
    `safetre/engine.py`. Public views must never expose `donor_id`, `free_text`,
    raw ages or timestamps. Internal unit views may carry internal analysis
@@ -89,10 +94,11 @@ To add a queryable dimension, measure, or tool:
 Never widen a view to expose an identifier or free-text column — that is the one
 invariant the whole design rests on.
 
-Future stats tools (GLM, regression, ANOVA, etc.) must enter as fixed-function
-tool schemas plus deterministic validators. Listing a tool in
-`planned_tool_classes` does not make it executable; only `tools[]` entries with
-`status: "available"` may be proposed.
+Stats tools enter as fixed-function tool schemas plus deterministic validators,
+never as arbitrary generated code. GLM and ANOVA are already live; the next
+planned tool is `regression` (continuous-predictor linear models). Listing a
+tool in `planned_tool_classes` does not make it executable; only `tools[]`
+entries with `status: "available"` may be proposed.
 
 ## Adding a disclosure control
 
