@@ -41,6 +41,8 @@ And the parts you will want in practice:
 | `columns` | Per-column `desc` and, for categoricals, `domain` — the declared value list. The domain is load-bearing: a released cell key must be a declared category, so an undeclared or hostile value is suppressed by name rather than printed (hardening #43). |
 | `derived_roles` | Roles for columns a view computes rather than reads. |
 | `internal_range_rules` | Band-aligned ranges for high-granularity filter variables — see below. |
+| `quantities` | Declared measure equivalence: `spend_gbp: [spend.amount_gbp, donor_spend.total_spend_gbp]` says two measure columns on different views measure the same thing per person, so the differencing lineage compares releases of that quantity ACROSS the two views (hardening #95). Undeclared measures are compared within their own view only; a measure belongs to at most one quantity and a quantity names at most one column per view. Declare every rollup that is the sum of an event-level measure — over-declaring only makes the auditor compare more, and a pair whose contributions differ for many people is not denied. |
+| `population` (per view) | The people a view describes, defaulting to the person key. Set it only when one definition holds genuinely disjoint populations, so cross-view comparison is attempted only between views of the same people. |
 | `lexicon` | Dimension and response synonyms, and domain cues, for the natural-language fidelity gates. |
 | `planner_hints`, `planner_examples` | What the untrusted planner is shown. Wrong content here costs answer quality, never safety: every spec it proposes is validated against the allowlists regardless. |
 | `ui_queries`, `tour` | The example buttons and the guided tour. |

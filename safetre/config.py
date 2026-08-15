@@ -103,6 +103,21 @@ class PolicyConfig:
               "PUBLISHED marginals, so the refusal itself leaks nothing.",
         clause="R6", yaml_key="session.differencing_delta",
         pinned_by="tests/test_hardening.py")
+    selection_budget_bits: int = _dial(
+        4,
+        controls="how many bits of data-sighted selection one session's locked "
+                 "plans may spend",
+        means="a locked plan (R20) may declare a contingency that decides "
+              "from cells the gateway withheld — which levels of a dimension "
+              "were too sparse to release — and the executed filter reveals "
+              "one bit per level. Those bits are the only data-sighted "
+              "decision the analyst is allowed, they are charged here, and a "
+              "contingency the ledger cannot afford is refused (P24). Small "
+              "on purpose: the round-8 existence-oracle attack needed eight "
+              "such bits. An interim, counted bound; the differential-privacy "
+              "accountant (roadmap 3) is the principled replacement.",
+        clause="R20", yaml_key="session.selection_budget_bits",
+        pinned_by="tests/test_plans.py")
     session_window_hours: int = _dial(
         24,
         controls="how long a session's differencing lineage and query budget "
@@ -268,6 +283,7 @@ _ENV_OVERRIDES: dict[str, tuple[str, type]] = {
     "SAFETRE_MIN_CELL": ("min_cell_size", int),
     "SAFETRE_MAX_OUTPUT_ROWS": ("max_output_rows", int),
     "SAFETRE_QUERY_BUDGET": ("query_budget", int),
+    "SAFETRE_SELECTION_BUDGET_BITS": ("selection_budget_bits", int),
     "SAFETRE_DIFFERENCING_DELTA": ("differencing_delta", int),
     "SAFETRE_SESSION_WINDOW_HOURS": ("session_window_hours", int),
     "SAFETRE_DOM_THRESHOLD": ("dom_threshold", float),
@@ -390,6 +406,11 @@ _FLOORS: tuple[tuple, ...] = (
     (lambda c: c.round_base >= 5,
      "round_base must be >= 5: finer rounding publishes counts at a precision "
      "hardenings #26 to #28 exist to blur"),
+    (lambda c: 0 <= c.selection_budget_bits <= 16,
+     "selection_budget_bits must be between 0 and 16: each bit is one "
+     "data-sighted fact about cohort structure the analyst may buy, and the "
+     "round-8 existence-oracle attack recovered a unique donor with eight; "
+     "0 disables locked-plan contingencies entirely"),
     (lambda c: 1 <= c.query_budget <= 1_000,
      "query_budget must be between 1 and 1000: an unbounded budget is not a "
      "budget, and every released aggregate is individually differencable. The "

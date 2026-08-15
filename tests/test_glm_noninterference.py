@@ -20,6 +20,7 @@ import inspect
 import os
 
 import safetre.anova
+import safetre.series
 import safetre.glm
 import safetre.stats
 
@@ -89,6 +90,27 @@ def test_anova_module_never_touches_engine_or_database():
 def test_anova_fit_entrypoints_take_only_finalized_frames():
     from safetre.anova import AnovaProcedure, refit_from_artifact
     assert list(inspect.signature(AnovaProcedure.fit).parameters) == \
+        ["self", "finalized", "spec"]
+    assert list(inspect.signature(refit_from_artifact).parameters) == \
+        ["cells", "spec"]
+
+
+def test_series_module_never_touches_engine_or_database():
+    # the series tool inherits the same P21 boundary: it plans one QuerySpec
+    # and consumes the finalized window table it is handed, stdlib numerics
+    imports = _module_imports(safetre.series)
+    assert not (imports & _FORBIDDEN_GLM_IMPORTS), (
+        f"safetre.series imports {imports & _FORBIDDEN_GLM_IMPORTS} — the model "
+        "procedure must not be able to reach rows (P21)")
+    assert not (imports & {"numpy", "scipy"}), imports
+    source = inspect.getsource(safetre.series)
+    for view in ("_spend_u", "_donor_spend_u", "_wellbeing_u", "_bets_u", "_panel_u"):
+        assert view not in source
+
+
+def test_series_fit_entrypoints_take_only_finalized_frames():
+    from safetre.series import SeriesProcedure, refit_from_artifact
+    assert list(inspect.signature(SeriesProcedure.fit).parameters) == \
         ["self", "finalized", "spec"]
     assert list(inspect.signature(refit_from_artifact).parameters) == \
         ["cells", "spec"]

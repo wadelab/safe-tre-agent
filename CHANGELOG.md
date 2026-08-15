@@ -8,6 +8,33 @@ and fixes are in [docs/hardening-log.md](docs/hardening-log.md).
 
 ### Security
 
+- **Hardening #95 closed, and #107 found on the way ([hardening log](docs/hardening-log.md),
+  round 13).** The differencing lineage compared cohorts within one dataset
+  name while the catalogue publishes several views of one population, so a
+  pair with one leg in each — two individually safe releases — recovered an
+  individual's exact annual spend. The close is a DECLARED measure
+  equivalence: the dataset definition's `quantities:` names measure columns
+  on different views that measure the same thing per person (and each view
+  may name its `population:`), the session auditor records
+  `(dataset, filters, quantity)` and compares a pair on different views only
+  when both carry the same declared quantity, and the audit row's
+  `accounting.cohorts` entries carry the quantity so a restart restores
+  cross-view comparability while pre-#95 rows still restore. **#107**: the
+  bound the round-11 groundwork pointed at — the donor-set symmetric
+  difference across views — is not sound for sums: on the NIGHTPLAY study the
+  panel holds every person and the bets view only gamblers, so the donor sets
+  differ by hundreds of zero-contributors while the sums differ by one or two
+  people. The bound is therefore the number of people whose per-person
+  CONTRIBUTION of the quantity differs (`engine.contribution_symdiff`). Both
+  reproducers deny; the benign correlation after an unrelated query — the
+  reason the blanket fix was withdrawn in round 11 — still releases;
+  `formal/disclosure_policy.als` gained the view atom it lacked and exhibits
+  the attack, the donor-set residual and the close; spec P11's known-gap note
+  is replaced; both red-team corpora carry the pair as `expect_block`.
+
+- **The inside analyst red-teamed with the model as adversary** — see the
+  phase-1 entry under *Added*.
+
 - **Red-team round 11 ([hardening log](docs/hardening-log.md)): the fixture was
   doing the work, and the catalogue had a second door.** The first full-surface
   audit since the repository went public — five surfaces examined in parallel
@@ -113,6 +140,76 @@ and fixes are in [docs/hardening-log.md](docs/hardening-log.md).
     execution in CI (#101).
 
 ### Added
+
+- **The inside analyst's data-sighted tier ("Chimp" phase 3): locked plans
+  and a metered selection channel (`safetre/plan.py`; spec R20, P24;
+  [design note](docs/inside-analyst.md)).** The only safe way an automated
+  analyst may act on cohort structure the gateway withheld. A `Plan` is a
+  typed, finite program of ordered stages whose canonical hash is committed to
+  the audit chain BEFORE any stage runs; `PlanExecutor` runs them through the
+  unchanged `QueryService` (gateway, budget and lineage apply to every stage)
+  and records each released frame's SHA-256 as a stage commitment. The one
+  data-sighted move, `exclude_sparse`, runs a privileged probe
+  (`engine.sparse_levels`) for the levels a model would suppress, excludes
+  them, and charges one bit per revealed level to a per-session selection
+  ledger bounded by `selection_budget_bits` (default 4). Over budget, the
+  contingency is refused and nothing is spent; the exact sparse counts never
+  leave the executor. `tests/test_plans.py` pins the bounded channel, the
+  commit-before-run order, and the stage commitments; the ledger and its
+  digests replay across a restart (#58's lesson, extended). An interim the
+  differential-privacy accountant (roadmap item 3) replaces.
+
+- **Chimp in the web interface, operator-gated (`SAFETRE_ANALYST`).** Whether
+  an inside analyst runs in an environment is an operator decision set at
+  deploy time (`off`, the default single-query gateway, or `chimp`); the
+  browser cannot enable it. When on, a `/api/chimp` route takes a research
+  question, runs the vetted loop server-side behind the same gateway, and
+  returns only the dossier and its narrative &mdash; Chimp's working notes and
+  the raw data never cross to the browser. The route is exempt from the
+  per-query response-time deadline (a multi-step analysis cannot fit it), a
+  stated PoC limit whose answer is asynchronous submit-and-collect (D5). Run
+  live against NIGHTPLAY with the 120B-class stand-in: nine analyses inside,
+  five released and four denied, answer honest about what the gateway blocked,
+  audit chain intact.
+
+- **The `series` model tool (`safetre/series.py`; manifest v13;
+  [adding a statistical tool](docs/adding-a-statistical-tool.md), second
+  example).** A time series is a vetted per-window aggregate — the mean or
+  sum of one measure grouped by a dimension the dataset definition declares an
+  ordered time axis (`time_dims:` on the view) — released as the window table
+  with its trend, autocorrelation (up to four lags) and periodogram (dominant
+  period and share), every diagnostic a pure stdlib function of the finalized
+  windows and reproducible from them (P21). The window table is one ordinary
+  `QuerySpec` (O2/O3/O4 inherited; the service untouched); a suppressed window
+  denies the series (P19); an axis declaring fewer than four windows is
+  refused at the request from its public domain; a gap is refused naming the
+  axis, never the window (P22). `SeriesSpec` in `query.py`; the manifest,
+  planner grammar and mock branch, and analysis cues learned it; conformance,
+  skeleton, noninterference and manifest pins extended; formal artifacts
+  regenerated (the demo's admissible series space is empty — its `wave`
+  declares two windows — so the tool is exercised on NIGHTPLAY, including an
+  exhaustive pass over its series skeleton). The term-fidelity gate no longer
+  calls a declared time axis hallucinated ("monthly time series of stake"
+  models `month`); the analyst protocol suggests the tool for seasonality and
+  trend questions, and on its first live outing the analyst used it to report
+  the planted six-month cycle from the released diagnostics.
+
+- **The NIGHTPLAY question bank is executable (`studies/nightplay/mark.py`,
+  `mark_dossiers.py`).** Each question's marks are now predicates over the
+  dossier — which specs were issued and released, which claims cite which
+  steps, what the claims and narrative say, the verdict, the untraceable
+  figures — so the bank is a repeatable analyst benchmark rather than a
+  reading list, re-scorable on saved dossiers without a model or the data.
+  On the archived final run it marks 32/35 and catches what the verdict did
+  not: `which-products` was scored right by verdict and had answered
+  late-night BETS (the event-level hour band) rather than late-night USERS
+  (the person-level band), concluding every product carries the effect
+  against the planted heterogeneity. `tests/test_nightplay_marks.py` pins the
+  archived marks. The analyst protocol gained the three hints the runs and
+  the marks pointed at (an absent category was suppressed — exclude it and
+  retry the model; people-level versus event-level; use the budget), and the
+  parser now infers a missing top-level verdict from the claims and
+  normalises verdict spellings, after correct conclusions were lost to each.
 
 - **The inside analyst, phase 1: the vetted loop (`safetre/inside_analyst.py`;
   spec R19 and P23; [D8](docs/decisions/D8-inside-analyst-vetted-loop.md);

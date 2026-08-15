@@ -46,6 +46,7 @@ MODELS: dict[str, dict[str, set[str]]] = {
             "RareCategoryIsolationBlocked",
             "RowDifferenceAlwaysBounded",
             "RowLayerSubsumesDonorLayer",
+            "CrossViewDifferenceBounded",
         },
         "runs": {
             "someSession",
@@ -53,6 +54,9 @@ MODELS: dict[str, dict[str, set[str]]] = {
             "Hardening40AttackWithoutRowLayer",
             "V13DonorTotalOvercounts",
             "V8ExactLegIsNotSimulatable",
+            "Hardening95AttackWithoutCrossViewLayer",
+            "DonorSetLegMissesCrossViewPair",
+            "CrossViewBenignPairAllowed",
         },
     },
     "temporal_session.als": {

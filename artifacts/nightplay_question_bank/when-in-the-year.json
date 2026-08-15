@@ -4,9 +4,9 @@
   "steps": [
     {
       "id": 1,
-      "sub_question": "Mean stake per bet by month",
+      "sub_question": "Mean stake by month (to assess seasonality)",
       "spec": {
-        "dataset": "bets",
+        "dataset": "panel",
         "measure": {
           "fn": "mean",
           "column": "stake_gbp"
@@ -21,64 +21,64 @@
       "findings": [],
       "output": [
         {
-          "month": 7,
-          "value": 30.17,
-          "n": 4875
-        },
-        {
-          "month": 6,
-          "value": 28.39,
-          "n": 4730
-        },
-        {
-          "month": 12,
-          "value": 27.92,
-          "n": 4230
-        },
-        {
-          "month": 2,
-          "value": 20.6,
-          "n": 4205
-        },
-        {
-          "month": 5,
-          "value": 20.51,
-          "n": 4060
-        },
-        {
-          "month": 4,
-          "value": 20.13,
-          "n": 4045
-        },
-        {
-          "month": 9,
-          "value": 19.89,
-          "n": 4045
-        },
-        {
-          "month": 11,
-          "value": 20.0,
-          "n": 4030
+          "month": 1,
+          "value": 12.83,
+          "n": 6000
         },
         {
           "month": 10,
-          "value": 19.9,
-          "n": 4005
+          "value": 13.29,
+          "n": 6000
         },
         {
-          "month": 8,
-          "value": 20.84,
-          "n": 4000
+          "month": 11,
+          "value": 13.43,
+          "n": 6000
+        },
+        {
+          "month": 12,
+          "value": 19.69,
+          "n": 6000
+        },
+        {
+          "month": 2,
+          "value": 14.44,
+          "n": 6000
         },
         {
           "month": 3,
-          "value": 19.88,
-          "n": 3970
+          "value": 13.16,
+          "n": 6000
         },
         {
-          "month": 1,
-          "value": 19.63,
-          "n": 3920
+          "month": 4,
+          "value": 13.56,
+          "n": 6000
+        },
+        {
+          "month": 5,
+          "value": 13.88,
+          "n": 6000
+        },
+        {
+          "month": 6,
+          "value": 22.38,
+          "n": 6000
+        },
+        {
+          "month": 7,
+          "value": 24.52,
+          "n": 6000
+        },
+        {
+          "month": 8,
+          "value": 13.9,
+          "n": 6000
+        },
+        {
+          "month": 9,
+          "value": 13.4,
+          "n": 6000
         }
       ],
       "artifacts": null,
@@ -86,7 +86,7 @@
     },
     {
       "id": 2,
-      "sub_question": "Mean stake per bet by hour band",
+      "sub_question": "Mean stake by hour band to assess time-of-day effect",
       "spec": {
         "dataset": "bets",
         "measure": {
@@ -129,27 +129,27 @@
   ],
   "claims": [
     {
-      "text": "Average stake per bet shows variation across months, indicating seasonality in gambling stakes.",
+      "text": "Mean monthly stake varies across months, ranging from 12.83 GBP in January to 24.52 GBP in July, indicating seasonality.",
       "verdict": "supported",
       "evidence": [
         1
       ],
-      "reason": ""
+      "reason": "Released table shows monthly mean stake values with clear variation across months."
     },
     {
-      "text": "Stakes are higher during the late_night hour band compared to other times of day, showing that time of day matters.",
+      "text": "Mean stake is highest during the late_night hour band at 38.54 GBP, substantially higher than morning (21.44), afternoon (21.47), and evening (20.9) bands.",
       "verdict": "supported",
       "evidence": [
         2
       ],
-      "reason": ""
+      "reason": "Released table shows hour band means with late_night markedly elevated."
     }
   ],
   "verdict": "supported",
-  "notes": "Monthly averages range from about \u00a319.6 to \u00a330.2, but month may proxy for other seasonal factors (e.g., holidays). Hour-band differences are based on substantial sample sizes, though the late_night band has fewer observations.",
+  "notes": "Both patterns are observed in the aggregated data; causality cannot be inferred from these aggregates alone.",
   "budget": 20,
   "budget_spent": 2,
   "stopped_because": "concluded",
-  "narrative": "The analysis of stake amounts reveals clear patterns across both calendar months and time\u2011of\u2011day bands.  \n\nAcross the twelve months, the mean stake per bet varies from a low of \u00a319.63 in January (month\u202f1, n\u202f=\u202f3\u202f920) to a high of \u00a330.17 in July (month\u202f7, n\u202f=\u202f4\u202f875). This roughly ten\u2011pound spread indicates that average stakes are not constant throughout the year, supporting the presence of seasonal variation in gambling stakes.  \n\nWhen stakes are examined by hour band, the late\u2011night period shows a markedly higher average stake of \u00a338.54 (n\u202f=\u202f3\u202f990). In contrast, the evening, afternoon and morning bands have average stakes of \u00a320.9 (n\u202f=\u202f23\u202f080), \u00a321.47 (n\u202f=\u202f16\u202f065) and \u00a321.44 (n\u202f=\u202f6\u202f975), respectively. Thus, stakes are substantially larger during late\u2011night hours, demonstrating that time of day also matters for betting amounts.  \n\nThese findings together suggest that both seasonal factors and daily timing influence the size of gambling stakes.",
+  "narrative": "The dossier examined whether stake amounts show seasonal patterns and whether they vary by time of day.  \n\nFor seasonality, the mean stake was calculated for each month (all\u202fn\u202f=\u202f6000). The lowest mean occurred in January at\u202f12.83\u202fGBP, while the highest was in July at\u202f24.52\u202fGBP. Intermediate months showed values ranging from\u202f13.16\u202fGBP (March) to\u202f22.38\u202fGBP (June), with a secondary peak in December at\u202f19.69\u202fGBP. This clear month\u2011to\u2011month variation indicates seasonality in stake size.  \n\nFor time\u2011of\u2011day effects, mean stake was computed across four hour bands (morning, afternoon, evening, late_night). The late_night band had the highest mean stake at\u202f38.54\u202fGBP (n\u202f=\u202f3990). The other bands were considerably lower: morning\u202f21.44\u202fGBP (n\u202f=\u202f6975), afternoon\u202f21.47\u202fGBP (n\u202f=\u202f16065), and evening\u202f20.9\u202fGBP (n\u202f=\u202f23080). Thus, stakes are substantially higher during late\u2011night hours compared with daytime periods.  \n\nBoth patterns are evident in the aggregated data; the analysis does not permit causal interpretation.",
   "unsupported_figures": []
 }

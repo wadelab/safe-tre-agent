@@ -38,7 +38,7 @@ def build_inside_analyst(out: str) -> None:
 
     title_slide(prs, "An analyst inside the room",
                 "A plan: from safe single queries to safe automated analysis. "
-                "Phases 0 and 1 are built (precise version: docs/inside-analyst.md).")
+                "Phases 0-2 and phase 3's core are built (precise version: docs/inside-analyst.md).")
 
     bullets_slide(prs, "Where we are today", [
         "A library holds everyone's diaries. You may never read one — you may only ask about",
@@ -175,6 +175,30 @@ def build_inside_analyst(out: str) -> None:
         "   excluding six people, and the second is refused. Order matters to it as it would to you.",
     ], accent=AMBER)
 
+    bullets_slide(prs, "Phase 3, done: letting the assistant peek — safely", [
+        "The one thing a data-sighted analyst does that ours could not: when a model is refused",
+        "   because a group is too small, drop that group and refit. But WHICH group is the secret.",
+        "So the assistant may do it only under a locked plan: it writes the whole plan down and",
+        "   SEALS ITS HASH IN THE LOGBOOK before it looks; a machine, not the model, runs the plan.",
+        "The one allowed peek — 'which groups are too small to drop?' — is PAID FOR IN BITS from a",
+        "   tiny budget (default 4; the round-8 attack needed 8). Spend it and the peek is refused.",
+        "Every released step still crosses the same gateway; each carries a fingerprint into the log.",
+        "This is the interim the differential-privacy 'epsilon' budget replaces — the bit jar IS the",
+        "   thing that becomes an epsilon budget. Spec R20/P24; 12 tests; the selection channel is bounded.",
+    ], accent=GREEN)
+
+    bullets_slide(prs, "Chimp, in the browser (proof of concept)", [
+        "The inside analyst has a name — CHIMP, after the deliberately-limited starship AI of",
+        "   'The Freeze-Frame Revolution': smart enough to run the mission, bounded so it can't outwit us.",
+        "Whether Chimp runs inside an environment is an OPERATOR setting (SAFETRE_ANALYST), fixed at",
+        "   deploy time. A browser visitor can no more switch it on than move the gateway.",
+        "When on, the browser is only the intercom: a question goes in, a vetted dossier comes back;",
+        "   Chimp, its working notes and the raw data never cross to the browser.",
+        "Run live: asked 'is late-night phone use linked to gambling?', Chimp ran nine analyses inside,",
+        "   FOUR were refused by the gateway (and it said so), five released — answer built from those.",
+        "   Verdict: supported. Audit chain intact. The guarantee is the wall, never Chimp's cleverness.",
+    ], accent=BLUE)
+
     table_slide(prs, "The phases, in order",
                 ["Phase", "What", "Why it is ordered here"],
                 [["0", "Local-class model baseline + the NIGHTPLAY dataset (done)",
@@ -183,7 +207,7 @@ def build_inside_analyst(out: str) -> None:
                   "most of the value, no new safety machinery"],
                  ["2", "Registered time-series procedures",
                   "grows what the analyst can answer"],
-                 ["3", "Data-sighted tier: locked plans, stage commitments, DP",
+                 ["3", "Locked plans + metered selection (done); DP next",
                   "the research core — selection as a channel"],
                  ["4", "Free-code tier + collect-later delivery",
                   "accelerates the human-checked airlock"],
@@ -192,7 +216,7 @@ def build_inside_analyst(out: str) -> None:
                 col_widths=[0.9, 5.8, 4.8])
 
     bullets_slide(prs, "What we are not claiming", [
-        "Nothing above phase 1 is built. The shipped system is the gateway plus a vetted-loop analyst.",
+        "Phase 3's locked-plan core is built; the DP accountant and the FHE track are still plan.",
         "The data-sighted analyst is a research problem, not an engineering task —",
         "   selection channels are genuinely hard, and we say so.",
         "An AI inside does not replace output checking; it raises the bar for it.",

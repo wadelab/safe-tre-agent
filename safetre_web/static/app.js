@@ -185,4 +185,37 @@ document.addEventListener("DOMContentLoaded", () => {
       run();
     }
   }
+
+  // The inside-analyst ("Chimp") form, present only when the operator enabled
+  // it. The browser is the intercom: a question goes out, a vetted dossier
+  // comes back. A whole analysis takes many model turns, so this can be slow.
+  const chimpForm = document.getElementById("chimpform");
+  if (chimpForm) {
+    const dossier = document.getElementById("dossier");
+    const cq = document.getElementById("cq");
+    const cbtn = document.getElementById("chimpbtn");
+    const askChimp = async () => {
+      const q = cq.value.trim();
+      if (!q) return;
+      cbtn.disabled = true;
+      dossier.innerHTML =
+        "<p class=\"hint\">Chimp is working inside the environment. It may run several " +
+        "analyses through the gateway, so this can take a little while&hellip;</p>";
+      try {
+        const resp = await fetch("/api/chimp", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({q}),
+        });
+        dossier.innerHTML = await resp.text();
+      } catch (err) {
+        dossier.innerHTML =
+          "<p class=\"hint\">Could not reach the inside analyst. Please try again.</p>";
+      } finally {
+        cbtn.disabled = false;
+      }
+    };
+    chimpForm.addEventListener("submit", (e) => { e.preventDefault(); askChimp(); });
+  }
+
 });

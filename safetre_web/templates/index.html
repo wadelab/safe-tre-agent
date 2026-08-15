@@ -26,6 +26,31 @@
     <span>This is a research prototype. {{ dataset_description }}</span>
   </div>
 
+  {% if chimp_enabled %}
+  <div class="chimp-banner" role="region" aria-label="Inside analyst">
+    <div class="chimp-banner__head">
+      <span class="chimp-badge" aria-hidden="true">&#129466;</span>
+      <div>
+        <h2 class="heading-s chimp-title">Chimp is running inside this environment</h2>
+        <p class="hint">An inside analyst set by the operator (not by you). Ask a whole
+          research question &mdash; Chimp plans and runs several analyses behind the same
+          gateway and hands back a dossier of vetted results. Its working notes and the raw
+          data never leave the environment.</p>
+      </div>
+    </div>
+    <form id="chimpform" autocomplete="off">
+      <div class="form-group">
+        <label class="label" for="cq">Research question</label>
+        <div id="cq-hint" class="hint">For example, &ldquo;Is late-night phone use linked to gambling?&rdquo;</div>
+        <textarea id="cq" name="q" class="textarea" rows="2" maxlength="500"
+                  aria-describedby="cq-hint" required></textarea>
+      </div>
+      <button id="chimpbtn" class="button button--chimp" type="submit">Ask Chimp</button>
+    </form>
+    <div id="dossier" class="result" role="status" aria-live="polite"></div>
+  </div>
+  {% endif %}
+
   <main id="main-content" class="main-wrapper" role="main">
     <div class="grid-row">
       <div class="col-two-thirds">

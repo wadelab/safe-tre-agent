@@ -178,6 +178,13 @@ class ViewDef(BaseModel):
     model_config = ConfigDict(extra="forbid")
     base: str
     person: str | None = None               # default f"{base}.{person_key}"
+    # The population this view describes. Views of one definition usually
+    # describe the same people, and then this is left unset (it defaults to
+    # the person key); a definition holding genuinely disjoint populations —
+    # a donors study and a staff study in one file — names them, so that a
+    # cross-view comparison is attempted only between views of the same
+    # people (roadmap 0.5; the companion of `quantities`).
+    population: str | None = None
     joins: list[Join] = []
     columns: list[str | DerivedColumn] = []
     group_by: list[str] = []
@@ -188,6 +195,10 @@ class ViewDef(BaseModel):
     internal_filters: dict[str, str] = {}
     internal_measures: list[str] = []
     glm_responses: dict[str, list[str]] = {}
+    # Dimensions that are ORDERED time axes (`month`, `wave`): integer-kind
+    # dims the `series` tool may lay a vetted per-window aggregate along.
+    # Declared, not inferred — an integer dim is not necessarily a time.
+    time_dims: list[str] = []
 
     def output_columns(self) -> list[str]:
         return [c.name if isinstance(c, DerivedColumn) else _split_ref(c, "column")[1]
@@ -293,6 +304,17 @@ class DatasetDefinition(BaseModel):
     # disclosure roles for view-derived columns (not present in any base table)
     derived_roles: dict[str, str] = {}
     datasets: dict[str, ViewDef] = Field(min_length=1)
+    # Declared measure equivalence (hardening #95, roadmap 0.0). A quantity
+    # names measure columns on DIFFERENT views that measure the same thing per
+    # person — `donor_spend.total_spend_gbp` IS the per-donor sum of
+    # `spend.amount_gbp` — so the session auditor's differencing lineage can
+    # compare a release on one view with a release on another. Only declared
+    # pairs are compared across views: differencing binds only between
+    # commensurable releases (a correlation minus a mean recovers nothing),
+    # and the code cannot infer commensurability; the catalogue must say it.
+    #     quantities:
+    #       spend_gbp: [spend.amount_gbp, donor_spend.total_spend_gbp]
+    quantities: dict[str, list[str]] = {}
     internal_range_rules: dict[str, RangeRule] = {}
     lexicon: Lexicon = Lexicon()
     planner_hints: list[str] = []
@@ -351,6 +373,7 @@ class DatasetDefinition(BaseModel):
             self._check_view(dname, view)
             all_internal_filters |= set(view.internal_filters)
             all_dims |= set(view.dims)
+        self._check_quantities()
 
         for col in self.internal_range_rules:
             _check_ident(col, "internal range-rule column")
@@ -374,6 +397,33 @@ class DatasetDefinition(BaseModel):
                         f"response synonym {phrase!r} maps to {col!r}, not a "
                         f"dimension or measure of {dname!r}")
         return self
+
+    def _check_quantities(self) -> None:
+        seen: dict[tuple[str, str], str] = {}
+        for qname, members in self.quantities.items():
+            _check_ident(qname, "quantity")
+            if not isinstance(members, list) or len(members) < 2:
+                raise ValueError(
+                    f"quantity {qname!r} must list at least two <dataset>.<measure> members")
+            views_seen: set[str] = set()
+            for ref in members:
+                dname, col = _split_ref(ref, f"quantity {qname!r} member")
+                view = self.datasets.get(dname)
+                if view is None:
+                    raise ValueError(f"quantity {qname!r} names unknown dataset {dname!r}")
+                if col not in view.measures:
+                    raise ValueError(
+                        f"quantity {qname!r}: {ref!r} is not a measure of {dname!r}")
+                if dname in views_seen:
+                    raise ValueError(
+                        f"quantity {qname!r} names dataset {dname!r} twice; a quantity has "
+                        "at most one column per view")
+                views_seen.add(dname)
+                if (dname, col) in seen:
+                    raise ValueError(
+                        f"{ref!r} belongs to quantities {seen[(dname, col)]!r} and {qname!r}; "
+                        "a measure has at most one quantity")
+                seen[(dname, col)] = qname
 
     def _check_view(self, dname: str, view: ViewDef) -> None:
         if view.base not in self.tables:
@@ -472,6 +522,12 @@ class DatasetDefinition(BaseModel):
         if set(view.measures) & set(view.internal_measures):
             raise ValueError(
                 f"{dname}: a column cannot be both a measure and an internal measure")
+        for t in view.time_dims:
+            if t not in view.dims:
+                raise ValueError(f"{dname}: time dimension {t!r} is not a dimension of the view")
+            if view.dims[t] != "int":
+                raise ValueError(
+                    f"{dname}: time dimension {t!r} must be of kind 'int' (an ordered axis)")
         responses = set(view.dims) | set(view.measures)
         for resp, fams in view.glm_responses.items():
             if resp not in responses:
@@ -509,6 +565,7 @@ class DatasetDefinition(BaseModel):
                 "internal_filters": dict(view.internal_filters),
                 "internal_measures": set(view.internal_measures),
                 "glm_responses": {r: set(fams) for r, fams in view.glm_responses.items()},
+                "time_dims": list(view.time_dims),
             }
             for name, view in self.datasets.items()
         }
@@ -527,6 +584,28 @@ class DatasetDefinition(BaseModel):
     def unit_view_sql(self) -> dict[str, str]:
         return {name: view.sql(name, self.person_key, unit=True)
                 for name, view in self.datasets.items()}
+
+    def quantity_of(self, dataset: str, column: str | None) -> str | None:
+        """The declared quantity a measure column carries on a view, or None
+        (undeclared measures are compared within their own view only)."""
+        if column is None:
+            return None
+        for qname, members in self.quantities.items():
+            if f"{dataset}.{column}" in members:
+                return qname
+        return None
+
+    def quantity_columns(self, quantity: str) -> dict[str, str]:
+        """{dataset: column} for every view carrying the quantity."""
+        out: dict[str, str] = {}
+        for ref in self.quantities.get(quantity, ()):
+            dname, col = ref.split(".", 1)
+            out[dname] = col
+        return out
+
+    def population_of(self, dataset: str) -> str:
+        view = self.datasets[dataset]
+        return view.population or self.person_key
 
     def glm_responses_text(self) -> str:
         parts = []

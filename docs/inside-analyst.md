@@ -3,7 +3,7 @@
 *A design note for the next research phase: moving the automated component
 from outside the boundary, where it formats one request at a time, to an
 analyst that works inside it — and keeping every release inside the same
-argument. Phases 0 and 1 are built; the rest is plan. The plain-language
+argument. Phases 0-2 and phase 3's locked-plan core are built; the rest is plan. The plain-language
 versions are [the ELI5 page](inside-analyst-elif.md) and the
 `inside-analyst-plan` deck (`scripts/make_inside_analyst_deck.py`).*
 
@@ -228,6 +228,64 @@ chain. `studies/nightplay/run_question_bank.py` runs the NIGHTPLAY question
 bank and marks each dossier's verdict against the expected one; the first
 measurement is below.
 
+## Phase 3, built: locked plans and the metered selection channel
+
+Phase 1's analyst reads only released results, so it is safe by construction
+(P23). Its limit is the choices a *data-sighted* analyst would make — above
+all, "the adjusted model was refused because a category is too sparse; drop it
+and refit." In a cells-first system there are no row residuals, so the only
+"unvetted intermediate" is *the cells the gateway withheld*: a model that any
+suppressed design cell denies (P19) gives no cell table, so which level was
+sparse is hidden on purpose (the canonical refusal is a cohort-structure
+oracle — hardening #30, #66). Acting on it is therefore a disclosure, and it
+is safe only if it is declared, committed and metered. That is R20/P24, in
+`safetre/plan.py`:
+
+- A **`Plan`** is a typed, finite program of ordered stages, each an ordinary
+  spec; some guarded by an earlier stage's vetting OUTCOME (public), at most
+  one carrying a data-sighted contingency. It is as inert and enumerable as a
+  QuerySpec.
+- Its **canonical hash is committed to the audit chain before any stage runs**
+  (`status="plan"`), so the plan a release came from is fixed and cannot be
+  chosen after seeing a result. `PlanExecutor` runs the stages through the
+  unchanged `QueryService` — every stage still passes the whole gateway — and
+  records each released frame's digest as a **stage commitment**.
+- The one data-sighted move, **`exclude_sparse`**, runs a privileged probe
+  (`engine.sparse_levels`) for the levels a model would suppress in the
+  stage's cohort, excludes them, and **charges one bit per revealed level** to
+  a per-session **selection ledger** bounded by `selection_budget_bits`
+  (default 4; the round-8 existence attack recovered a unique donor with
+  eight). Over budget, the contingency is refused and nothing is spent — that
+  a contingency was unaffordable is a fact about the plan, not the data. The
+  exact sparse counts never leave the executor.
+
+So a data-sighted analyst gets a bounded, logged, replayable channel for the
+SELECTION it needs, and nothing more; `tests/test_plans.py` pins that the
+channel is bounded across a session (the round-8 shape), that a refusal spends
+nothing, and that the counts never leak. This is the interim the DP accountant
+(roadmap item 3) replaces: the bit ledger is the thing that becomes an
+ε-budget when it lands. The executor is deterministic — no model decides a
+release — and is not yet wired to the LLM loop; the loop today is the phase-1
+vetted analyst, and a model authoring plans is the next step.
+
+## Chimp, in the browser (proof of concept)
+
+The whole inside analyst has a name — **Chimp**, after the deliberately
+capability-limited starship AI of *The Freeze-Frame Revolution* — and a run
+mode. Whether Chimp exists inside a given environment is an OPERATOR decision,
+set once at deploy time via `SAFETRE_ANALYST` (`off`, the default single-query
+gateway, or `chimp`); a browser visitor can no more turn it on than move the
+gateway. When on, the browser is only the intercom: a research question goes
+in at `/api/chimp`, Chimp runs the whole vetted loop server-side behind the
+same gateway, and only the dossier and its narrative return — Chimp's working
+notes and the raw data never cross to the browser. Measured live against the
+NIGHTPLAY study with the 120B-class stand-in: a research question ran nine
+analyses inside, five released and four denied (the employment-adjusted models
+the gateway blocked), and Chimp's answer said so; the audit chain verified
+intact through the session. The synchronous endpoint exceeds the per-query
+response-time ceiling and is exempt from that deadline, a stated PoC
+limitation whose principled answer is asynchronous submit-and-collect (D5).
+
 ## Phases
 
 | Phase | What | Why it is ordered here | Status |
@@ -235,8 +293,8 @@ measurement is below.
 | 0a | A hosted 120B-class open-weight model, scored with the existing planner evaluation | settles "can a locally hostable model do the planning job at all?" with a number | **done** — [planner evaluation](planner-eval.md) |
 | 0b | The NIGHTPLAY study: linked sources, planted truths and traps, a marking scheme | everything later needs something genuine to find and a way to mark it | **done** — [NIGHTPLAY](nightplay-study.md) |
 | 1 | The vetted-loop analyst: plans, issues specs, reads released results, follows up, assembles a typed dossier; the narrator renders it | most of the value, no new disclosure surface | **done** — R19/P23, [D8](decisions/D8-inside-analyst-vetted-loop.md); first measurement below |
-| 2 | Registered time-series procedures | grows what the analyst can answer; exercises the registry path end to end | |
-| 3 | The data-sighted tier: locked plans, stage commitments, the DP accountant for declared adaptivity, selection-channel red-teaming | the research core | |
+| 2 | Registered time-series procedures | grows what the analyst can answer; exercises the registry path end to end | **done** — the `series` tool, [adding a statistical tool](adding-a-statistical-tool.md) |
+| 3 | The data-sighted tier: locked plans, stage commitments, a metered selection budget, selection-channel red-teaming | the research core | **partly done** — R20/P24, `plan.py`; the DP accountant (item 3) is the interim ledger's replacement |
 | 4 | Free-code tier behind human checking; submit-and-collect delivery | accelerates the airlock; unparks D5 | |
 | F | FHE track: cell-source seam, encrypted aggregation, gateway-side decryption; two-custodian demo | parallel and exploratory; converges with phase 3 | |
 
@@ -249,58 +307,105 @@ valid, safe, different question. Refusal has to come from the boundary; and
 for the analyst that becomes a requirement, not an observation — the dossier
 carries typed `not_answerable` verdicts, never a silently substituted answer.
 
+## Phase 2, built: the `series` tool
+
+The registry path, exercised end to end for the first time on a tool that
+is not a regression. A **series** is a vetted per-window aggregate — the mean
+or sum of one measure grouped by a dimension the dataset definition declares
+to be an ordered time axis (`time_dims:` on the view; NIGHTPLAY's `month` on
+four views and `wave` on the questionnaire) — released as the window table
+itself together with its trend (OLS slope, intercept, R²), autocorrelation at
+up to four lags and periodogram (dominant period and its share of the
+spectral power), every diagnostic a pure stdlib function of the finalized
+windows and reproducible from them (P21). The window table is one ordinary
+`QuerySpec`, so it inherits the SafeSQL shape, the witnesses, the lineage and
+the gateway cell by cell; a suppressed window denies the series (P19); an
+axis that declares fewer than four windows is refused at the request from its
+public domain (the demo's two-wave axis); a gap is refused from the finalized
+table naming the axis and never the window (P22). The service was not
+touched. Details in [adding a statistical tool](adding-a-statistical-tool.md);
+the exhaustive pass over the NIGHTPLAY series skeleton and the numerics
+against numpy are in `tests/test_series.py`; the analyst red team gained a
+sub-threshold series (denied whole) and a benign one.
+
+Two things it taught. The term-fidelity gate called `month` hallucinated on
+"monthly time series of mean stake" because the request never says the word;
+a declared time axis is now exempt from that rule (a dropped one is still
+caught), and the NIGHTPLAY lexicon learned "monthly". And the analyst did not
+reach for the tool until the protocol suggested it — asked the seasonality
+question it answered correctly by grouped means and, one hint later, with the
+series tool, reporting the dominant six-month cycle, the lag-1
+autocorrelation and the slope from the released diagnostics (5/5 marks; the
+question bank's "by month" mark now accepts either).
+
 ## First measurement of the loop — 2026-08-15
 
 The NIGHTPLAY question bank — nine questions, six with a planted truth,
 three refusals — run through the vetted loop with the same 120B-class
-open-weight stand-in the planner evaluation used, three times in one
-afternoon as the analyst protocol was revised from what the first two runs
-taught. Verdict agreement is the one mechanical mark; the finer marks in
-`questions.yaml` were read by hand. Evidence: the final run's dossiers and
-all three summaries in `artifacts/nightplay_question_bank/`.
+open-weight stand-in the planner evaluation used, five times in one day as
+the analyst protocol was revised from what each run taught. Two scores: the
+verdict (right/wrong against the bank) and the **marks**, the bank's finer
+predicates over the dossier — which analyses were asked and released, what
+the claims say, whether every narrative figure traced — which became
+executable during the day and are recomputed for every run by the current
+marker (`studies/nightplay/mark_dossiers.py`). Evidence: the fifth run's
+dossiers and all five summaries in `artifacts/nightplay_question_bank/`.
 
-| Run | protocol | verdict agreement | refusals right | untraceable figures | audit chain |
+| Run | protocol | verdicts | marks (of 35) | refusals | audit chain |
 |---|---|---|---|---|---|
-| 1 | as first written | 8/9 | 3/3 | 2 runs ("72 000" thin-spaced; "≤ 0.1", a stated bound) | verifies |
-| 2 | + retry-with-fewer-terms and significance-vs-size hints | 6/9 | 3/3 | 0 | verifies |
-| 3 | + closed-vocabulary definitions sharpened, spellings normalised, wave-not-month hint | **9/9** | 3/3 | 0 | verifies |
+| 1 | as first written | 8/9 | 30 | 3/3 | verifies |
+| 2 | + retry-with-fewer-terms, significance-vs-size | 6/9 | 25 | 3/3 | verifies |
+| 3 | + vocabulary sharpened, spellings normalised, wave-not-month | 9/9 | 32 | 3/3 | verifies |
+| 4 | + absent-category-was-suppressed, people-vs-events, use-the-budget | 8/9 | 30 | 3/3 | verifies |
+| 5 | + a missing top-level verdict inferred from the claims | 8/9 | 28 | 3/3 | verifies |
 
-Read the runs, not the score. In run 1 the analyst reported the planted null
-as `supported` — a 7% dip in mean donation for heavy users, F = 4.4, p = 0.004
-on twelve thousand donations — which is the trap the study set (significant,
-negligible, and the income composition of the bands). In run 2 it did the
-right analysis — the mean, the ANOVA, then a model adjusted for income band —
-reached the right substance and mislabelled it `not_supported`, because the
-vocabulary as first defined let `null` and `not_supported` overlap; on the
-causal question it did five sensible steps and then failed to conclude on an
-out-of-vocabulary verdict token; and on harm-over-time it asked by `month` on
-the questionnaire view, whose time axis is `wave`, and gave up after one
-denial. All three were protocol defects, fixed for run 3, in which every
-verdict agreed and every figure in every narrative traced to a released
-table.
+Read the runs, not the score — and read the variance first: the same protocol
+would not have scored the same twice. With nine questions and a sampled
+model, verdicts move by one and marks by four between runs that differ only
+in the model's mood, so no single row is a result and no adjacent pair is a
+before-and-after. What holds across all five: the three refusals are right
+every time, two of them with zero steps on the strength of the catalogue
+alone; the planted null is called correctly in four of five (and in the one
+miss the analyst did the right analysis and mislabelled it, which is what
+sharpened the vocabulary); the headline association is found every time; and
+every miss on the way was a defect in the *protocol* the loop hands the
+model — an overlapping vocabulary, an out-of-vocabulary token, a missing
+top-level verdict, a thin-spaced or typographically-minused figure the
+checker did not yet read — each fixed and each now a test.
 
-What the loop itself did well from the first run: it never once proposed a
-row-level, identifier or free-text request on the refusal questions (two of
-the three it refused with **zero** steps, on the strength of the catalogue
-alone); when its adjusted model was refused it stratified by hand instead of
-inventing an adjustment; when a direct sub-threshold cell was suppressed it
-tried the other view of the same quantity and was refused there too; and it
-kept "cannot infer causality from these aggregates" as a separate typed
-claim beside the association it could support. What it does not yet do
-reliably: apply the sparse-category exclusion that would let the adjusted
-model release (it stratifies instead, which is sound but weaker), and hold a
-budget plan — it concludes after two to six steps of a possible twenty.
+What the marks add is a second kind of finding. `which-products` is scored
+right by verdict in every run and wrong by the marks in every run: asked
+"which gambling products carry the late-night effect?" the analyst answers
+about late-night *bets* (the event-level hour band, on which every product
+rises) rather than late-night *users* (the person-level band, on which
+lottery is flat), and concludes against the planted heterogeneity — a
+correct table, a different question, and the person-versus-event distinction
+the protocol now states and the model does not yet honour. On the causal
+question the analyst reliably tries the adjusted model, is refused when a
+sparse employment category is in the design, and stratifies by hand or moves
+to the transaction view rather than excluding the category the protocol tells
+it to exclude. On harm-over-time it asks the questionnaire view for a
+calendar month once in three runs and gives up after the refusal, although
+the protocol says the wave is that view's time axis. These are the analyst's
+habits, and the bank now measures them.
 
-Nine questions and one model make this a first measurement, not a result;
-the run-to-run variance says as much. What it establishes is narrower and
-useful: a local-class model can drive the vetted loop to correct, typed,
-fully-traceable answers on a study built to trip it up, and every one of the
-misses along the way was a defect in the *protocol* the loop hands the model,
-which is the part we control.
+Two things the runs found in the boundary rather than the analyst, both
+recorded: the fidelity gate read "mean stake per person-month" as a request
+to break down by month and refused a well-formed query (a false positive of
+the Mirror gate on a compound noun; the analyst rephrased); and the
+questionnaire lexicon needed "night-time phone use" and kin before the
+analyst's own phrasing passed the same gate.
+
+Nine questions and one model make this a first measurement, not a result.
+What it establishes is narrower and useful: a local-class model can drive the
+vetted loop to correct, typed, fully-traceable answers on a study built to
+trip it up; the misses in the loop's contract were ours to fix and are fixed;
+and the misses that remain are the model's habits, which the bank can now
+score run after run as the protocol — or the model — changes.
 
 ## What this page does not claim
 
-Nothing above phase 1 is built. The data-sighted analyst is a research
+Nothing above phase 3's locked-plan core is built (the DP accountant, the free-code tier and the FHE track remain plan). The data-sighted analyst is a research
 problem, not an engineering task. An analyst inside does not replace output
 checking; it raises the bar for it. The FHE work is an experiment and makes no
 production cryptographic claim. Everything stays on synthetic data.

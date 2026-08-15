@@ -134,10 +134,10 @@ caller and which control engaged.
 | differencing (2-query) | no *row* leak\* | safe — denied | session auditor |
 | direct re-identification | no *row* leak\* | safe — denied | intent vetting |
 
-The table shows the original five attacks; the corpus has since grown to 33
-scenarios (28 attacks plus 5 benign baselines: grouping-fidelity probes,
-GLM-specific attacks, literal-spec entries). Current standing: **28/28 attacks
-neutralised; 13/33 scenarios would leak row-level data with the gateway off.**
+The table shows the original five attacks; the corpus has since grown to 34
+scenarios (29 attacks plus 5 benign baselines: grouping-fidelity probes,
+GLM-specific attacks, literal-spec entries, cross-view differencing). Current standing: **29/29 attacks
+neutralised; 13/34 scenarios would leak row-level data with the gateway off.**
 Benign analysis still flows
 through untouched, and small-cell queries are **redacted and released**
 (offending cells suppressed) rather than blanket-denied — matching real TRE

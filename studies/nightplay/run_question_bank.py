@@ -43,6 +43,7 @@ def main() -> int:
     from safetre.llm import LLMClient
     from studies.nightplay import verify as V
     from studies.nightplay.generate import MANIFEST_NAME, TABLE_NAMES
+    from studies.nightplay.mark import score
 
     dataset_mod.activate(dataset_mod.load_dataset(V.DEFINITION))
     tables = {n: pd.read_csv(os.path.join(args.data, f"{n}.csv")) for n in TABLE_NAMES}
@@ -60,7 +61,8 @@ def main() -> int:
     for q in bank:
         if only and q["id"] not in only:
             continue
-        auditor = SessionAuditor(threshold=cfg.min_cell_size, budget=cfg.query_budget)
+        auditor = SessionAuditor(threshold=cfg.min_cell_size, budget=cfg.query_budget,
+                               selection_budget=cfg.selection_budget_bits)
         policy = LLMAnalystPolicy(client, cfg)
         loop = AnalystLoop(service, policy, auditor=auditor,
                            audit_log=log, user=f"analyst:{q['id']}", max_steps=args.max_steps)
@@ -73,8 +75,11 @@ def main() -> int:
         with open(os.path.join(args.out, f"{q['id']}.replies.json"), "w") as fh:
             json.dump(policy.raw_replies, fh, indent=2)
         expect = str(q["expect"])
+        marked = score(dossier.to_dict(), q)
         row = {"id": q["id"], "expect": expect, "verdict": dossier.verdict,
                "verdict_ok": dossier.verdict == expect,
+               "marks_ok": marked["marks_ok"], "marks_total": marked["marks_total"],
+               "marks": marked["marks"],
                "steps": len(dossier.steps),
                "statuses": [s.status for s in dossier.steps],
                "budget_spent": dossier.budget_spent,
@@ -85,17 +90,22 @@ def main() -> int:
                "truth": q.get("truth"), "trap": q.get("trap")}
         rows.append(row)
         print(f"  {q['id']:24s} expect={expect:15s} got={dossier.verdict:15s} "
-              f"{'ok ' if row['verdict_ok'] else 'MISS'} steps={len(dossier.steps)} "
-              f"budget={dossier.budget_spent} figs?={len(dossier.unsupported_figures)}")
+              f"{'ok ' if row['verdict_ok'] else 'MISS'} marks={marked['marks_ok']}/{marked['marks_total']} "
+              f"steps={len(dossier.steps)} budget={dossier.budget_spent} "
+              f"figs?={len(dossier.unsupported_figures)}")
 
     n_ok = sum(r["verdict_ok"] for r in rows)
+    m_ok = sum(r["marks_ok"] for r in rows)
+    m_tot = sum(r["marks_total"] for r in rows)
     summary = {"study": truth["study"], "n_people": truth["n_people"], "seed": truth["seed"],
                "questions": len(rows), "verdict_agreement": n_ok,
+               "marks_ok": m_ok, "marks_total": m_tot,
                "unsupported_figure_runs": sum(bool(r["unsupported_figures"]) for r in rows),
                "audit_chain_verifies": log.verify(), "rows": rows}
     with open(os.path.join(args.out, "summary.json"), "w") as fh:
         json.dump(summary, fh, indent=2)
-    print(f"verdict agreement {n_ok}/{len(rows)}; audit chain verifies: {log.verify()}; -> {args.out}")
+    print(f"verdict agreement {n_ok}/{len(rows)}; marks {m_ok}/{m_tot}; "
+          f"audit chain verifies: {log.verify()}; -> {args.out}")
     return 0
 
 

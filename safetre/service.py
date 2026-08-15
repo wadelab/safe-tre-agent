@@ -6,6 +6,7 @@ request → intent vetting → planner (untrusted) → QuerySpec validation
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 from dataclasses import dataclass, field
@@ -13,6 +14,7 @@ from dataclasses import dataclass, field
 import pandas as pd
 from pydantic import ValidationError
 
+from . import dataset as _dataset
 from . import disclosure as D
 from .analyst import check_grouping_coherence, check_term_coherence, vet_request
 from .disclosure import simulatable_cohort_bound
@@ -97,7 +99,18 @@ def _donor_total(df: pd.DataFrame) -> float:
     return float(len(df))
 
 
-def _accounting(cost: int, cohorts, totals=()) -> dict:
+def frame_digest(frame) -> str | None:
+    """SHA-256 of a released frame's canonical CSV rendering — the STAGE
+    COMMITMENT (R20): what left the gateway, in a form a replay can recompute
+    and compare. None when nothing was released."""
+    if frame is None:
+        return None
+    text = frame.to_csv(index=False, lineterminator="\n")
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _accounting(cost: int, cohorts, totals=(), output_sha256: str | None = None,
+                selection_bits: int = 0) -> dict:
     """What this request cost the session, and which cohorts it released over.
 
     Written into the audit row so a restart can *replay* the accounting rather
@@ -136,10 +149,22 @@ def _accounting(cost: int, cohorts, totals=()) -> dict:
     control's semantics rather than the live object's contents, which is the
     one place in this block where those two differ.
     """
-    return {"cost": int(cost),
-            "cohorts": [[dataset, [list(f) for f in filters]]
-                        for dataset, filters in cohorts],
+    out = {"cost": int(cost),
+            # [dataset, filters, quantity]: the third element (the declared
+            # measure equivalence class, #95) is what lets a restart replay a
+            # cohort as comparable across views; rows written before it carry
+            # two elements and restore with no quantity, i.e. within-view only
+            "cohorts": [[dataset, [list(f) for f in filters], quantity]
+                        for dataset, filters, quantity in cohorts],
             "totals": [[measure, float(total)] for measure, total in totals]}
+    # the released frame's digest (a stage commitment) and any data-sighted
+    # selection a locked plan charged for this request; both absent from rows
+    # written before R20, which restore as they did
+    if output_sha256 is not None:
+        out["output_sha256"] = output_sha256
+    if selection_bits:
+        out["selection_bits"] = int(selection_bits)
+    return out
 
 
 def _literal_spec(request: str) -> dict | None:
@@ -221,29 +246,36 @@ class QueryService:
 
         The exact leg runs only when the cheap one has not already denied.
         """
-        def bound(prev_dataset: str, a: tuple, this_dataset: str, b: tuple) -> int:
+        def bound(prev_dataset: str, a: tuple, this_dataset: str, b: tuple,
+                  quantity: str | None = None) -> int:
             """`prev_dataset` is the view the EARLIER release came from.
 
-            Across two views of the same people the row-level leg is not
-            defined — "the rows exactly one query aggregated" has no meaning
-            when the two queries aggregate different row universes — so the
-            exact leg falls back to the DONOR-set symmetric difference, which
-            is the right question there and the one the cross-view attack
-            defeats (round 11, #95). Within one view nothing changes.
-
-            UNREACHABLE TODAY, and deliberately kept: the only caller,
-            `SessionAuditor.observe_cohort`, skips every prior cohort from
-            another dataset (`if prev_dataset != dataset: continue`, see
-            `disclosure.py`), so this leg never runs in production and #95 is
-            OPEN, not closed. The machinery is what #95 will be built on —
-            but nothing here defends cross-view differencing yet, and a
-            reviewer should not read the branch as though it did.
+            Across two views of the same people (called with `quantity`, the
+            declared measure equivalence class both releases carry — round
+            11, #95) neither the row-level leg nor the donor-set leg is the
+            right question: the two queries aggregate different row
+            universes, and the donor sets can differ by hundreds of people
+            who contribute nothing to either sum while the sums still differ
+            by one person's total. The quantity that governs a difference of
+            two sums is the set of people whose per-person contribution is
+            not the same in the two releases, and that is what
+            `engine.contribution_symdiff` counts — each side under its own
+            predicate on its own view. The simulatable marginal bound is
+            stated per view and has no cross-view reading, so this leg is
+            exact, like the row-level one (D7). Within one view nothing
+            changes.
             """
             if prev_dataset != this_dataset:
-                # the simulatable marginal bound is stated per dataset, so it
-                # has no cross-view reading; go straight to the exact leg
-                return self.engine.cohort_symdiff(prev_dataset, a, b,
-                                                  dataset_b=this_dataset)
+                if quantity is None:
+                    # not commensurable by declaration: the auditor does not
+                    # call here for such pairs; if it ever did, the donor-set
+                    # difference is the conservative reading
+                    return self.engine.cohort_symdiff(prev_dataset, a, b,
+                                                      dataset_b=this_dataset)
+                columns = _dataset.active().quantity_columns(quantity)
+                return self.engine.contribution_symdiff(
+                    prev_dataset, columns[prev_dataset], a,
+                    this_dataset, columns[this_dataset], b)
             cheap = simulatable_cohort_bound(marginals, this_dataset, a, b)
             if cheap < self.policy.threshold:
                 return cheap
@@ -260,7 +292,7 @@ class QueryService:
             spec, with_contributions=self.policy.needs_contributions())
 
     def handle(self, request: str, planner, auditor: D.SessionAuditor | None = None,
-               audit_log=None, user: str = "anon") -> Result:
+               audit_log=None, user: str = "anon", selection_bits: int = 0) -> Result:
         """The audited, fail-closed entry point.
 
         Any exception below — a planner failure, an engine error, a fit that
@@ -273,7 +305,8 @@ class QueryService:
         spent_before = auditor.spent
         try:
             return self._handle_inner(request, planner, auditor=auditor,
-                                      audit_log=audit_log, user=user)
+                                      audit_log=audit_log, user=user,
+                                      selection_bits=selection_bits)
         except Exception as exc:                  # noqa: BLE001 - audited boundary
             findings = [D.Finding(
                 "high", "pipeline_error",
@@ -341,7 +374,8 @@ class QueryService:
                           "the chain")
 
     def _handle_inner(self, request: str, planner, auditor: D.SessionAuditor,
-                      audit_log=None, user: str = "anon") -> Result:
+                      audit_log=None, user: str = "anon",
+                      selection_bits: int = 0) -> Result:
         auditor = auditor or D.SessionAuditor()
         trace: list[str] = []
         spent_before = auditor.spent
@@ -349,14 +383,18 @@ class QueryService:
         def record(status, spec, findings, output, cohorts=(), totals=()):
             """`cost` is measured, not classified: the auditor's own spend
             delta over this request, so the log records what the session
-            actually paid however the request went (hardening #58)."""
+            actually paid however the request went (hardening #58). A locked
+            plan's stage may also have spent SELECTION bits (P24) before this
+            call; they are recorded here so a restart replays them (#58's
+            lesson, for the selection ledger)."""
             if audit_log is not None:
                 audit_log.append(
                     user=user, request=request, spec=spec, status=status,
                     findings=[f.__dict__ for f in findings],
                     output_shape=(list(output.shape) if output is not None else None),
                     accounting=_accounting(auditor.spent - spent_before, cohorts,
-                                           totals))
+                                           totals, output_sha256=frame_digest(output),
+                                           selection_bits=selection_bits))
 
         try:
             literal = _literal_spec(request)
@@ -459,9 +497,11 @@ class QueryService:
         # exact row-level difference decides it where they cannot — see
         # `_difference_bound` and hardening #40.
         cohort = spec.normalized_filters()
+        quantity = _dataset.active().quantity_of(spec.dataset, spec.measure.column)
         marginals = self.engine.marginal_donor_counts()
         audit_findings += auditor.observe_cohort(
-            spec.dataset, cohort, self._difference_bound(spec.dataset, marginals))
+            spec.dataset, cohort, self._difference_bound(spec.dataset, marginals),
+            quantity=quantity)
 
         released, action, findings = self.policy.apply(df, self._context(spec))
         findings = findings + audit_findings
@@ -507,14 +547,14 @@ class QueryService:
                           spec=spec.model_dump(), findings=findings, trace=trace,
                           plans=plans)
 
-        auditor.record_cohort(spec.dataset, cohort)
+        auditor.record_cohort(spec.dataset, cohort, quantity)
         # Released-value shaping runs on the FINALIZED frame: corr's p_value is
         # computed from the rounded n, never the exact one, so every released
         # number is a function of numbers already released (hardening #26).
         released = get_procedure(spec.measure.fn).postprocess(released, spec)
         status = "redacted" if action == "redacted" else "released"
         record(status, spec.model_dump(), findings, released,
-               cohorts=[(spec.dataset, cohort)], totals=observed)
+               cohorts=[(spec.dataset, cohort, quantity)], totals=observed)
         return Result(status, output=released, spec=spec.model_dump(),
                       findings=findings, trace=trace, plans=plans)
 
@@ -620,9 +660,10 @@ class QueryService:
             observed.append((f"{agg.measure_key()}#{role}", total))
             audit_findings = auditor.observe(f"{agg.measure_key()}#{role}", total)
             cohort = agg.normalized_filters()
+            quantity = _dataset.active().quantity_of(agg.dataset, agg.measure.column)
             audit_findings += auditor.observe_cohort(
                 agg.dataset, cohort,
-                self._difference_bound(agg.dataset, marginals))
+                self._difference_bound(agg.dataset, marginals), quantity=quantity)
             if audit_findings:
                 trace.append(WITHHELD_TRACE)
                 return deny(audit_findings, WITHHELD_MESSAGE, public=_withheld())
@@ -670,7 +711,7 @@ class QueryService:
             # cross-tab as the model's `cells` artifact.
             notes.extend(findings)
             finalized[role] = get_procedure(agg.measure.fn).postprocess(released, agg)
-            cohorts.append((agg.dataset, cohort))
+            cohorts.append((agg.dataset, cohort, quantity))
 
         # The documented HITL step, on the model path too (R7). Suppression
         # already settled anything suppressable; a residual medium escalates
@@ -724,8 +765,8 @@ class QueryService:
                 return deny(f, "blocked: model output violates its declared contract")
         trace.append("contract: ok")
 
-        for dataset, cohort in cohorts:
-            auditor.record_cohort(dataset, cohort)
+        for dataset, cohort, quantity in cohorts:
+            auditor.record_cohort(dataset, cohort, quantity)
         spec_dict = spec.model_dump() | {
             "aggregates": [a.measure_key() for a in aggregates]}
         # every cohort the model released over, including the ones the

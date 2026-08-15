@@ -97,6 +97,15 @@ def planner_system(policy=None) -> str:
         "ANOVA takes exactly one categorical factor and a gaussian (interval-scale) "
         "response. If the request names more than one factor, use the glm tool "
         "instead.\n"
+        "For a time-series request ('monthly series of stake', 'trend in X over "
+        "the year', 'is there seasonality in Y', 'autocorrelation of Z by month'), "
+        "output a SeriesSpec JSON of the form:\n"
+        '{"tool":"series","dataset":...,"response":<allowed measure>,'
+        '"time":<a declared time axis of the dataset>,"stat":"mean|sum",'
+        '"filters":[...]}\n'
+        "The release is the vetted per-window table (the series itself) with its "
+        "trend, autocorrelation and dominant period; a series needs at least four "
+        "windows, so a two-wave axis cannot carry one.\n"
         "Published tool manifest (anything else is rejected):\n"
         + _manifest_text(policy) +
         "\nNever reference identifiers, names, timestamps or free text. JSON only."
@@ -295,8 +304,33 @@ class MockPlanner:
         return {"tool": "anova", "dataset": dataset, "response": response,
                 "factor": factor, "filters": filters}
 
+    def _plan_series(self, request: str, u: str) -> dict:
+        """Deterministic SeriesSpec for time-series requests: the first
+        declared time axis of the inferred dataset, mean unless the request
+        says total/sum."""
+        filters = self._filters_from_text(request)
+        if any(kw in u for kw in ("wellbeing", "wemwbs", "pgsi", "gambling",
+                                  "igds", "mental")):
+            dataset = "wellbeing"
+            response = ("pgsi_score" if ("pgsi" in u or "gambling" in u)
+                        else "igds_score" if "igds" in u else "wemwbs_score")
+        elif "in-game" in u or "currency" in u:
+            dataset, response = "spend", "ingame_currency"
+        else:
+            dataset, response = "spend", "amount_gbp"
+        axes = CATALOGUE[dataset].get("time_dims", [])
+        time = axes[0] if axes else "wave"
+        stat = "sum" if ("total" in u or " sum " in f" {u} ") else "mean"
+        return {"tool": "series", "dataset": dataset, "response": response,
+                "time": time, "stat": stat, "filters": filters}
+
     def plan(self, request: str) -> dict:
         u = request.lower()
+
+        if any(kw in u for kw in ("time series", "time-series", "series of",
+                                  "over time", "seasonal", "autocorrelation",
+                                  "periodogram", "trend in", "trend of")):
+            return self._plan_series(request, u)
 
         if "anova" in u or "analysis of variance" in u:
             return self._plan_anova(request, u)

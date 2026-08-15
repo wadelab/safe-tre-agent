@@ -37,16 +37,21 @@ Six base tables, ~6,000 people by default (`studies/nightplay/generate.py`):
 
 Five public views (`studies/nightplay/nightplay.yaml`): `sessions`, `bets`,
 `panel`, `wellbeing`, `giving`. Raw timestamps and free text are in no view;
-`hour_band` and `month` are their declared coarsenings. Exact age is an
+`hour_band` and `month` are their declared coarsenings, and `month` (and the
+questionnaire's `wave`) are declared time axes (`time_dims:`) the `series`
+tool may lay a vetted per-window aggregate along. Exact age is an
 internal band-edge filter, as in the demo.
 
 The panel and the cohort band are **derived from the event tables after every
 plant is applied**, so the views agree with each other by construction — the
 same property the demo's per-donor rollups have, materialised. That
-consistency is also a live instance of the cross-view differencing surface
-roadmap item 0.0 describes: `panel.stake_gbp` *is* the per-person-month sum
-of `bets.stake_gbp`, and only a declared equivalence could tell the lineage
-so.
+consistency was also the second reproducer of the cross-view differencing
+finding (#95): `panel.stake_gbp` *is* the per-person-month sum of
+`bets.stake_gbp`, and the definition now declares it (`quantities:`), so the
+lineage compares releases of the two across the views — by per-person
+contribution, because the panel holds every person and the bets view only
+gamblers, and the donor-set difference between the two views would have
+cleared the threshold while the sums differed by one person (#107).
 
 ## What is planted, and what is written down
 
@@ -121,14 +126,26 @@ question bank marks whether the dossier says so.
 
 ## The question bank
 
-`studies/nightplay/questions.yaml` is the marking scheme for a future
-analyst: nine research questions, each naming the truth it is marked against,
-the datasets and procedures a good answer uses, the expected verdict
-(`supported` / `not_supported` / `null` / `not_answerable`) and the trap it
-sets. Three of the nine are refusals — a per-person listing, a sub-threshold
-region, the free text — where the mark is for refusing *and saying so* rather
-than substituting a valid-looking aggregate. It is not yet an executable
-evaluation; the reference analyses are run by hand in `verify.py`.
+`studies/nightplay/questions.yaml` is the marking scheme for the
+[inside analyst](inside-analyst.md): nine research questions, each naming the
+truth it is marked against, the datasets and procedures a good answer uses,
+the expected verdict (`supported` / `not_supported` / `null` /
+`not_answerable`), the trap it sets, and a list of **marks**. Three of the
+nine are refusals — a per-person listing, a sub-threshold region, the free
+text — where the mark is for refusing *and saying so* rather than
+substituting a valid-looking aggregate.
+
+The marks are executable (`studies/nightplay/mark.py`): each is a plain-
+language description and one predicate over the dossier — which specs were
+issued and which released, which claims cite which steps, what the claims and
+narrative say, the verdict, the untraceable figures — so a saved dossier can be
+re-marked whenever the bank is refined, without a model or the data
+(`mark_dossiers.py`). `run_question_bank.py` runs the analyst and marks each
+dossier; `tests/test_nightplay_marks.py` pins the archived run. The marks
+catch what the verdict does not: on the archived run `which-products` was
+right by verdict and had answered late-night *bets* (the event-level hour
+band) rather than late-night *users* (the person-level band), concluding that
+every product carries the effect — against the planted heterogeneity.
 
 ## Serving it
 

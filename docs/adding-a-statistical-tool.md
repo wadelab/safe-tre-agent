@@ -121,3 +121,55 @@ Those are further tools, each a similar-sized addition. A multi-factor request
 is routed to the `glm` tool (whose coefficient t-tests are the model-form of the
 same analysis); a request naming two factors to `anova` is refused by the term
 coherence check rather than silently reduced to one.
+
+
+## A second example, one round later: the `series` tool
+
+The ANOVA walk-through above was written to show that a new tool is "almost
+entirely new numerics and a new output contract". The `series` tool
+(`safetre/series.py`, 2026-08-15, for the [inside analyst](inside-analyst.md)'s
+phase 2) is the second pass through the same checklist, and the first tool
+that is not a regression — which is what makes it a real test of the claim.
+
+A **time series** here is a vetted per-window aggregate: the mean or sum of
+one measure grouped by a dimension the dataset definition declares to be an
+ordered time axis (`month`, `wave`; `time_dims:` on the view — declared, not
+inferred, because an integer dimension is not necessarily a time). That
+window table is *one ordinary `QuerySpec`*, so O2/O3/O4 are inherited as
+literally as for ANOVA, and it passes the ordinary gateway cell by cell. The
+tool's own arithmetic runs on the finalized windows and nothing else:
+
+```
+trend        OLS of value on window index: slope, intercept, R²
+acf          autocorrelation at lags 1..L, L = min(4, n_windows // 3)
+periodogram  |DFT of the demeaned series|² at frequencies 1..⌊n/2⌋,
+             the dominant period and its share of the spectral power
+```
+
+Every output is a deterministic function of released-equivalent cells
+(stdlib `cmath`, no dependency), so an analyst holding the released `cells`
+frame — the series itself — reproduces every diagnostic bit for bit
+(`refit_from_artifact`, pinned in `tests/test_series.py`). What is different
+from ANOVA, and where the checklist earned its keep:
+
+- **A request-decided refusal.** An axis that declares fewer than four
+  windows can never carry a series, whatever the cohort, and its domain is
+  public — so `SeriesSpec` refuses it at validation, naming the axis, rather
+  than letting it reach the data and come back as a canonical refusal. The
+  demo's `wave` (two windows) is exactly that case, which is why the demo's
+  series skeleton is empty and the tool is exercised on the NIGHTPLAY study.
+- **A gap is a P22 refusal that must not name the window.** A missing window
+  inside the requested range means "no rows in that window for this cohort",
+  which is an existence fact; the refusal says the series is not contiguous
+  and does not say where.
+- **The service was untouched, again.** `SeriesSpec` exposes `terms` as the
+  one-element time axis, so `_handle_model` drives it as it drives ANOVA.
+
+The steps were the ANOVA steps: `time_dims` on the definition and in the
+catalogue; `SeriesSpec` in `query.py`; the procedure; the manifest entry and
+version bump (`v13`), the planner paragraph and mock branch, the analysis
+cues; the conformance obligation, skeleton bound, noninterference guard and
+manifest pins; the formal artifacts regenerated. `tests/test_series.py` adds
+the tool's own bar — contract, reproducibility, fail-closed on a suppressed
+window, request-decided and finalized-table refusals, an exhaustive pass over
+the NIGHTPLAY series skeleton, and the numerics against numpy.

@@ -187,6 +187,7 @@ datasets:
       month: int
       app_category: cat
     measures: [duration_min]
+    time_dims: [month]
     internal_filters:
       age_years: int
     glm_responses:
@@ -225,6 +226,7 @@ datasets:
       month: int
       product: cat
     measures: [stake_gbp, net_loss_gbp]
+    time_dims: [month]
     internal_filters:
       age_years: int
     glm_responses:
@@ -264,6 +266,7 @@ datasets:
       month: int
     measures: [total_sessions, late_night_sessions, late_night_minutes,
                gambling_txns, stake_gbp, net_loss_gbp, donation_gbp]
+    time_dims: [month]
     internal_filters:
       age_years: int
     internal_measures: [age_years]
@@ -305,6 +308,7 @@ datasets:
       night_use_band: cat
       wave: int
     measures: [pgsi_score, sleep_quality, wemwbs_score, monthly_stake_selfreport]
+    time_dims: [wave]
     internal_filters:
       age_years: int
     glm_responses:
@@ -341,10 +345,22 @@ datasets:
       month: int
       cause: cat
     measures: [amount_gbp]
+    time_dims: [month]
     internal_filters:
       age_years: int
     glm_responses:
       amount_gbp: [gaussian]
+
+# Declared measure equivalence (hardening #95): the panel is DERIVED from the
+# event tables, so each of these per-person-month measures is the sum of the
+# event-level measure named beside it. The session auditor compares releases
+# of one quantity across the two views; a differencing pair with one leg in
+# each was the second reproducer of #95.
+quantities:
+  stake_gbp: [bets.stake_gbp, panel.stake_gbp]
+  net_loss_gbp: [bets.net_loss_gbp, panel.net_loss_gbp]
+  donation_gbp: [giving.amount_gbp, panel.donation_gbp]
+  late_night_minutes: [sessions.duration_min, panel.late_night_minutes]
 
 # Exact age may be ranged only at the declared band edges (hardening #39).
 internal_range_rules:
@@ -406,6 +422,10 @@ lexicon:
     weekend: day_type
     month: month
     calendar month: month
+    monthly: month
+    per month: month
+    each month: month
+    month by month: month
     app category: app_category
     app: app_category
     product: product

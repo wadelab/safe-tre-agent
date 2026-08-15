@@ -90,6 +90,21 @@ How similar two cohorts may be before the second is refused.
 | Pinned by | `tests/test_hardening.py` |
 | Measured cost | *not measured* |
 
+## `selection_budget_bits`
+
+How many bits of data-sighted selection one session's locked plans may spend.
+
+**What the value means.** a locked plan (R20) may declare a contingency that decides from cells the gateway withheld — which levels of a dimension were too sparse to release — and the executed filter reveals one bit per level. Those bits are the only data-sighted decision the analyst is allowed, they are charged here, and a contingency the ledger cannot afford is refused (P24). Small on purpose: the round-8 existence-oracle attack needed eight such bits. An interim, counted bound; the differential-privacy accountant (roadmap 3) is the principled replacement.
+
+| | |
+|---|---|
+| Default | `4` |
+| Environment | `SAFETRE_SELECTION_BUDGET_BITS` |
+| `config.yaml` | `session.selection_budget_bits` |
+| Clause | [R20](specification.md) |
+| Pinned by | `tests/test_plans.py` |
+| Measured cost | *not measured* |
+
 ## `session_window_hours`
 
 How long a session's differencing lineage and query budget survive.

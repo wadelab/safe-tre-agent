@@ -133,12 +133,29 @@ All configuration is via environment variables.
 | `SAFETRE_CHANNEL_ALLOW_NETS` | `127.0.0.1/32,::1/128` | comma-separated CIDRs allowed to reach the app |
 | `SAFETRE_AUDIT_DB` | `audit.db` | path to the hash-chained audit log |
 | `SAFETRE_AUDIT_KEY` | generated dev key | HMAC key; provide from an off-box secret in production |
+| `SAFETRE_ANALYST` | `off` | `off` (single-query gateway) or `chimp` (an inside analyst runs in this environment, at `/api/chimp`). An OPERATOR decision fixed at deploy time; the browser cannot change it. Any other value is a startup error |
+| `SAFETRE_CHIMP_MAX_STEPS` | `6` | when `SAFETRE_ANALYST=chimp`, the most analysis steps one research question may take |
 | `PORT` | `8800` | used by `scripts/run_web.sh` |
 
 Legacy `OPENAI_BASE_URL`, `OPENAI_API_KEY`, and `SAFETRE_MODEL` are still read
 as fallbacks, but new deployments should use the `SAFETRE_LLM_*` names. The
 model never sees secrets and never needs network beyond the local model
 endpoint. See `.env.example` and [Model runtime](model-runtime.md).
+
+## The inside analyst ("Chimp")
+
+Whether an inside analyst runs in a given environment is an operator decision,
+set once here with `SAFETRE_ANALYST=chimp`, and it is deliberately not
+reachable from the browser: a page visitor can no more turn Chimp on than move
+the gateway. With it on, the home page shows a research-question box that posts
+to `/api/chimp`; Chimp plans and runs the whole analysis server-side behind
+the same safe-outputs gateway and returns only a dossier of vetted releases
+and the narrative written from them &mdash; its working notes and the raw data
+never cross to the browser. The endpoint runs a whole multi-step analysis and
+is exempt from the per-query response-time deadline, a proof-of-concept
+limitation whose principled answer is asynchronous submit-and-collect
+([D5](decisions/D5-timing-channel.md)). Synthetic data only; see
+[the inside analyst](inside-analyst.md).
 
 ## One process per audit database
 

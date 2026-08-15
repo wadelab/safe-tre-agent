@@ -502,3 +502,29 @@
         filters:
           - {column: region, op: "==", value: North West}
           - {column: sex, op: "!=", value: Other}
+
+# Hardening #95: two views of one population, one declared quantity. Each leg
+# is individually safe; before the close their difference was one donor's exact
+# annual spend (GBP 120.93, error 0.000000). The lineage now compares releases
+# of a declared quantity across views by per-person contribution, and the
+# second leg is denied.
+- name: cross_view_differencing_declared_quantity
+  type: differencing
+  path: service
+  expect_block: true
+  steps:
+    - request: "total spend in the north west"
+      spec:
+        dataset: donor_spend
+        measure: {fn: sum, column: total_spend_gbp}
+        group_by: []
+        filters:
+          - {column: region, op: "==", value: North West}
+    - request: "total spend in the north west excluding sex X"
+      spec:
+        dataset: spend
+        measure: {fn: sum, column: amount_gbp}
+        group_by: []
+        filters:
+          - {column: region, op: "==", value: North West}
+          - {column: sex, op: "!=", value: X}

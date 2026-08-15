@@ -315,3 +315,119 @@ pred V8ExactLegIsNotSimulatable {
 }
 run V8ExactLegIsNotSimulatable
   for 2 Dim, 4 Val, 4 Donor, 5 Row, 2 Cohort, 0 Release, 6 Int
+
+// --- hardening #95: two views of one population --------------------------------
+//
+// A catalogue publishes several VIEWS of the same people: a per-event view,
+// where each row is one transaction, and a per-person ROLLUP, where each
+// person's rows are summed. A release on the rollup and a release on the
+// event view aggregate different row universes, so neither `rowSymdiffDonors`
+// ("the rows exactly one query aggregated") nor `donorSymdiff` is the right
+// comparison — and the lineage as first built compared only within one view,
+// so a pair with one leg in each was compared by nothing. Two individually
+// safe releases differed by one donor's exact annual spend.
+//
+// What governs the difference of two SUMS of one declared quantity is the set
+// of people whose per-person contribution is not the same in the two releases
+// (safetre/engine.py::contribution_symdiff). Modelled: a row either
+// contributes to the quantity or not (a session with amount zero does not); a
+// donor's contribution to a release is the contributing rows of theirs that
+// the release aggregated — on the event view those selected by the predicate,
+// on the rollup all of them if the person is selected. Contributions are
+// positive and distinct, so equal sums means equal row sets.
+//
+// The auditor rule for a pair on different views of one declared quantity:
+// identical predicates (the same people by declaration) or contribution
+// symmetric difference >= T.
+
+abstract sig View {}
+one sig EventView, RollupView extends View {}
+
+// rows that carry the quantity (a non-spend event contributes nothing)
+sig ContribRow in Row {}
+
+// which view a cohort was released on
+sig Viewed in Cohort { view: one View }
+// a rollup has no row-level dimensions: its cohorts select people only
+fact RollupSelectsPeopleOnly {
+  all c: Viewed | c.view = RollupView implies
+    (all dm: RowDim | c.sel[dm] = dm.~dim)
+}
+
+// a donor's contribution to a release: the contributing rows the release summed
+fun contrib [c: Viewed, d: Donor] : set Row {
+  c.view = EventView implies (rows[c] & ContribRow & d.~donor)
+                       else ((d in donors[c]) implies (ContribRow & d.~donor) else none)
+}
+fun contribSymdiff [a, b: Viewed] : Int {
+  #{ d: Donor | contrib[a, d] != contrib[b, d] }
+}
+
+// the cross-view rule as implemented (SessionAuditor.observe_cohort, the
+// `elif quantity is not None and prev_quantity == quantity` branch, with
+// service._difference_bound calling engine.contribution_symdiff)
+pred crossViewAllows [a, b: Viewed] {
+  a.sel = b.sel or contribSymdiff[a, b] >= T
+}
+
+// releases on different views must pass the cross-view rule as well
+sig ViewedRelease in Release {}
+fact ViewedReleasesAreViewed { all r: ViewedRelease | r.cohort in Viewed }
+fact CrossViewReleasesPassAuditor {
+  all disj r1, r2: ViewedRelease |
+    r1.cohort.view != r2.cohort.view implies crossViewAllows[r1.cohort, r2.cohort]
+}
+
+// #95, machine-exhibited: WITHOUT the cross-view rule, two cohorts on
+// different views whose predicates differ by one excluded value are both
+// released and their sums differ by ONE person's contribution. Expected SAT.
+pred Hardening95AttackWithoutCrossViewLayer {
+  some disj a, b: Viewed {
+    a.view != b.view
+    a.sel != b.sel
+    contribSymdiff[a, b] > 0
+    contribSymdiff[a, b] < T
+  }
+}
+run Hardening95AttackWithoutCrossViewLayer
+  for 2 Dim, 4 Val, 4 Donor, 5 Row, 2 Cohort, 0 Release, 6 Int
+
+// Why the bound is CONTRIBUTIONS and not the donor sets: a rollup holds people
+// the event view never sees (nobody with an event has zero rows there, but a
+// person whose rows all fail to contribute is in the rollup's donor set with
+// contribution none), so the donor-set difference can clear T while the two
+// sums still differ by fewer than T people's contributions. Expected SAT — the
+// NIGHTPLAY reproducer, where the panel holds every person and the bets view
+// only gamblers.
+pred DonorSetLegMissesCrossViewPair {
+  some disj a, b: Viewed {
+    a.view != b.view
+    donorSymdiff[a, b] >= T
+    contribSymdiff[a, b] > 0
+    contribSymdiff[a, b] < T
+  }
+}
+run DonorSetLegMissesCrossViewPair
+  for 2 Dim, 4 Val, 5 Donor, 6 Row, 2 Cohort, 0 Release, 6 Int
+
+// The close: with the cross-view rule in force, no two releases on different
+// views differ in fewer than T people's contributions unless they are the
+// same predicate (and then the same people, by declaration).
+assert CrossViewDifferenceBounded {
+  all disj r1, r2: ViewedRelease | let a = r1.cohort, b = r2.cohort |
+    a.view != b.view implies (a.sel = b.sel or contribSymdiff[a, b] >= T)
+}
+check CrossViewDifferenceBounded
+  for 2 Dim, 4 Val, 4 Donor, 5 Row, 3 Cohort, 3 Release, 6 Int
+
+// And it does not deny what it need not: a cross-view pair whose contributions
+// differ over at least T people is allowed (the benign multi-view session).
+pred CrossViewBenignPairAllowed {
+  some disj r1, r2: ViewedRelease {
+    r1.cohort.view != r2.cohort.view
+    r1.cohort.sel != r2.cohort.sel
+    contribSymdiff[r1.cohort, r2.cohort] >= T
+  }
+}
+run CrossViewBenignPairAllowed
+  for 2 Dim, 4 Val, 4 Donor, 5 Row, 2 Cohort, 2 Release, 6 Int

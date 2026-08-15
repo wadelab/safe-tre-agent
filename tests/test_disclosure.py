@@ -126,51 +126,52 @@ def test_auditor_cohort_lineage_allows_separated_and_identical():
     # and the (possibly costly) bound is never even computed
     assert a.observe_cohort("spend", london,
                             bound=lambda pd_, a_, d_, b_: 1 / 0) == []
-    # another VIEW of the same people is not compared, and hardening #95 is
-    # the open finding that says so — see the note in `observe_cohort`. Pinned
-    # here so the gap is a stated property rather than an accident, and so
-    # whoever implements the declared measure equivalence (roadmap 0.0) has to
-    # come back and change this line.
+    # another VIEW of the same people is compared only when both releases
+    # carry the same DECLARED quantity (hardening #95, closed 2026-08-15); an
+    # undeclared measure on another view is not commensurable and is not a
+    # pair — see test_cross_view_differencing_95_is_closed_by_declared_quantity
     assert a.observe_cohort("wellbeing",
                             (("region", "==", "London"), ("sex", "!=", "X")),
                             bound=lambda pd_, a_, d_, b_: 1 / 0) == []
 
 
-def test_cross_view_differencing_is_the_open_gap_95():
-    """#95 as a named, first-class keeper: the lineage auditor compares WITHIN
-    ONE VIEW only.
-
-    A catalogue publishes several views of the same people whose measures are
-    commensurable -- `donor_spend.total_spend_gbp` is the per-donor sum of
-    `spend.amount_gbp` -- so a differencing pair with one leg in each view is
-    caught by neither this layer (the `prev_dataset != dataset` skip in
-    `observe_cohort`) nor the totals layer.
-
-    The cross-view `bound` here RAISES if it is ever computed, so a green run
-    proves the second leg was skipped, not merely found under threshold. The
-    within-view control below runs the same near-cohort shape inside one view
-    and IS flagged, which isolates the gap to the cross-view skip specifically.
-
-    When #95 is closed (declared-measure equivalence, roadmap 0.0), the
-    cross-view pair must be refused and the first assertion must flip -- its
-    failure is the reminder that this keeper is here. Complements the note in
-    `observe_cohort` and the lineage tests above.
+def test_cross_view_differencing_95_is_closed_by_declared_quantity():
+    """#95, the keeper flipped. Until 2026-08-15 this test proved the lineage
+    auditor compared WITHIN ONE VIEW only (the cross-view bound here raised
+    if ever computed, and a green run proved it was skipped). It now proves
+    the close: a prior cohort on another view IS compared when both releases
+    carry the same DECLARED quantity (`dataset.quantity_of`, threaded through
+    `record_cohort` / `observe_cohort` and the audit accounting), and is still
+    not compared when they do not — an undeclared or different quantity is
+    not commensurable, which is why dropping the dataset from the key was the
+    wrong fix. `tests/test_cross_view_differencing.py` runs the real pairs
+    through the service on both studies.
     """
     a = SessionAuditor()
     cohort = (("region", "==", "London"), ("sex", "==", "M"))
     near = (("region", "==", "London"), ("sex", "==", "M"),
             ("income_band", "!=", ">150k"))
-    a.record_cohort("spend", cohort)
+    a.record_cohort("spend", cohort, "spend_gbp")
 
-    # second leg in a DIFFERENT view of the same people: never compared, so the
-    # exploding bound is never evaluated -> released, unflagged (the open gap)
-    def _explode(prev_ds, prev_f, ds, f):
-        raise AssertionError("cross-view bound was computed -- has #95 been "
-                             "closed? update this keeper")
-    assert a.observe_cohort("donor_spend", near, bound=_explode) == []
+    seen = []
 
-    # control: the SAME shape within one view IS compared and flagged, so the
-    # gap is the cross-view skip, not the pair being far apart
+    def bound(prev_ds, prev_f, ds, f, quantity=None):
+        seen.append((prev_ds, ds, quantity))
+        return 1
+
+    # same declared quantity on another view: compared, and flagged
+    flags = a.observe_cohort("donor_spend", near, bound=bound, quantity="spend_gbp")
+    assert any(f.rule == "differencing" for f in flags)
+    assert seen == [("spend", "donor_spend", "spend_gbp")]
+
+    # a different or undeclared quantity on another view: never compared
+    seen.clear()
+    assert a.observe_cohort("wellbeing", near, bound=bound, quantity=None) == []
+    assert a.observe_cohort("wellbeing", near, bound=bound, quantity="pgsi") == []
+    assert seen == []
+
+    # and within one view the blanket rule is unchanged (compared whatever the
+    # quantity), called without the keyword
     flags = a.observe_cohort("spend", near, bound=lambda pd_, a_, d_, b_: 1)
     assert any(f.rule == "differencing" for f in flags)
 

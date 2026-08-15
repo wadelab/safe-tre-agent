@@ -41,7 +41,9 @@ Good requests are specific about the outcome, grouping, and filters:
 
 The executable tools are those in the [manifest](tool-manifest.md):
 `aggregate_query` (count, mean, sum, sum of squares, and Pearson correlation
-over allowlisted datasets), `glm`, and `anova`. Correlation is fixed-function:
+over allowlisted datasets), `glm`, `anova`, and `series` (a vetted per-window
+time series of one measure along a declared time axis, with its trend,
+autocorrelation and dominant period). Correlation is fixed-function:
 it can only use two allowlisted measure columns from the same dataset and
 returns `value`, `p_value`, and `n` after the normal disclosure and session
 checks. New tools appear in the manifest only after they have fixed schemas

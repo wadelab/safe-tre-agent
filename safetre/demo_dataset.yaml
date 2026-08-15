@@ -229,6 +229,7 @@ datasets:
       device_os: cat
       wave: int
     measures: [pgsi_score, igds_score, wemwbs_score, monthly_spend_selfreport]
+    time_dims: [wave]
     internal_filters:
       age_years: int
     glm_responses:
@@ -236,6 +237,14 @@ datasets:
       igds_score: [gaussian]
       wemwbs_score: [gaussian]
       monthly_spend_selfreport: [gaussian]
+
+# Declared measure equivalence (hardening #95): a per-donor total on one view
+# that IS the sum of a measure on another. Non-spend events carry amount 0, so
+# `donor_spend.total_spend_gbp` equals each donor's sum of `spend.amount_gbp`.
+# The session auditor compares releases of one quantity ACROSS these views;
+# undeclared measures are compared within their own view only.
+quantities:
+  spend_gbp: [spend.amount_gbp, donor_spend.total_spend_gbp]
 
 # Internal high-granularity filters may be ranged only at edges that select
 # whole public bands (hardening #39). These edges mirror the declared age_band

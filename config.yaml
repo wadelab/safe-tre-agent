@@ -21,6 +21,7 @@ disclosure:
 session:
   query_budget: 20         # max released aggregates per session before review
   differencing_delta: 10   # flag same-measure totals / cohorts differing by < this
+  selection_budget_bits: 4 # data-sighted selection a session's locked plans may spend (R20/P24)
 # Three parameters are deliberately ABSENT rather than forgotten, because for
 # each of them "unset" is a distinct behaviour that writing a value would
 # destroy: `disclosure.moment2_dom_threshold` unset means second-moment cells

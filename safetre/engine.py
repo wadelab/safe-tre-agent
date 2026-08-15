@@ -599,6 +599,44 @@ class QueryEngine:
         sql = f"SELECT COUNT(DISTINCT {UNIT_PERSON}) FROM {self._unit_view(dataset)}{where}"  # nosec
         return int(self.cursor.execute(sql, params).fetchone()[0])
 
+    def sparse_levels(self, dataset: str, dimension: str, filters,
+                      threshold: int) -> list:
+        """The declared levels of `dimension` whose cell holds FEWER than
+        `threshold` distinct donors within the cohort `filters` — i.e. exactly
+        the design cells a model over `dimension` would have suppressed, and
+        therefore the levels a locked plan's `exclude_sparse` contingency
+        drops (spec R20).
+
+        Privileged and never released. It reads the internal unit view, and
+        the *result* — which levels were sparse — is the withheld cohort
+        structure the canonical refusal exists to hide (hardening #30, #66):
+        a denied model gives the analyst NO cell table, so without this probe
+        they cannot know which category to exclude. So the executor charges
+        one bit of the session's selection budget per level returned (P24);
+        this method only computes the truth.
+
+        Restricted to DECLARED levels (`schema.declared_domain`): an undeclared
+        or hostile value is never a level a plan can name, and a NULL cell is
+        not a level at all. Deterministic order (declared-domain order) so the
+        rewrite and the bit charge are reproducible.
+        """
+        from .schema import declared_domain
+        domain = declared_domain(dimension)
+        if domain is None:
+            raise ValueError(
+                f"exclude_sparse needs a declared categorical dimension; "
+                f"{dimension!r} has no domain")
+        where, params = _where_triples(filters)
+        sql = (
+            f"SELECT {_ident(dimension)} AS lvl, COUNT(DISTINCT {UNIT_PERSON}) AS n "  # nosec
+            f"FROM {self._unit_view(dataset)}{where} "
+            f"GROUP BY {_ident(dimension)}")
+        counts = {row[0]: int(row[1])
+                  for row in self.cursor.execute(sql, params).fetchall()}
+        # a declared level with no rows in the cohort is absent from counts and
+        # counts as 0 (below threshold) — the plan may legitimately exclude it
+        return [lvl for lvl in domain if counts.get(lvl, 0) < threshold]
+
     def row_symdiff_donors(self, dataset: str, filters_a, filters_b) -> int:
         """Distinct donors behind the rows exactly one of two queries counted.
 
@@ -631,6 +669,44 @@ class QueryEngine:
         )
         params = params_a + params_b + params_b + params_a
         return int(self.cursor.execute(sql, params).fetchone()[0])
+
+    def contribution_symdiff(self, dataset_a: str, column_a: str, filters_a,
+                             dataset_b: str, column_b: str, filters_b) -> int:
+        """Donors whose per-person CONTRIBUTION to two releases differs.
+
+        The cross-view differencing check (hardening #95). Two releases of one
+        declared quantity on different views — a per-event view and a per-
+        person rollup, say — aggregate different row universes, so neither
+        the row-level leg ("the rows exactly one query aggregated") nor the
+        donor-set leg is the right question: the donor sets can differ by
+        hundreds of people who contribute ZERO to both (people in a rollup
+        who have no events) while the two sums still differ by exactly one
+        person's total. What governs the disclosure of a difference of two
+        sums is the set of people whose summed contribution is not the same
+        in the two releases; this counts them, each side under its OWN
+        predicate on its OWN unit view, comparing per-donor sums with a
+        tolerance for floating-point summation order.
+
+        For a declared quantity the two columns measure the same thing per
+        person, which is what makes the comparison meaningful; an undeclared
+        pair is never compared. Exact rather than simulatable, like
+        `row_symdiff_donors` (decision D7).
+        """
+        unit_a = self._unit_view(dataset_a)
+        unit_b = self._unit_view(dataset_b)
+        wa, pa = _where_triples(filters_a)
+        wb, pb = _where_triples(filters_b)
+        ca, cb = _ident(column_a), _ident(column_b)
+        sql = (
+            f"WITH a AS (SELECT {UNIT_PERSON} AS d, SUM({ca}) AS s FROM {unit_a}{wa} "   # nosec
+            f"GROUP BY {UNIT_PERSON}), "
+            f"b AS (SELECT {UNIT_PERSON} AS d, SUM({cb}) AS s FROM {unit_b}{wb} "
+            f"GROUP BY {UNIT_PERSON}) "
+            f"SELECT COUNT(*) FROM (SELECT COALESCE(a.s, 0) AS sa, COALESCE(b.s, 0) AS sb "
+            f"FROM a FULL OUTER JOIN b ON a.d = b.d) t "
+            f"WHERE ABS(sa - sb) > 1e-6"
+        )
+        return int(self.cursor.execute(sql, pa + pb).fetchone()[0])
 
     def cohort_symdiff(self, dataset: str, filters_a, filters_b,
                        dataset_b: str | None = None) -> int:

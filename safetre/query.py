@@ -328,6 +328,74 @@ class GLMSpec(BaseModel):
         return _normalized_filters(self.filters)
 
 
+class SeriesSpec(BaseModel):
+    """A time-series request (spec R15): a vetted per-window aggregate of one
+    measure along a DECLARED time axis, with its trend, autocorrelation and
+    periodogram computed from the released series alone.
+
+    The window aggregate is an ordinary QuerySpec (`stat` of `response`
+    grouped by `time`), so O2/O3/O4 are inherited; the series diagnostics are
+    a pure function of the finalized windows (P21), and a suppressed window
+    denies the whole series (P19). `terms` exposes the time axis so the
+    generic model path drives this tool unchanged, as it does ANOVA.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    tool: Literal["series"] = "series"
+    dataset: str
+    response: str
+    time: str
+    stat: Literal["mean", "sum"] = "mean"
+    filters: list[Filter] = []
+
+    @field_validator("dataset")
+    @classmethod
+    def _dataset_known(cls, v):
+        return _known_dataset(v)
+
+    @field_validator("filters")
+    @classmethod
+    def _limit_filters(cls, v):
+        if len(v) > MAX_FILTERS:
+            raise ValueError(f"at most {MAX_FILTERS} filters")
+        return v
+
+    @model_validator(mode="after")
+    def _check_allowlist(self):
+        cat = CATALOGUE[self.dataset]
+        if self.response not in cat["measures"]:
+            raise ValueError(
+                f"response {self.response!r} is not a measure of dataset {self.dataset!r} "
+                f"(measures: {sorted(cat['measures'])})")
+        if self.time not in cat.get("time_dims", []):
+            raise ValueError(
+                f"time {self.time!r} is not a declared time axis of dataset "
+                f"{self.dataset!r} (time axes: {sorted(cat.get('time_dims', []))})")
+        # decidable from the PUBLIC domain, so refused at the request rather
+        # than from data: an axis with fewer declared windows than a series
+        # needs can never carry one, whatever the cohort
+        from .schema import declared_domain
+        domain = declared_domain(self.time)
+        if domain is not None and len(domain) < 4:
+            raise ValueError(
+                f"time axis {self.time!r} declares only {len(domain)} windows; a "
+                "series needs at least 4")
+        check_filters(self.dataset, self.filters)
+        if any(f.column == self.response for f in self.filters):
+            raise ValueError("response cannot also be filtered in a series query")
+        if any(f.column == self.time for f in self.filters):
+            raise ValueError("the time axis cannot also be filtered in a series query")
+        return self
+
+    @property
+    def terms(self) -> list[str]:
+        """The time axis as a term list, for the generic model path."""
+        return [self.time]
+
+    def model_key(self) -> str:
+        return f"{self.dataset}:series:{self.stat}:{self.response}~{self.time}"
+
+
 class AnovaSpec(BaseModel):
     """A one-way ANOVA request (spec R15) — the simplest possible model tool,
     and a worked example of adding a statistical capability (docs/adding-a-

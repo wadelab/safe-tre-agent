@@ -20,6 +20,7 @@ weaken what it says.
 from __future__ import annotations
 
 import os
+import re
 import sys
 
 import pandas as pd
@@ -90,7 +91,12 @@ def test_the_legacy_path_is_not_reachable_from_anything_that_ships():
     for module in ("safetre_web/app.py", "safetre/cli.py", "safetre/service.py"):
         source = open(os.path.join(root, module)).read()
         assert "run_in_sandbox" not in source
-        assert "import Analyst" not in source
+        # the legacy code-writing `Analyst` sandbox class specifically — not
+        # the inside-analyst vetted loop `AnalystLoop`, which is a different
+        # thing entirely (word boundary so `AnalystLoop`/`LLMAnalystPolicy`
+        # do not trip it)
+        assert not re.search(r"\bimport Analyst\b(?!Loop|Policy)", source)
+        assert "safetre.guards" not in source and "redteam.legacy" not in source
 
 
 def test_the_release_ordering_does_not_stop_the_bypass(tmp_path):

@@ -34,7 +34,11 @@ def test_skeleton_export_is_json_roundtrippable_and_bounded():
     live = registry_skeleton()
     assert json.loads(json.dumps(live)) == live
     assert set(live) == {"skeleton_version", "catalogue", "aggregate", "model"}
-    assert set(live["model"]) == {"glm", "anova"}
+    assert set(live["model"]) == {"glm", "anova", "series"}
     assert 500 < len(live["model"]["glm"]) < 2000
     assert 0 < len(live["model"]["anova"]) < 200
+    # the demo declares one time axis (`wave`, two windows), which the series
+    # tool refuses at the request; its admissible demo space is therefore
+    # empty and the tool is exercised on the NIGHTPLAY study instead
+    assert len(live["model"]["series"]) == 0
     assert 20 < sum(len(v) for v in live["aggregate"].values()) < 200

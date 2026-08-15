@@ -435,7 +435,7 @@ def model_registry() -> dict[str, ModelProcedure]:
     through this function rather than touching `MODEL_REGISTRY` directly, so
     there is no way to observe it half-populated.
     """
-    from . import anova, glm  # noqa: F401  (self-register on import)
+    from . import anova, glm, series  # noqa: F401  (self-register on import)
 
     return MODEL_REGISTRY
 

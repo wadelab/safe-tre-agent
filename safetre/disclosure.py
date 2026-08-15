@@ -895,12 +895,43 @@ class SessionAuditor:
     # is about — it is how a differencing pair gets released. What the budget
     # bound leaves is a cost question, and that is answered where the budget's
     # own ceiling is set (`config.py::_FLOORS`).
-    _cohorts: list[tuple[str, tuple]] = field(default_factory=list)
+    # (dataset, filters, quantity): the quantity is the declared measure
+    # equivalence class of the released measure (dataset.quantity_of), or
+    # None, and is what makes a release comparable ACROSS views (#95)
+    _cohorts: list[tuple[str, tuple, str | None]] = field(default_factory=list)
     _spent: int = 0
+    # the selection ledger (R20/P24): bits of data-sighted selection a locked
+    # plan's contingencies have spent this session, against `selection_budget`
+    selection_budget: int = 4
+    _selection_spent: int = 0
 
     @property
     def spent(self) -> int:
         return self._spent
+
+    @property
+    def selection_spent(self) -> int:
+        return self._selection_spent
+
+    def selection_remaining(self) -> int:
+        return max(0, self.selection_budget - self._selection_spent)
+
+    def charge_selection(self, bits: int) -> bool:
+        """Spend `bits` of data-sighted selection if the ledger can afford
+        them; return whether it could. A refusal spends nothing — the fact
+        that a contingency was unaffordable is a fact about the plan, not
+        about the data."""
+        if bits < 0:
+            raise ValueError("selection bits cannot be negative")
+        if self._selection_spent + bits > self.selection_budget:
+            return False
+        self._selection_spent += bits
+        return True
+
+    def restore_selection(self, bits: int) -> None:
+        """Replay a charge from the audit log (no affordability check: the
+        live session paid it)."""
+        self._selection_spent += int(bits)
 
     @property
     def cohort_count(self) -> int:
@@ -965,12 +996,19 @@ class SessionAuditor:
         self._history.append((measure, total_n))
         return findings
 
-    def observe_cohort(self, dataset: str, filters: tuple, bound) -> list[Finding]:
+    def observe_cohort(self, dataset: str, filters: tuple, bound,
+                       quantity: str | None = None) -> list[Finding]:
         """Flag a release whose difference from an earlier one is too few people.
 
         `filters` is QuerySpec.normalized_filters();
         `bound(prev_dataset, a, dataset, b) -> int` returns an upper bound on
-        the number of individuals the two releases differ over.
+        the number of individuals the two releases differ over; for a pair
+        on DIFFERENT views it is called as `bound(..., quantity=q)` and must
+        compare per-person contributions of that declared quantity
+        (`service._difference_bound`, `engine.contribution_symdiff`).
+        `quantity` is the declared measure equivalence class of THIS release's
+        measure (`dataset.quantity_of`), or None for an undeclared measure,
+        which is compared within its own view only.
         The caller injects `service._difference_bound`, which takes the smaller of
         the simulatable marginal bound and the exact count of donors behind the
         rows exactly one of the two queries aggregated (hardening #40).
@@ -988,29 +1026,41 @@ class SessionAuditor:
         a filter naming a value no record holds drops exactly the donors who
         carry a NULL. Both were live before this changed.
         """
-        # OPEN GAP, stated where it lives: the `prev_dataset != dataset` skip
-        # below means this layer compares WITHIN ONE VIEW ONLY. A catalogue
+        # Within ONE view every prior cohort is compared, whatever it measured
+        # (the blanket rule, conservative). ACROSS views only a pair of the
+        # same DECLARED quantity is compared (hardening #95): a catalogue
         # publishes several views of the same people, and a differencing pair
-        # with one leg in each is caught by neither this layer nor the totals
-        # layer — reproduced, one individual's exact annual spend recovered
-        # from two individually safe releases. Hardening #95 has the numbers,
-        # why dropping the dataset from the key is NOT the fix (the two values
-        # must be commensurable, which only the catalogue knows), and the
-        # declared-measure-equivalence design that is. Roadmap item 0.0.
-        for prev_dataset, prev_filters in self._cohorts:
-            if prev_dataset != dataset or prev_filters == filters:
+        # with one leg in each recovered one individual's exact annual spend
+        # from two individually safe releases. Dropping the dataset from the
+        # key was measured and withdrawn — differencing binds only between
+        # commensurable releases, and a correlation minus a mean recovers
+        # nothing however close the cohorts are — so commensurability is
+        # DECLARED in the dataset definition (`quantities:`) and threaded
+        # through here. Identical predicates on two views select the same
+        # people by declaration, so they are skipped like identical predicates
+        # on one view.
+        for prev_dataset, prev_filters, prev_quantity in self._cohorts:
+            if prev_filters == filters:
                 continue
-            if bound(prev_dataset, prev_filters, dataset, filters) < self.threshold:
+            if prev_dataset == dataset:
+                too_close = bound(prev_dataset, prev_filters, dataset, filters) < self.threshold
+            elif quantity is not None and prev_quantity == quantity:
+                too_close = bound(prev_dataset, prev_filters, dataset, filters,
+                                  quantity=quantity) < self.threshold
+            else:
+                continue
+            if too_close:
                 return [Finding(
                     "high", "differencing",
                     "cohort is within the differencing threshold of a previously "
                     "released cohort: possible differencing attack")]
         return []
 
-    def record_cohort(self, dataset: str, filters: tuple) -> None:
+    def record_cohort(self, dataset: str, filters: tuple,
+                      quantity: str | None = None) -> None:
         """Remember a cohort once its result has actually been released."""
-        if (dataset, filters) not in self._cohorts:
-            self._cohorts.append((dataset, filters))
+        if (dataset, filters, quantity) not in self._cohorts:
+            self._cohorts.append((dataset, filters, quantity))
 
 
 def hitl_decision(findings: list[Finding]) -> str:

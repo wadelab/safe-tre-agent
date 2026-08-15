@@ -57,8 +57,8 @@ The current endpoint is:
 GET /api/manifest
 ```
 
-The manifest currently publishes three executable tools: `aggregate_query`,
-`glm`, and `anova`. `aggregate_query` supports fixed count, mean, sum, sum of
+The manifest currently publishes four executable tools: `aggregate_query`,
+`glm`, `anova`, and `series`. `aggregate_query` supports fixed count, mean, sum, sum of
 squares, and Pearson correlation requests. Correlation uses two validated
 measure columns from one dataset and returns only aggregate `value`, `p_value`,
 and `n`.
@@ -69,7 +69,7 @@ output columns. They are accepted only in the specific schema positions the
 safepod validator allows.
 
 Stats families still to come, such as `regression` and `survival`, are listed
-as planned only (`glm` and `anova` are available). A proposed tool call is
+as planned only (`glm`, `anova` and `series` are available). A proposed tool call is
 executable only if it appears in `tools[]` with `status: "available"`.
 
 ## Inside vetting
@@ -104,6 +104,7 @@ arbitrary code. The first one is live:
 |---|---|---|---|
 | `glm` | **available (v1, manifest v12)** | gaussian, logistic (binomial), Poisson over categorical terms | fitted from gateway-finalized design cells only (R15/P21); any suppressed cell denies the model (P19); ≤ 3 terms, canonical links, per-dataset response allowlist; releases coefficients + model block + the vetted cell table; no row diagnostics ever (P20) |
 | `anova` | **available (v1, manifest v12)** | one-way analysis of variance from vetted group cells | fitted from the same gateway-finalized mean/`sum_sq`/`n` cells the gaussian GLM plans; any suppressed cell denies the table (P19); reproducible from the released cell table |
+| `series` | **available (v1, manifest v13)** | a time series of one measure — its mean or sum per window along a declared time axis — with trend, autocorrelation and periodogram | the window table is one ordinary QuerySpec that passes the gateway cell by cell; the diagnostics are a pure function of the released windows (P21) and reproduce from them; any suppressed window denies the series (P19); an axis with fewer than four declared windows is refused at the request; a gap is refused naming the axis, never a quantity (P22); at most four lags |
 | `regression` | planned | continuous-predictor linear models (moment cells, L2) | min rows per parameter, bounded covariate count, no residual/fitted-value release |
 | `survival` | parked | time-to-event models | extra caution: event counts, censoring patterns, and time granularity can disclose |
 

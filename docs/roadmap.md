@@ -15,35 +15,20 @@ not new controls.
 ## 0. Security follow-ups from round 11
 
 Not a new workstream — the residuals the [round-11 audit](hardening-log.md)
-left behind, ordered by what they buy. 0.0 is the round's one open finding;
-0.1 and 0.2 are cheap and change how every later round is run, which is why
-they sit above the larger workstreams below.
+left behind, ordered by what they buy. 0.0 was the round's one open finding
+and is now closed (round 13); 0.1 and 0.2 are cheap and change how every
+later round is run, which is why they sit above the larger workstreams below.
 
-**0.0 — Declared measure equivalence, and close #95.** The differencing lineage
-compares cohorts only within one dataset name, so a catalogue publishing
-several views of one donor population carries a surface neither layer
-examines. Reproduced: `sum(total_spend_gbp)` over North West and
-`sum(amount_gbp)` over North West excluding `sex=X`, both individually safe,
-differ by one person, and the difference is that person's exact annual spend —
-GBP 120.93, error 0.000000.
-
-Dropping the dataset from the key does NOT fix it, and that was measured too:
-differencing binds only between **commensurable** releases, and a correlation
-minus a mean recovers nothing however close the cohorts are, so the blanket
-version denied the demo's own benign correlation after one unrelated query
-while adding no safety. What the control needs is the fact the catalogue holds
-and the code cannot infer — that `donor_spend.total_spend_gbp` *is* the
-per-donor sum of exactly the `spend.amount_gbp` events.
-
-So: a `quantity:` declaration on measures in the dataset definition, two
-measures with the same quantity being comparable across views; threaded
-through `SessionAuditor.record_cohort`; and — the part that makes this more
-than an afternoon — carried in the audit row's `accounting` block, which
-stores `[dataset, filters]` pairs today, so replay must keep every chain
-written before the change verifying and restoring (#58, #74). Extend
-`formal/disclosure_policy.als`, which has no dataset atom at all and therefore
-could not have expressed the finding. Acceptance: `redteam/attacks.yaml` gains
-the cross-view pair, and the demo's correlation still releases.
+**0.0 — Declared measure equivalence, and close #95.** *Delivered 2026-08-15
+(round 13). The dataset definition declares `quantities:`, the auditor
+compares a pair on different views only when both carry the same declared
+quantity, the bound is the per-person contribution comparison (#107 — the
+donor-set difference the groundwork pointed at is not sound for sums; the
+NIGHTPLAY reproducer showed it), the audit accounting carries the quantity
+and pre-#95 rows still restore, and the Alloy model gained the view atom it
+lacked. Both reproducers deny; the benign correlation still releases;
+`redteam/attacks.yaml` and the analyst red team carry the pair as
+`expect_block`.*
 
 **0.1 — Make the adversarial dataset a first-class artifact.** Three of round
 11's findings (#92, #93, #94) are arithmetic that is wrong in general and
@@ -84,14 +69,10 @@ selecting the key per row, makes rotation an ordinary operation. This matters
 more now that #81 refuses to start on an unverifiable chain — a well-meant
 rotation currently bricks the service.
 
-**0.5 — Declare the population explicitly** (companion to 0.0). Comparing
-cohorts across views presupposes the views describe the same people, which the
-code would otherwise have to infer from a shared `person_key` — right for the
-demo catalogue and wrong for a definition holding genuinely disjoint
-populations, such as a donors study and a staff study in one file. An explicit
-`population:` field per dataset, defaulting to the person key, states it. Both
-declarations land together: a cross-view comparison needs the same population
-AND a commensurable quantity, and neither is inferable.
+**0.5 — Declare the population explicitly** (companion to 0.0). *Delivered
+with 0.0: each view may name its `population:`, defaulting to the person key;
+the demo and NIGHTPLAY leave it unset because their views describe the same
+people.*
 
 **0.6 — Bring the last three dials inside the policy loader.**
 `SAFETRE_RATE_LIMIT`, `SAFETRE_AUDIT_VERIFY_RATE_LIMIT` and
@@ -264,9 +245,15 @@ R19 and P23; [D8](decisions/D8-inside-analyst-vetted-loop.md)) — every step
 an ordinary request under one session, a policy shown only the public side,
 a typed dossier, a narrator checked against the released tables — red-teamed
 with the model as adversary (`redteam/analyst_attacks.yaml`, in CI) and run
-live over the question bank. Next is phase 2 (registered time-series
-procedures) and, in parallel, making the question bank's finer marks
-executable. Ordered after items 0–4 because it *depends* on them: it consumes
+live over the question bank. Phase 2, the `series` tool, followed the same day, and the question
+bank's marks are executable. Phase 3's locked-plan core is delivered (spec R20/P24, `safetre/plan.py`):
+a plan committed to the audit chain before it runs, executed deterministically,
+with the one data-sighted move (`exclude_sparse`) metered in bits against a
+session selection budget. Chimp is now runnable in the web interface behind an
+operator-set `SAFETRE_ANALYST` switch. What remains on the research core is the
+differential-privacy accountant (item 3), which replaces the interim bit
+ledger, and wiring a model to author plans; alongside, the F0
+homomorphic-encryption spike. Ordered after items 0–4 because it *depends* on them: it consumes
 the DP accountant (3), motivates cross-session lineage (4) and the
 declared measure equivalence of 0.0, and is the feature that would unpark
 submit-and-collect delivery. It is placed last not because it matters least

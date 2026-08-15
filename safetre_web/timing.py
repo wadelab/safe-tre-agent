@@ -118,6 +118,23 @@ def _always_admitted(path: str) -> bool:
     return path in ALWAYS_ADMITTED or path.startswith(ALWAYS_ADMITTED_PREFIXES)
 
 
+# Paths exempt from the response-time DEADLINE entirely (not merely the pool
+# cap). The inside analyst ("/api/chimp") runs a whole multi-step analysis and
+# legitimately takes far longer than the per-query ceiling; racing it against
+# that deadline would refuse every real research question. Its timing reveals
+# how many analyses the analyst ran, not any withheld cell value — the dossier
+# carries only vetted releases, so this is a weaker and different channel than
+# the per-query one this boundary closes. The principled answer for a
+# long-running analyst is asynchronous submit-and-collect (decision D5); until
+# that lands, this synchronous exemption is a stated proof-of-concept limit,
+# and it is the ONLY path allowed past the deadline.
+DEADLINE_EXEMPT = ("/api/chimp",)
+
+
+def _deadline_exempt(path: str) -> bool:
+    return path in DEADLINE_EXEMPT
+
+
 class ResponseTimeBoundary:
     """Pad every response to the next quantum; refuse anything past the ceiling.
 
@@ -222,6 +239,13 @@ class ResponseTimeBoundary:
 
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+
+        # The inside analyst is exempt from the whole boundary (see
+        # DEADLINE_EXEMPT): it runs to completion, unpadded, because a
+        # multi-step analysis cannot fit the per-query window and its timing is
+        # not the per-cell channel this control closes.
+        if _deadline_exempt(scope.get("path", "")):
             return await self.app(scope, receive, send)
 
         quantum_ms, ceiling_ms = self.settings()

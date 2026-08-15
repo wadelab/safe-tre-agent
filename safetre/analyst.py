@@ -75,6 +75,10 @@ ANALYSIS_CUES = [
     "as a function of", "controlling for", "adjusted for", "adjusting for",
     "effect of", "odds", "anova", "analysis of variance", "differ across",
     "differ between",
+    # time-series requests (R15, the `series` tool)
+    "time series", "time-series", "series of", "over time", "trend",
+    "seasonal", "seasonality", "autocorrelation", "periodogram", "by month",
+    "monthly", "by wave", "across waves",
 ]
 # The dataset-specific vocabulary the intent filter accepts as on-topic, and
 # the synonym maps the fidelity checks resolve requests against. Mirrored from
@@ -310,8 +314,13 @@ def check_term_coherence(request: str, dataset: str, response: str,
             f"{'omits it' if len(missing) == 1 else 'omits them'} "
             f"(terms={sorted(modelled)})")
 
-    # Rule B: a predictor the request never mentioned.
-    hallucinated = sorted(t for t in modelled if t not in referenced)
+    # Rule B: a predictor the request never mentioned. A declared TIME AXIS
+    # is exempt: it is the natural axis of any series / trend / "over time"
+    # request whether or not the request names it ("monthly", "over the
+    # year"), and there is at most one per view, so modelling it substitutes
+    # no question. A dropped time axis is still caught by rule C above.
+    time_axes = set(CATALOGUE[dataset].get("time_dims", ()))
+    hallucinated = sorted(t for t in modelled if t not in referenced and t not in time_axes)
     if hallucinated:
         return False, (
             f"query models with {', '.join(hallucinated)}, which was not part "

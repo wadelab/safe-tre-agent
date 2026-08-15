@@ -124,21 +124,65 @@ the test fails if it ever silently stops reproducing.
 ### What it found, live
 
 Pointed at the synthetic NIGHTPLAY study with a 120B-class open-weight model
-as the assistant, and given the study's nine-question exam three times in an
-afternoon while we fixed what each run taught: on the last run it got **nine
-out of nine** verdicts right, every number in every summary traced to a
-released table, and the audit chain verified. It found the five-fold rise in
-stake with night use, showed it survived splitting by employment, called the
-charity question a null (significant but negligible — the trap the study set,
-and the one it fell into on the first run), found the summer peak and the
-larger late-night bet, saw harm rising over the year for heavy users only,
-and refused the three questions it should refuse — two of them without asking
-a single query, on the strength of the catalogue alone. Where it is still
-green: it stratifies by hand instead of fitting the adjusted model that would
-be sharper, and it stops after a few steps of a twenty-step budget. Nine
-questions and one model is a first measurement, not a result; but every miss
-on the way was a defect in the instructions we hand the model, and those are
-ours to fix.
+as the assistant, and given the study's nine-question exam five times in one
+day while we fixed what each sitting taught: it got eight or nine of nine
+verdicts right in four of the five sittings, refused the three questions it
+should refuse every time (two of them without asking a single query), called
+the charity question a null in four of five, and every number in every
+summary traced to a released table once the checker had learned about
+thin-spaced thousands and typographic minus signs. The exam also has finer
+**marks** now — did it adjust for the confounder, did it use the person-level
+band, did it say why it refused — and those are where the assistant is still
+green: it answers "which products carry the late-night effect?" about
+late-night *bets* rather than late-night *users* every time (a correct table,
+a different question); when its adjusted model is refused it works around
+rather than excluding the small category the instructions tell it to; and
+once in three sittings it asks the questionnaire for a calendar month, is
+told no, and gives up. Nine questions and one model is a first measurement,
+not a result; the same instructions score differently on different days,
+which is itself something the exam now shows. But every mistake in the
+*instructions we hand the model* was ours to fix and is fixed, and what
+remains are the model's habits, which the exam can now score sitting after
+sitting.
+
+### A new instrument for the assistant: time series
+
+Until now the assistant could ask for averages by month and squint at them.
+Now the librarian offers a **time-series** answer: the checked month-by-month
+table *and*, computed only from that released table, whether it trends up or
+down, whether one month predicts the next, and which cycle dominates. Because
+every number comes from the released windows, the same safety story holds —
+you could recompute the lot from the table you were handed. A series over a
+group too small to release is refused whole; a time axis with only two waves
+is refused before anything is looked up, because two points are not a
+series. On its first live outing the assistant used it to find the planted
+six-month cycle in stakes and report it with the lag-one autocorrelation and
+the slope — from the released numbers alone.
+
+### Letting the assistant peek — safely — and meeting it through a window
+
+There is one thing a really good assistant does that ours could not: when the
+librarian refuses a model because one group is too small, a human analyst
+says "fine, drop that group and try again." But *which* group was too small is
+exactly what the librarian hides &mdash; telling you would leak that the group
+exists. So we let the assistant do it only under a rule: it must **write down
+its whole plan and seal it in the logbook before it looks**, a machine (not
+the assistant) runs the plan, and the one allowed peek &mdash; "which groups
+are too small to drop?" &mdash; is **paid for in tokens** from a tiny budget.
+Spend the budget and the peek is refused. Learn nothing you could not have
+declared you might learn. When the fuller privacy budget (the "epsilon"
+accountant) arrives, this token jar is exactly what it becomes.
+
+And you can now talk to the assistant **through a web page**. The operator of
+the environment decides whether an assistant lives inside at all &mdash; you
+can&rsquo;t switch it on from the browser any more than you can move the
+library&rsquo;s walls. When it is switched on, the page is just an intercom:
+you type a research question, it travels inside, the assistant does its work
+behind the same librarian, and only the checked answer comes back out. We ran
+it for real: asked "is late-night phone use linked to gambling?", the
+assistant ran nine analyses inside, got four of them refused by the librarian
+(and said so, plainly), and handed back a proper answer built from the five it
+was allowed &mdash; with the logbook intact.
 
 ### What it still does not do
 

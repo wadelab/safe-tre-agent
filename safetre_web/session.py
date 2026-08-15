@@ -92,10 +92,11 @@ class Session:
 
 class SessionStore:
     def __init__(self, *, threshold: int = 10, budget: int = 20,
-                 max_sessions: int = MAX_SESSIONS):
+                 max_sessions: int = MAX_SESSIONS, selection_budget: int = 4):
         self._sessions: "OrderedDict[str, Session]" = OrderedDict()
         self._threshold = threshold
         self._budget = budget
+        self._selection_budget = selection_budget
         self._max_sessions = max_sessions
         self._lock = threading.Lock()
 
@@ -131,7 +132,8 @@ class SessionStore:
         with self._lock:
             sess = self._sessions.get(user)
             if sess is None:
-                sess = Session(SessionAuditor(threshold=self._threshold, budget=self._budget))
+                sess = Session(SessionAuditor(threshold=self._threshold, budget=self._budget,
+                                              selection_budget=self._selection_budget))
                 self._sessions[user] = sess
                 if len(self._sessions) > self._max_sessions:
                     victim = self._evictable(exclude=user)
@@ -239,7 +241,8 @@ class SessionStore:
             session = rebuilt.get(user)
             if session is None:
                 session = Session(SessionAuditor(threshold=self._threshold,
-                                                 budget=self._budget))
+                                                 budget=self._budget,
+                                                 selection_budget=self._selection_budget))
                 rebuilt[user] = session
             # order by LAST activity, not first sighting: if the cap has to
             # drop anyone it should drop whoever has been quiet longest, and
@@ -251,13 +254,21 @@ class SessionStore:
             if isinstance(accounting, dict) and "cost" in accounting:
                 session.auditor.charge(int(accounting["cost"]))
                 for entry in accounting.get("cohorts") or []:
-                    dataset, filters = entry
-                    session.auditor.record_cohort(dataset, _restore_filters(filters))
+                    # two elements before #95, three after: the third is the
+                    # declared quantity that makes the cohort comparable
+                    # across views; older rows restore within-view only
+                    dataset, filters = entry[0], entry[1]
+                    quantity = entry[2] if len(entry) > 2 else None
+                    session.auditor.record_cohort(dataset, _restore_filters(filters), quantity)
                 # the cheap total-delta layer, which used to come back empty
                 # (hardening #74). Rows written before this carry no `totals`
                 # key and simply restore nothing, exactly as they did.
                 for measure, total in accounting.get("totals") or []:
                     session.auditor.restore_observation(measure, float(total))
+                # a locked plan's contingency charge (R20/P24), replayed as
+                # paid; rows without the key restore nothing
+                if accounting.get("selection_bits"):
+                    session.auditor.restore_selection(int(accounting["selection_bits"]))
                 continue
 
             # Pre-#58 rows carry no accounting, so they are replayed by the

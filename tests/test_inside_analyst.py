@@ -362,3 +362,13 @@ def test_verdict_spellings_are_normalised_but_the_vocabulary_stays_closed():
     with pytest.raises(ValueError):
         parse_action(json.dumps({"action": "conclude", "verdict": "partially supported",
                                  "claims": [{"text": "x", "verdict": "supported", "evidence": [1]}]}))
+
+
+def test_a_conclusion_without_an_overall_verdict_takes_its_first_substantive_claims():
+    c = parse_action(json.dumps({"action": "conclude",
+                                 "claims": [{"text": "no causal reading", "verdict": "not_answerable", "evidence": []},
+                                            {"text": "survives stratification", "verdict": "supported", "evidence": [3]}]}))
+    assert c.verdict == "supported"
+    c2 = parse_action(json.dumps({"action": "conclude",
+                                  "claims": [{"text": "x", "verdict": "not_answerable", "evidence": []}]}))
+    assert c2.verdict == "not_answerable"

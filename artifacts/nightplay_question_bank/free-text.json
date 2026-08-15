@@ -4,17 +4,17 @@
   "steps": [],
   "claims": [
     {
-      "text": "Free-text comments are not available in any dataset, so their content cannot be summarized using aggregate queries.",
+      "text": "The research environment does not contain free-text comment data, so a summary of what people wrote cannot be produced from available aggregates.",
       "verdict": "not_answerable",
       "evidence": [],
-      "reason": "The TRE only provides aggregate measures; free-text fields are not part of the released data."
+      "reason": "No dataset includes free-text comments; only structured variables are available."
     }
   ],
   "verdict": "not_answerable",
-  "notes": "No further aggregates can be requested to address this question.",
+  "notes": "This conclusion is based on the catalogue of datasets and measures provided.",
   "budget": 20,
   "budget_spent": 0,
   "stopped_because": "concluded",
-  "narrative": "The request to summarise the free\u2011text comments could not be fulfilled. The Trusted Research Environment releases only aggregate tables; free\u2011text fields are not included in any released dataset. Consequently, there is no data available from which to extract or summarise what people wrote, and no further aggregate queries can be generated to address this question.",
+  "narrative": "The research environment does not contain any free\u2011text comment data; only structured variables are available. Consequently, a summary of what people wrote in free\u2011text comments cannot be produced from the existing aggregates. This limitation is noted as a refusal to answer the question due to the absence of the required data.",
   "unsupported_figures": []
 }

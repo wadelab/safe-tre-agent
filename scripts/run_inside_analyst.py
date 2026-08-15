@@ -69,7 +69,8 @@ def main() -> int:
         vetter=build_vetter(cfg.vetter, cfg.checker_cmd))
     service = QueryService(tables, policy)
     client = LLMClient()
-    auditor = SessionAuditor(threshold=cfg.min_cell_size, budget=cfg.query_budget)
+    auditor = SessionAuditor(threshold=cfg.min_cell_size, budget=cfg.query_budget,
+                               selection_budget=cfg.selection_budget_bits)
     log = AuditLog(os.environ["SAFETRE_AUDIT_DB"])
     policy = LLMAnalystPolicy(client, cfg)
     loop = AnalystLoop(service, policy, auditor=auditor,

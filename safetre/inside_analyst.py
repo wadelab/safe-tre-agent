@@ -113,7 +113,9 @@ class Dossier:
         return json.dumps(self.to_dict(), indent=2, default=str, **kw)
 
     def released_numbers(self) -> set[float]:
-        """Every numeric value in every released frame and companion."""
+        """Every numeric value in every released frame and companion — and
+        every number written inside a released string cell key ("20-35k",
+        "18-24"), since a band label quoted in prose is not a figure."""
         out: set[float] = set()
         for s in self.steps:
             for rows in ([s.output or []] + list((s.artifacts or {}).values())):
@@ -123,6 +125,12 @@ class Dossier:
                             continue
                         if isinstance(v, (int, float)) and not (isinstance(v, float) and math.isnan(v)):
                             out.add(float(v))
+                        elif isinstance(v, str):
+                            for tok in re.findall(r"\d+\.?\d*", v):
+                                try:
+                                    out.add(float(tok))
+                                except ValueError:
+                                    pass
         return out
 
     def check_narrative(self, text: str) -> list[str]:
@@ -146,8 +154,10 @@ class Dossier:
                 derived.add(r * 100)
         bad: list[str] = []
         # "72 000" (thin, no-break or plain space as the thousands separator)
-        # is one figure, not two
+        # is one figure, not two; and a typographic minus (U+2212, U+2011,
+        # U+2013) is a sign, so "‑0.1266" is the released -0.1266, not 0.1266
         text = re.sub(r"(?<=\d)[\u202f\u00a0 ](?=\d{3}\b)", "", text)
+        text = re.sub(r"[\u2212\u2011\u2013\u2010]", "-", text)
         for tok in re.findall(r"(?<![\w.])[-+]?\d[\d,]*\.?\d*(?![\w.])", text):
             raw = tok.replace(",", "")
             try:
@@ -382,6 +392,22 @@ Rules:
   difference is "significant". Report the magnitude, and before claiming an
   effect consider whether the bands differ in composition (income, age)
   rather than in the thing asked about.
+- A category that is ABSENT from a released breakdown was suppressed as too
+  small. To fit a model over that dimension, exclude that category with a
+  filter {"column": <dimension>, "op": "!=", "value": <category>} and ask the
+  model before any unadjusted marginal.
+- Distinguish a property of PEOPLE (a per-person band such as a night-use
+  band) from a property of EVENTS (the hour band of a single bet). A question
+  about late-night USERS is answered with the person-level band; a question
+  about late-night BETS with the event-level hour band. Say which you used.
+- For seasonality, trend, "over time" or "over the year" questions use the
+  series tool: in one step it releases the vetted per-window table AND its
+  trend, autocorrelation and dominant period, which a plain breakdown by month
+  does not give you.
+- Use the budget. A research question usually has parts — the association,
+  its adjustment for a confounder, and a check that could refute you — so
+  plan several steps and do not conclude after the first released table
+  unless the question is a single fact.
 - verdict vocabulary (use these exact tokens):
     supported      = the released data show the association or effect asked about;
     null           = the released data show NO association or effect (a null
@@ -508,7 +534,7 @@ def parse_action(raw: str) -> Query | Conclude:
         return Query(sub_q.strip(), spec)
     if action == "conclude":
         verdict = _normalise_verdict(obj.get("verdict"))
-        if verdict is None:
+        if verdict is None and obj.get("verdict") not in (None, ""):
             raise ValueError(f"verdict must be one of {VERDICTS}")
         claims_raw = obj.get("claims")
         if not isinstance(claims_raw, list) or not claims_raw:
@@ -524,6 +550,13 @@ def parse_action(raw: str) -> Query | Conclude:
             if not isinstance(ev, list) or not all(isinstance(e, int) for e in ev):
                 raise ValueError("claim evidence must be a list of step ids")
             claims.append(Claim(c["text"].strip(), v, ev, str(c.get("reason") or "")))
+        if verdict is None:
+            # a conclusion whose claims all carry verdicts but which omits the
+            # overall one is a usable conclusion: the overall verdict is the
+            # first substantive claim's, else not_answerable — and the loop
+            # still requires a surviving claim of that kind to carry it
+            verdict = next((c.verdict for c in claims if c.verdict != "not_answerable"),
+                           "not_answerable")
         return Conclude(claims, verdict, str(obj.get("notes") or ""))
     raise ValueError("action must be 'query' or 'conclude'")
 

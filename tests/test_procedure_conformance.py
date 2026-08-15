@@ -101,6 +101,8 @@ MODEL_PROCEDURES = {
             "denies_on_suppression": True},
     "anova": {"multi_query": True, "fits_on_finalized_only": True,
               "denies_on_suppression": True},
+    "series": {"multi_query": True, "fits_on_finalized_only": True,
+               "denies_on_suppression": True},
 }
 
 

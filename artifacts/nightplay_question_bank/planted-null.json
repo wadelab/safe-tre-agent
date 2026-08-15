@@ -4,7 +4,7 @@
   "steps": [
     {
       "id": 1,
-      "sub_question": "Mean donation amount by night-time phone use band",
+      "sub_question": "Mean charitable donation amount by night-time phone use band.",
       "spec": {
         "dataset": "giving",
         "measure": {
@@ -46,12 +46,16 @@
     },
     {
       "id": 2,
-      "sub_question": "one-way anova of donation amount by night use band",
+      "sub_question": "Correlation between late-night phone use sessions and charitable donation amount",
       "spec": {
-        "tool": "anova",
-        "dataset": "giving",
-        "response": "amount_gbp",
-        "factor": "night_use_band",
+        "dataset": "panel",
+        "measure": {
+          "fn": "corr",
+          "column": null,
+          "x": "late_night_sessions",
+          "y": "donation_gbp"
+        },
+        "group_by": [],
         "filters": []
       },
       "status": "released",
@@ -59,59 +63,251 @@
       "findings": [],
       "output": [
         {
-          "source": "night_use_band",
-          "df": 3,
-          "sum_sq": 3062.4076,
-          "mean_sq": 1020.8025,
-          "statistic": 4.445,
-          "p_value": 0.004
+          "value": -0.0009,
+          "p_value": 0.809,
+          "n": 72000
+        }
+      ],
+      "artifacts": null,
+      "cost": 1
+    },
+    {
+      "id": 3,
+      "sub_question": "Mean charitable donation amount by night-time phone use band adjusted for income band",
+      "spec": {
+        "tool": "glm",
+        "dataset": "panel",
+        "family": "gaussian",
+        "response": "donation_gbp",
+        "terms": [
+          "night_use_band",
+          "income_band"
+        ],
+        "filters": []
+      },
+      "status": "released",
+      "message": "",
+      "findings": [],
+      "output": [
+        {
+          "term": "(intercept)",
+          "level": "",
+          "estimate": 2.0311,
+          "std_error": 0.1149,
+          "statistic": 17.6823,
+          "p_value": 0.0
         },
         {
-          "source": "Residual",
-          "df": 12431,
-          "sum_sq": 2854831.7205,
-          "mean_sq": 229.6542,
-          "statistic": null,
-          "p_value": null
+          "term": "night_use_band",
+          "level": "occasional",
+          "estimate": -0.1266,
+          "std_error": 0.1079,
+          "statistic": -1.1733,
+          "p_value": 0.241
+        },
+        {
+          "term": "night_use_band",
+          "level": "regular",
+          "estimate": -0.0736,
+          "std_error": 0.1104,
+          "statistic": -0.6667,
+          "p_value": 0.505
+        },
+        {
+          "term": "night_use_band",
+          "level": "heavy",
+          "estimate": -0.2515,
+          "std_error": 0.1894,
+          "statistic": -1.3275,
+          "p_value": 0.184
+        },
+        {
+          "term": "income_band",
+          "level": "20-35k",
+          "estimate": 0.8262,
+          "std_error": 0.1186,
+          "statistic": 6.9668,
+          "p_value": 0.0
+        },
+        {
+          "term": "income_band",
+          "level": "35-50k",
+          "estimate": 2.0125,
+          "std_error": 0.1204,
+          "statistic": 16.7187,
+          "p_value": 0.0
+        },
+        {
+          "term": "income_band",
+          "level": "50-80k",
+          "estimate": 3.6971,
+          "std_error": 0.1317,
+          "statistic": 28.0763,
+          "p_value": 0.0
+        },
+        {
+          "term": "income_band",
+          "level": ">80k",
+          "estimate": 5.9946,
+          "std_error": 0.1773,
+          "statistic": 33.803,
+          "p_value": 0.0
         }
       ],
       "artifacts": {
         "cells": [
           {
             "night_use_band": "heavy",
-            "mean": 20.46,
-            "n": 710,
-            "sum_sq": 442039.77
+            "income_band": "20-35k",
+            "mean": 2.85,
+            "n": 1225,
+            "sum_sq": 102014.72
+          },
+          {
+            "night_use_band": "heavy",
+            "income_band": "35-50k",
+            "mean": 4.07,
+            "n": 970,
+            "sum_sq": 132807.59
+          },
+          {
+            "night_use_band": "heavy",
+            "income_band": "50-80k",
+            "mean": 5.09,
+            "n": 865,
+            "sum_sq": 159595.84
+          },
+          {
+            "night_use_band": "heavy",
+            "income_band": "<20k",
+            "mean": 1.81,
+            "n": 1080,
+            "sum_sq": 59546.06
+          },
+          {
+            "night_use_band": "heavy",
+            "income_band": ">80k",
+            "mean": 5.72,
+            "n": 130,
+            "sum_sq": 29354.51
           },
           {
             "night_use_band": "occasional",
-            "mean": 21.59,
-            "n": 4535,
-            "sum_sq": 3078913.9
+            "income_band": "20-35k",
+            "mean": 2.82,
+            "n": 7560,
+            "sum_sq": 640104.03
+          },
+          {
+            "night_use_band": "occasional",
+            "income_band": "35-50k",
+            "mean": 3.96,
+            "n": 6670,
+            "sum_sq": 881167.74
+          },
+          {
+            "night_use_band": "occasional",
+            "income_band": "50-80k",
+            "mean": 5.57,
+            "n": 4610,
+            "sum_sq": 1066635.21
+          },
+          {
+            "night_use_band": "occasional",
+            "income_band": "<20k",
+            "mean": 1.94,
+            "n": 5855,
+            "sum_sq": 272879.61
+          },
+          {
+            "night_use_band": "occasional",
+            "income_band": ">80k",
+            "mean": 7.33,
+            "n": 1800,
+            "sum_sq": 617351.88
           },
           {
             "night_use_band": "rare",
-            "mean": 22.04,
-            "n": 3145,
-            "sum_sq": 2225968.14
+            "income_band": "20-35k",
+            "mean": 2.72,
+            "n": 4655,
+            "sum_sq": 351666.82
+          },
+          {
+            "night_use_band": "rare",
+            "income_band": "35-50k",
+            "mean": 3.99,
+            "n": 4610,
+            "sum_sq": 617425.0
+          },
+          {
+            "night_use_band": "rare",
+            "income_band": "50-80k",
+            "mean": 5.98,
+            "n": 3035,
+            "sum_sq": 783308.5
+          },
+          {
+            "night_use_band": "rare",
+            "income_band": "<20k",
+            "mean": 1.95,
+            "n": 3745,
+            "sum_sq": 185263.17
+          },
+          {
+            "night_use_band": "rare",
+            "income_band": ">80k",
+            "mean": 8.3,
+            "n": 1550,
+            "sum_sq": 636648.67
           },
           {
             "night_use_band": "regular",
-            "mean": 22.42,
-            "n": 4045,
-            "sum_sq": 3079980.45
+            "income_band": "20-35k",
+            "mean": 2.73,
+            "n": 6250,
+            "sum_sq": 539316.49
+          },
+          {
+            "night_use_band": "regular",
+            "income_band": "35-50k",
+            "mean": 3.92,
+            "n": 6205,
+            "sum_sq": 913475.68
+          },
+          {
+            "night_use_band": "regular",
+            "income_band": "50-80k",
+            "mean": 5.59,
+            "n": 4405,
+            "sum_sq": 1057873.64
+          },
+          {
+            "night_use_band": "regular",
+            "income_band": "<20k",
+            "mean": 1.97,
+            "n": 5040,
+            "sum_sq": 259219.36
+          },
+          {
+            "night_use_band": "regular",
+            "income_band": ">80k",
+            "mean": 8.45,
+            "n": 1740,
+            "sum_sq": 784143.29
           }
         ],
         "model": [
           {
-            "response": "amount_gbp",
-            "factor": "night_use_band",
-            "n": 12435,
-            "n_groups": 4,
-            "grand_mean": 21.9093,
-            "eta_squared": 0.0011,
-            "df_between": 3,
-            "df_within": 12431
+            "family": "gaussian",
+            "link": "identity",
+            "response": "donation_gbp",
+            "n": 72000,
+            "n_cells": 20,
+            "params": 8,
+            "df_resid": 71992.0,
+            "deviance": 8848740.8047,
+            "r_squared": 0.0231
           }
         ]
       },
@@ -120,20 +316,26 @@
   ],
   "claims": [
     {
-      "text": "Late-night phone use is not meaningfully linked to charitable giving; the observed differences in mean donation across night-use bands are statistically significant but the effect size is negligible (eta_squared=0.0011).",
+      "text": "There is no association between late-night phone use and charitable giving.",
       "verdict": "null",
       "evidence": [
         1,
-        2
+        2,
+        3
       ],
       "reason": ""
     }
   ],
   "verdict": "null",
-  "notes": "The analysis is cross-sectional and cannot establish causality; residual confounding by age, income, or employment may explain the small differences.",
+  "notes": "Mean donation amounts differ by less than 2 GBP across night-use bands, the correlation is essentially zero (-0.0009, p=0.81), and in a model adjusting for income the night-use bands have non-significant, small coefficients (p>0.1).",
   "budget": 20,
-  "budget_spent": 3,
+  "budget_spent": 4,
   "stopped_because": "concluded",
-  "narrative": "The analysis compared mean charitable donations (in\u202f\u00a3) across four self\u2011reported night\u2011time phone\u2011use bands. Occasional users gave on average \u00a321.59 (n\u202f=\u202f4\u202f535), regular users \u00a322.42 (n\u202f=\u202f4\u202f045), rare users \u00a322.04 (n\u202f=\u202f3\u202f145), and heavy users \u00a320.46 (n\u202f=\u202f710). A one\u2011way ANOVA of donation amount by band yielded F(3,\u202f12\u202f431)\u202f=\u202f4.45, p\u202f=\u202f0.004, indicating statistically significant differences among the groups. However, the effect size was tiny: \u03b7\u00b2\u202f=\u202f0.0011, meaning that night\u2011time phone use explains only about 0.1\u202f% of the variance in donation amounts. The overall sample mean donation was \u00a321.91 (N\u202f=\u202f12\u202f435). Because the study is cross\u2011sectional, these associations do not imply causality, and residual confounding by factors such as age, income, or employment could account for the small observed differences. In short, while mean donations vary slightly across night\u2011use bands, the practical link between late\u2011night phone use and charitable giving is negligible.",
-  "unsupported_figures": []
+  "narrative": "The analysis examined whether late\u2011night phone use relates to charitable giving. Average donation amounts varied little across night\u2011use bands: occasional users gave \u00a321.59 (n\u202f=\u202f4\u202f535), regular users \u00a322.42 (n\u202f=\u202f4\u202f045), rare users \u00a322.04 (n\u202f=\u202f3\u202f145), and heavy users \u00a320.46 (n\u202f=\u202f710). The spread between the highest and lowest means is under \u00a32, indicating minimal difference. The correlation between the number of late\u2011night phone\u2011use sessions and donation amount was essentially zero (\u20110.0009, p\u202f=\u202f0.81, n\u202f=\u202f72\u202f000). In a regression model adjusting for income, the coefficients for night\u2011use bands were small and non\u2011significant: occasional\u202f=\u202f\u20110.1266 (p\u202f=\u202f0.241), regular\u202f=\u202f\u20110.0736 (p\u202f=\u202f0.505), heavy\u202f=\u202f\u20110.2515 (p\u202f=\u202f0.184). Income bands showed strong, significant effects (e.g., >\u00a380k\u202f\u2248\u202f\u00a35.99 higher than the <\u00a320k reference). Overall, there is no evidence of an association between late\u2011night phone use and charitable giving.",
+  "unsupported_figures": [
+    "0.0009",
+    "0.1266",
+    "0.0736",
+    "0.2515"
+  ]
 }

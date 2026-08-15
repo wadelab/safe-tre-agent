@@ -17,6 +17,8 @@ import math
 import os
 import pathlib
 
+import pandas as pd
+
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -31,6 +33,8 @@ from safetre.audit import AuditLog, claim_exclusive
 from safetre.config import load_policy_config
 from safetre.disclosure import DisclosurePolicy, build_vetter
 from safetre.manifest import manifest_for_response, public_schema
+from safetre.inside_analyst import AnalystLoop, LLMAnalystPolicy, LLMNarrator
+from safetre.llm import LLMClient
 from safetre.planner import LLMPlanner, MockPlanner
 from safetre.query import CATALOGUE
 from safetre.service import QueryService
@@ -102,7 +106,8 @@ audit_log = AuditLog(_audit_db, require_external_key=is_production())
 # turning the control off (round 11, #87). A malformed anchor is reported by
 # `configuration_problems()` rather than silently ignored.
 _audit_head_anchor = (os.environ.get("SAFETRE_AUDIT_HEAD_ANCHOR") or "").strip() or None
-sessions = SessionStore(threshold=_cfg.differencing_delta, budget=_cfg.query_budget)
+sessions = SessionStore(threshold=_cfg.differencing_delta, budget=_cfg.query_budget,
+                        selection_budget=_cfg.selection_budget_bits)
 limiter = RateLimiter(int(os.environ.get("SAFETRE_RATE_LIMIT", "120")))
 # A full-chain verification is an integrity scan, not an interactive read: it
 # reads every row under the audit lock and recomputes every MAC. It gets its
@@ -154,6 +159,30 @@ _log.info("restored %d session(s) from the last %d hour(s) of audit history",
 audit_log.append(user="system", request="policy",
                  spec={"policy": _cfg.digest(), "dataset": _definition.name},
                  status="config", findings=[], output_shape=None)
+
+
+# Whether an inside analyst ("Chimp") runs inside this environment is an
+# OPERATOR decision, set once at deploy time via SAFETRE_ANALYST and never
+# reachable from the browser: a page visitor can no more turn Chimp on than
+# they can move the gateway. Default off — the shipped system is the
+# single-query gateway. When on, the browser is only the intercom: a research
+# question goes in, and a dossier of already-vetted releases comes back; Chimp,
+# its working notes and the raw data never cross to the browser.
+def _resolve_analyst_mode() -> str:
+    mode = (os.environ.get("SAFETRE_ANALYST") or "off").strip().lower()
+    if mode not in ("off", "chimp"):
+        raise SystemExit(
+            f"SAFETRE_ANALYST={mode!r} is not understood; use 'off' (default, "
+            "single-query gateway) or 'chimp' (an inside analyst runs in this "
+            "environment)")
+    return mode
+
+
+ANALYST_MODE = _resolve_analyst_mode()
+CHIMP_ENABLED = ANALYST_MODE == "chimp"
+# A modest cap: each step is an LLM turn, and a browser request waits for the
+# whole loop. The session budget still bounds disclosure; this bounds latency.
+CHIMP_MAX_STEPS = int(os.environ.get("SAFETRE_CHIMP_MAX_STEPS", "6"))
 
 
 def make_planner():
@@ -362,6 +391,7 @@ def index(request: Request):
         "examples": _definition.ui_queries,
         "dataset_description": _definition.description,
         "version": _version,
+        "chimp_enabled": CHIMP_ENABLED,
     })
 
 
@@ -397,6 +427,52 @@ def query(request: Request, body: QueryRequest):
     spent = sess.auditor.spent
     return templates.TemplateResponse(request, "_result.html", {
         "r": result, "table_html": table_html,
+        "budget_left": max(0, sess.auditor.budget - spent),
+    })
+
+
+def _dossier_tables(dossier) -> dict[int, str]:
+    """Pre-render each released step's table to HTML (the browser only ever
+    sees the vetted frames Chimp released, never its working notes)."""
+    out: dict[int, str] = {}
+    for step in dossier.steps:
+        if step.released() and step.output:
+            df = pd.DataFrame(step.output)
+            html = df.to_html(index=False, border=0, classes="agg", escape=True)
+            out[step.id] = html.replace(' style="text-align: right;"', "")
+    return out
+
+
+@app.post("/api/chimp", response_class=HTMLResponse)
+def chimp(request: Request, body: QueryRequest):
+    """Ask the inside analyst a research question. Only mounted when the
+    operator set SAFETRE_ANALYST=chimp; the browser cannot enable it. Chimp
+    runs the whole analysis inside this environment behind the same gateway,
+    and only the vetted dossier and its narrative return to the browser."""
+    if not CHIMP_ENABLED:
+        raise HTTPException(404, "no inside analyst runs in this environment")
+    user, allowed = current_user(request)
+    if not allowed:
+        raise HTTPException(403, "not on the Safe People allowlist")
+
+    sess = sessions.get(user)
+    client = LLMClient()
+    with sess.lock:
+        loop = AnalystLoop(service, LLMAnalystPolicy(client, _cfg),
+                           auditor=sess.auditor, audit_log=audit_log, user=user,
+                           max_steps=CHIMP_MAX_STEPS)
+        dossier = loop.run(body.q)
+        try:
+            LLMNarrator(client).render(dossier)
+        except Exception:                         # noqa: BLE001
+            # the narrator is a convenience over the dossier; if the model call
+            # fails the vetted dossier still stands, so degrade to no prose
+            _log.warning("narrator failed; returning the dossier without prose")
+        sess.history.append((body.q, dossier.verdict))
+
+    spent = sess.auditor.spent
+    return templates.TemplateResponse(request, "_dossier.html", {
+        "d": dossier, "tables": _dossier_tables(dossier),
         "budget_left": max(0, sess.auditor.budget - spent),
     })
 

@@ -1078,7 +1078,7 @@ def test_the_two_differencing_legs_are_indistinguishable(tables):
         ((("income_band", "==", ">150k"),),
          (("income_band", "==", ">150k"), ("sex", "==", "F"))),
     ):
-        auditor._cohorts = [("spend", a)]
+        auditor._cohorts = [("spend", a, None)]
         findings = auditor.observe_cohort("spend", b, bound)
         if findings:
             (cheap if simulatable_cohort_bound(marginals, "spend", a, b)
@@ -1197,7 +1197,7 @@ def test_a_binomial_keeps_its_successes_cohort_across_a_restart(tmp_path,
     after = SessionStore(threshold=10, budget=20)
     after.rehydrate(log, window_hours=24)
     cohorts = after.get("analyst@org").auditor._cohorts
-    assert ("spend", (("contains_lootboxes", "==", True),)) in cohorts, cohorts
+    assert ("spend", (("contains_lootboxes", "==", True),), None) in cohorts, cohorts
 
 
 def test_rehydration_refuses_a_chain_that_does_not_verify(tmp_path, monkeypatch,

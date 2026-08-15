@@ -66,6 +66,21 @@ disclosure_policy.als:
     hardening: 62
     twin: tests/test_hardening.py::test_the_two_differencing_legs_are_indistinguishable
     priced: artifacts/exact_leg_channel.json
+  Hardening95AttackWithoutCrossViewLayer:
+    kind: attack
+    hardening: 95
+    twin: tests/test_cross_view_differencing.py::test_the_round_11_pair_is_denied_on_the_demo
+  DonorSetLegMissesCrossViewPair:
+    kind: attack
+    hardening: 107
+    twin: tests/test_cross_view_differencing.py::test_donor_set_difference_would_not_have_caught_it
+  CrossViewBenignPairAllowed:
+    kind: guard
+    note: >-
+      a cross-view pair whose contributions differ over at least T people is
+      allowed, so CrossViewDifferenceBounded is not vacuously satisfied by a
+      rule that denies every multi-view session — the benign correlation
+      after an unrelated query, which is why the blanket fix was withdrawn.
 
 temporal_session.als:
   someTemporalSession:

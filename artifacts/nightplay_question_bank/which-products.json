@@ -4,14 +4,12 @@
   "steps": [
     {
       "id": 1,
-      "sub_question": "Mean stake per bet by product and hour band (late night vs other)",
+      "sub_question": "Mean stake per bet by gambling product and hour band (to see late-night differences)",
       "spec": {
         "dataset": "bets",
         "measure": {
           "fn": "mean",
-          "column": "stake_gbp",
-          "x": null,
-          "y": null
+          "column": "stake_gbp"
         },
         "group_by": [
           "product",
@@ -150,19 +148,19 @@
   ],
   "claims": [
     {
-      "text": "All gambling products (sports, slots, casino, lottery, bingo) have a higher mean stake per bet during late_night hours compared to other hour bands.",
+      "text": "All gambling products (sports, casino, slots, lottery, bingo) have a higher mean stake per bet during the late_night hour band compared to their evening, afternoon, and morning hour bands.",
       "verdict": "supported",
       "evidence": [
         1
       ],
-      "reason": "The released table shows the mean stake for each product is greatest in the late_night hour band for every product."
+      "reason": ""
     }
   ],
   "verdict": "supported",
-  "notes": "This conclusion is based solely on aggregate mean stake values; variability or statistical significance was not assessed.",
+  "notes": "",
   "budget": 20,
   "budget_spent": 1,
   "stopped_because": "concluded",
-  "narrative": "All five gambling products examined show a higher average stake per bet during the late\u2011night hour band than during any other time of day.  \n\n- Sports betting: mean stake\u202f=\u202f31.0 (late night) versus 19.97 (evening), 19.45 (afternoon) and 19.42 (morning).  \n- Slots: mean stake\u202f=\u202f67.93 (late night) versus 26.4 (evening), 28.88 (afternoon) and 27.89 (morning).  \n- Casino games: mean stake\u202f=\u202f52.8 (late night) versus 31.59 (evening), 32.29 (afternoon) and 33.46 (morning).  \n- Lottery: mean stake\u202f=\u202f10.56 (late night) versus 7.7 (evening), 7.58 (afternoon) and 7.27 (morning).  \n- Bingo: mean stake\u202f=\u202f19.26 (late night) versus 11.63 (evening), 11.53 (afternoon) and 12.42 (morning).  \n\nThese figures come directly from the released table of mean stake values; no measures of variability or statistical significance were provided, so the conclusion rests solely on the observed averages.",
+  "narrative": "The analysis compared the average stake per bet for five gambling products across four time\u2011of\u2011day bands: morning, afternoon, evening and late\u2011night.  \n\n- Sports betting: late\u2011night mean stake\u202f=\u202f31.0, which exceeds the evening (19.97), afternoon (19.45) and morning (19.42) means.  \n- Casino games: late\u2011night mean stake\u202f=\u202f52.8, higher than evening (31.59), afternoon (32.29) and morning (33.46).  \n- Slot machines: late\u2011night mean stake\u202f=\u202f67.93, greater than evening (26.4), afternoon (28.88) and morning (27.89).  \n- Lottery: late\u2011night mean stake\u202f=\u202f10.56, above evening (7.7), afternoon (7.58) and morning (7.27).  \n- Bingo: late\u2011night mean stake\u202f=\u202f19.26, larger than evening (11.63), afternoon (11.53) and morning (12.42).  \n\nFor every product, the late\u2011night hour band shows a higher average stake per bet than all other bands, supporting the claim that all gambling products exhibit a late\u2011night effect on stake size. No other comparisons were made, and no estimates were required beyond the released figures.",
   "unsupported_figures": []
 }

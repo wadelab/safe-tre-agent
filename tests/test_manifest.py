@@ -40,7 +40,7 @@ def test_only_available_tools_are_executable():
     manifest = public_manifest(POLICY)
     available = {tool["id"] for tool in manifest["tools"] if tool["status"] == "available"}
     planned = {tool["id"] for tool in manifest["planned_tool_classes"]}
-    assert available == {"aggregate_query", "glm", "anova"}
+    assert available == {"aggregate_query", "glm", "anova", "series"}
     assert manifest["tools"][0]["version"] == "4"
     assert manifest["tools"][0]["measures"]["functions"] == [
         "corr", "count", "mean", "sum", "sum_sq"]

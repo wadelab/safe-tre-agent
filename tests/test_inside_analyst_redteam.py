@@ -35,12 +35,14 @@ def test_the_corpus_covers_the_families_the_analyst_adds():
     types = {a.get("type") for a in attacks}
     assert {"benign", "egress", "prompt_injection", "differencing", "dominance",
             "dos", "protocol", "fabrication"} <= types
-    assert len(attacks) >= 14
+    assert len(attacks) >= 17
 
 
-def test_known_open_findings_still_reproduce(report):
-    """A fix that lands unnoticed is a fix nobody audited (roadmap 0.2): the
-    cross-view differencing pair (#95) is expected to reproduce on the second
-    study until the declared measure equivalence lands."""
-    assert "cross_view_differencing" in report["known_open_reproduced"], report
-    assert not report["known_open_not_reproduced"], report["known_open_not_reproduced"]
+def test_the_cross_view_pair_no_longer_reproduces(report):
+    """#95 was carried here as known_open until the declared measure
+    equivalence landed; it is an ordinary expect_block scenario now, and the
+    known-open machinery stays for the next finding of that kind (roadmap
+    0.2: a fix that lands unnoticed is a fix nobody audited)."""
+    r = next(x for x in report["results"] if x["name"] == "cross_view_differencing")
+    assert r["passed"] and r["statuses"] == ["redacted", "denied"], r
+    assert not report["known_open_reproduced"] and not report["known_open_not_reproduced"]

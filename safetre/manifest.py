@@ -21,7 +21,7 @@ from .query import (
 )
 from .schema import ROLE_LABELS, column_description, declared_domain, role_of
 
-MANIFEST_VERSION = "2026-08-05.aggregate+glm+anova.v12"
+MANIFEST_VERSION = "2026-08-15.aggregate+glm+anova+series.v13"
 
 
 def public_schema() -> dict[str, Any]:
@@ -235,6 +235,47 @@ def public_manifest(policy: PolicyConfig) -> dict[str, Any]:
                                       "df_within"],
                     "cell_table_released": True,
                     "denied_if_any_group_cell_suppressed": True,
+                    "fitted_from_finalized_aggregates_only": True,
+                    "subject_to_session_audit": True,
+                },
+            },
+            {
+                "id": "series",
+                "version": "1",
+                "status": "available",
+                "description": (
+                    "A time series of one measure — its mean or sum per window "
+                    "along a declared time axis (month, wave) — released as the "
+                    "disclosure-checked window table together with its trend, "
+                    "autocorrelation and periodogram, all computed exclusively "
+                    "from the released windows (never row-level data)."),
+                "request_schema": "SeriesSpec",
+                "model": {
+                    "response": "an allowlisted measure of the dataset",
+                    "time": "a declared time axis of the dataset (integer-kind, ordered)",
+                    "stat": "mean | sum — the per-window aggregate",
+                    "time_axes": {
+                        dataset: sorted(info.get("time_dims", []))
+                        for dataset, info in sorted(CATALOGUE.items())
+                        if info.get("time_dims")
+                    },
+                },
+                "constraints": {
+                    "min_windows": 4,
+                    "max_lags": 4,
+                    "max_filters": MAX_FILTERS,
+                    "per_observation_outputs": False,
+                },
+                "release": {
+                    "table_outputs": ["quantity", "value"],
+                    "quantities": ["n_windows", "mean", "sd", "trend_slope",
+                                   "trend_intercept", "trend_r_squared",
+                                   "acf_lag_k", "dominant_period",
+                                   "dominant_period_share"],
+                    "model_outputs": ["response", "time", "stat", "n_windows", "n",
+                                      "first_window", "last_window"],
+                    "cell_table_released": True,
+                    "denied_if_any_window_suppressed": True,
                     "fitted_from_finalized_aggregates_only": True,
                     "subject_to_session_audit": True,
                 },

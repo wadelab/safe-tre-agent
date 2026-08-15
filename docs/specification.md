@@ -262,6 +262,25 @@ planners **deflect** — propose a valid, safe, different question when
 refusing would be right — is what makes the typed verdict a requirement
 rather than a nicety.)*
 
+**R20** — A *locked analysis plan* (the inside analyst's data-sighted tier,
+"Chimp" phase 3) is the ONLY way an automated analyst may act on cohort
+structure the gateway withheld. A plan MUST be a typed, finite program of
+ordered stages, each an ordinary spec; its canonical hash MUST be committed
+to the audit chain BEFORE any stage runs, so the plan a release came from is
+fixed and cannot be chosen after seeing a result. Stages MUST be executed by
+deterministic code, never by the model, and every stage's released frame MUST
+still pass the whole gateway and carry its digest into the audit accounting (a
+stage commitment). The one data-sighted operation a stage may declare is
+`exclude_sparse`: a privileged probe for the levels of a dimension whose cells
+fall below the frequency threshold in the stage's cohort, excluding them
+before the stage runs. The probe's result MUST NOT be released; only the
+executed filter and the bits it cost are observable, and the cost MUST be
+charged under P24. *(Added 2026-08-15. The withheld structure is real — a
+model that any suppressed design cell denies (P19) gives no cell table, so
+which level was sparse is hidden on purpose (hardening #30, #66) — and a
+data-sighted decision is therefore a disclosure that must be declared,
+committed and metered rather than made ad hoc.)*
+
 ## Prohibitions — what it MUST NOT do
 
 These are the safety invariants. They hold for every request, whatever the
@@ -311,19 +330,24 @@ The published, simulatable marginals remain the first test — they can only den
 more, and they catch rare-category isolation without touching the data — but
 they are no longer the last word.
 
-*Known gap, 2026-07-31 (hardening #95) — NOT yet met across views.* The
-implementation compares cohorts only within one dataset name, while the
-definition of a cohort above is about the people a predicate selects. A
-catalogue publishing a per-event view and a per-donor view of the same donors
-therefore carries a differencing surface neither layer examines: two
-individually safe releases, one from each, recovered an individual's exact
-annual total with zero error. Simply dropping the dataset from the key does not
-satisfy this clause either — differencing needs the two released values to be
-COMMENSURABLE, and comparing a correlation against a mean denies ordinary
-analysis while adding no safety. Meeting it requires the catalogue to DECLARE
-which measures are the same quantity through different views (roadmap 0.0).
-Until then the clause is stated, the gap is reproduced, and
-`tests/test_disclosure.py` pins it so it stays visible.
+*Met across views since 2026-08-15 (hardening #95, #107).* The clause is
+about the people a predicate selects, and the implementation compared cohorts
+only within one dataset name, so a catalogue publishing a per-event view and a
+per-donor view of the same donors carried a differencing surface neither layer
+examined — two individually safe releases, one from each, recovered an
+individual's exact annual total with zero error. Dropping the dataset from
+the key did not satisfy the clause either: differencing needs the two
+released values to be COMMENSURABLE, and comparing a correlation against a
+mean denies ordinary analysis while adding no safety. So commensurability is
+DECLARED: the dataset definition's `quantities:` names measure columns on
+different views that measure the same thing per person (and each view may
+name its `population:`, defaulting to the person key), the auditor compares a
+pair on different views only when both releases carry the same declared
+quantity, and the bound for such a pair is the number of people whose
+per-person contribution of that quantity differs between the two releases —
+not the donor-set difference, which a per-person rollup's zero-contributors
+inflate past the threshold while the sums still differ by one person (#107).
+The Alloy model carries the view atom, the attack and the close.
 
 *Amended 2026-07-28.* This clause previously read "MUST NOT decide a
 differencing denial from the live donor sets", requiring the decision to be a
@@ -443,6 +467,19 @@ rather than re-argued. It deliberately excludes the data-sighted tier of
 intermediates and selection itself becomes a channel; that tier has no clause
 because it is not built.)*
 
+**P24** — A locked plan (R20) MUST NOT spend more data-sighted *selection*
+than the session's declared budget. Each level a stage's `exclude_sparse`
+contingency reveals to be sparse is one bit, charged to a per-session
+selection ledger bounded by `selection_budget_bits` (default 4; the round-8
+existence-oracle attack recovered a unique donor with eight). A contingency
+the ledger cannot afford MUST be refused, and a refusal MUST spend nothing —
+that a contingency was unaffordable is a fact about the plan, not the data.
+The exact sparse counts MUST NOT leave the executor. *(Added 2026-08-15. This
+is an interim, counted bound on the selection channel a data-sighted analyst
+opens; the differential-privacy accountant (roadmap item 3) is its principled
+replacement, and the ledger is the thing that becomes an ε-budget when it
+lands.)*
+
 ## Non-goals — what it does NOT claim
 
 Stated so the claim is not over-read. Several are roadmap items, not permanent
@@ -503,6 +540,7 @@ SQL plan to be inspectable, and it was exposed nowhere until `Result.plans`.
 | P21 fitter noninterference | `stats.py`, `glm.py` (pure fit) | reproducibility meta-test (`test_glm_properties.py`), `test_glm_noninterference.py`, Alloy `P21` | Implemented |
 | P22 refusals from released-equivalent data | `glm.py` (`preconditions`), `service.py` | `test_glm.py` (non-numeric, term-naming refusals) | Implemented |
 | P23 analyst policy sees the public side only; narrator sees the dossier only | `inside_analyst.py` (`LoopState`, `Step`, `LLMNarrator`, `check_narrative`) | `test_inside_analyst.py` (declared fields, denied steps carry no frame, hostile data absent from the transcript, narrator input), `redteam/run_analyst_redteam.py` (data-borne injection, narrator invention) | Implemented |
+| P24 locked plan selection budget: sparse-exclusion metered in bits, unaffordable refused, counts never leave | `plan.py` (`PlanExecutor._apply_contingency`), `disclosure.py` (`SessionAuditor.charge_selection`), `config.py` (`selection_budget_bits`) | `test_plans.py` (bit charge, budget refusal spends nothing, the selection channel is bounded) | Implemented |
 | R1 natural-language request to untrusted spec | `service.py` (`handle`), `planner.py` | `test_pipeline.py`, `test_secure.py` | Implemented |
 | R2 validate before execution | `query.py` (`QuerySpec`), `service.py` | `test_secure.py`, `test_query_properties.py`, `test_formal_enumeration.py` | Implemented |
 | R3 read-only SQL under resource caps | `engine.py` (`compile_query`, `MEMORY_LIMIT`, `THREADS`, `ROW_CAP`) | `test_formal_enumeration.py`, `test_procedure_conformance.py`, `test_requirements.py` | Implemented |
@@ -517,11 +555,12 @@ SQL plan to be inspectable, and it was exposed nowhere until `Result.plans`.
 | R13 no silent fallback to the mock planner | `llm.py` (`resolve_planner_mode`) | `test_llm.py` | Implemented |
 | R5 complementary suppression | `disclosure.py` (`_secondary_suppress`, `_finalize`) | `test_disclosure.py`, `test_release_equality.py` | Partial (single-dim exact, multi-dim conservative) |
 | R14 procedure registry | `procedures.py` | `test_procedure_conformance.py` | Implemented |
-| R15 GLM from vetted cells | `glm.py`, `stats.py`, `service.py` | `test_glm.py`, `test_formal_glm_enumeration.py`, `test_glm_oracle.py`, `test_second_moment.py` | Implemented |
+| R15 GLM from vetted cells | `glm.py`, `stats.py`, `service.py`; the same seam carries `anova.py` and `series.py` | `test_glm.py`, `test_formal_glm_enumeration.py`, `test_glm_oracle.py`, `test_second_moment.py`, `test_anova.py`, `test_series.py` | Implemented |
 | R16 skeleton export + model check | `procedures.py`, `formal/` | `test_skeleton_sync.py`, `test_formal_alloy_sync.py`, `test_formal_lean_sync.py`, CI `formal` job | Implemented |
 | R17 literal spec entry | `service.py` (`_literal_spec`) | `test_literal_spec.py` | Implemented |
 | R18 response time reveals nothing | `safetre_web/app.py` (`constant_response_time`) | `test_timing_channel.py`, `scripts/measure_timing_channel.py` | Partial (the deployment boundary; a library embedder pads at their own) |
 | R19 inside analyst: ordinary requests, one session, typed dossier | `inside_analyst.py` (`AnalystLoop`, `_ground_claims`, `VERDICTS`) | `test_inside_analyst.py` (lineage binds across steps, budget stops the loop, every step audited, ungrounded claims downgraded), `test_inside_analyst_redteam.py` + `redteam/analyst_attacks.yaml` (the model as adversary) | Implemented |
+| R20 locked plans: committed hash, deterministic execution, metered sparse-exclusion, stage commitments | `plan.py` (`Plan`, `PlanExecutor`), `engine.py` (`sparse_levels`), `service.py` (`frame_digest`) | `test_plans.py` (commit-before-run, guard/contingency, released-only crossing, replay) | Implemented |
 
 The red-team suite (`redteam/run_redteam.py`, R12) exercises P1–P6, P10–P11,
 and P19–P22 end to end, off gateway versus on. The bounded formal model
