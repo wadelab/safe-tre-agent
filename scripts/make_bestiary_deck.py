@@ -5,7 +5,7 @@ and long. This is the version you can give someone in twenty minutes: one
 creature per slide, its card, what it wants in plain English, and the one
 sentence about what stops it.
 
-The audience is a research colleague, an IG officer or a funder — someone who
+The audience is a research colleague, an IG officer or a reviewer — someone who
 needs to understand *what kinds of thing go wrong with a data gateway* without
 learning the vocabulary first. So the rule here is stricter than the field
 guide's: **no term is used before it is explained, and every claim is one a

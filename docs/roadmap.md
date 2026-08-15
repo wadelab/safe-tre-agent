@@ -17,7 +17,7 @@ not new controls.
 Not a new workstream — the residuals the [round-11 audit](hardening-log.md)
 left behind, ordered by what they buy. 0.0 is the round's one open finding;
 0.1 and 0.2 are cheap and change how every later round is run, which is why
-they sit above the fellowship work.
+they sit above the larger workstreams below.
 
 **0.0 — Declared measure equivalence, and close #95.** The differencing lineage
 compares cohorts only within one dataset name, so a catalogue publishing
@@ -131,7 +131,7 @@ is what reviewers use — but every round that touches the response-time boundar
 adds to the case for it, and it should be unparked before this is ever pointed
 at real data.
 
-## 1. ACRO integration (fellowship WP3)
+## 1. ACRO integration
 
 The disclosure gateway is a stand-in, and it says so. The SDC community will
 judge the whole claim on whether the output checking is real, so wrapping
@@ -179,7 +179,7 @@ composition: 23 more suppressed cells out of 4684, and 5 of 102 gaussian
 models (`artifacts/composite_cost.json`). What is left is the preprint's
 gateway section, which still describes the stand-in alone.
 
-## 2. Formal executable specification (fellowship WP2)
+## 2. Formal executable specification
 
 The `QuerySpec` space is finite and small, which is what makes it provable.
 Encode the catalogue and the `QuerySpec → SQL plan → disclosure` path as a
@@ -233,7 +233,7 @@ accountant closes both, at the cost of noisy outputs and a harder
 explainability story — which is why it ships as an opt-in release mode, not a
 replacement for the deterministic gateway.
 
-## 4. Cross-session and cross-user lineage (fellowship WP1 extension)
+## 4. Cross-session and cross-user lineage
 
 Persist released-cohort signatures beyond a session so colluding users and
 serial sessions are inside the differencing control. Ordered after ACRO and DP
