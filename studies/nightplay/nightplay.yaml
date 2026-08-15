@@ -390,6 +390,13 @@ lexicon:
     late night phone use: night_use_band
     late-night users: night_use_band
     night users: night_use_band
+    night-time phone use: night_use_band
+    night-time use: night_use_band
+    nighttime phone use: night_use_band
+    nighttime use: night_use_band
+    night-time phone use band: night_use_band
+    late-night use band: night_use_band
+    late-night phone use band: night_use_band
     hour band: hour_band
     hour: hour_band
     time of day: hour_band

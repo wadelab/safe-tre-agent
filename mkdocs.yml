@@ -45,6 +45,7 @@ nav:
   - Home: index.md
   - Research argument:
       - Explained simply: elif.md
+      - The inside analyst, explained simply: inside-analyst-elif.md
       - Research write-up: writeup.md
       - Security model: security.md
       - Architecture: architecture.md
@@ -86,6 +87,7 @@ nav:
           - D5 Timing channel: decisions/D5-timing-channel.md
           - D6 Checker default: decisions/D6-checker-default.md
           - D7 Donor totals and band filters: decisions/D7-donor-totals-and-band-filters.md
+          - D8 Inside analyst, vetted loop: decisions/D8-inside-analyst-vetted-loop.md
       - Bestiary of caged beasts: bestiary.md
       - Best-practice review: best-practice-review.md
       - ACRO comparison: acro-comparison.md

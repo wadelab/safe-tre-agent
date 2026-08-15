@@ -38,7 +38,7 @@ def build_inside_analyst(out: str) -> None:
 
     title_slide(prs, "An analyst inside the room",
                 "A plan: from safe single queries to safe automated analysis. "
-                "Only phase 0 is built (precise version: docs/inside-analyst.md).")
+                "Phases 0 and 1 are built (precise version: docs/inside-analyst.md).")
 
     bullets_slide(prs, "Where we are today", [
         "A library holds everyone's diaries. You may never read one — you may only ask about",
@@ -147,11 +147,39 @@ def build_inside_analyst(out: str) -> None:
         "   every trap is caught (14/14 checks). Plus a nine-question marking scheme for dossiers.",
     ], accent=GREEN)
 
+    bullets_slide(prs, "Phase 1, done: the analyst inside — the vetted loop", [
+        "An assistant at a desk IN the reading room, given a whole research question.",
+        "It plans requests, sends each through the SAME librarian a human would (same form, same",
+        "   rules, same budget, same memory of what was asked), reads only what she releases, follows up.",
+        "It hands back a DOSSIER: the released tables, and claims stamped supported / not supported /",
+        "   no association / cannot be answered — each pointing at the steps that back it.",
+        "A claim that points at no released table is downgraded automatically. Refusals are typed,",
+        "   never laundered into a finding — because measured planners DEFLECT rather than refuse.",
+        "A second AI writes the prose from the dossier alone; a checker underlines any number",
+        "   no released table contains (it caught a thin-spaced '72 000' on the first live run).",
+        "Two new rules in the specification (R19, P23), a decision record (D8), and tests that plant",
+        "   hostile strings and tiny groups in the data and prove none reach the assistant's view.",
+    ], accent=GREEN)
+
+    bullets_slide(prs, "Phase 1, done: we attacked it (the AI as the attacker)", [
+        "Fourteen scripted 'analysts' try to: list people by name; filter on an identifier; ask for",
+        "   free text and timestamps; smuggle instructions into a question; subtract two answers to",
+        "   isolate a small group; read a whale's cell; flood the budget; send garbage; invent",
+        "   conclusions; make the narrator write nonsense.",
+        "A separate row-level oracle — which never trusts the librarian's own opinion — watched",
+        "   everything released. NONE leaked; every attack ended in a typed refusal, a bounded loop,",
+        "   or a flagged narrative. Runs in the test suite and in CI.",
+        "One scenario deliberately reproduces a leak we already know about (two views of one quantity",
+        "   are not yet compared); it is marked KNOWN-OPEN and the test fails if it silently stops.",
+        "Day-one lesson: the assistant lives in a human's lineage — ask the marginal, then a model",
+        "   excluding six people, and the second is refused. Order matters to it as it would to you.",
+    ], accent=AMBER)
+
     table_slide(prs, "The phases, in order",
                 ["Phase", "What", "Why it is ordered here"],
                 [["0", "Local-class model baseline + the NIGHTPLAY dataset (done)",
                   "cheap; everything later builds on both"],
-                 ["1", "Vetted-loop analyst (reads only released answers)",
+                 ["1", "Vetted-loop analyst (reads only released answers) (done)",
                   "most of the value, no new safety machinery"],
                  ["2", "Registered time-series procedures",
                   "grows what the analyst can answer"],
@@ -164,7 +192,7 @@ def build_inside_analyst(out: str) -> None:
                 col_widths=[0.9, 5.8, 4.8])
 
     bullets_slide(prs, "What we are not claiming", [
-        "Nothing above phase 0 is built. Today's shipped system is the single-query gateway.",
+        "Nothing above phase 1 is built. The shipped system is the gateway plus a vetted-loop analyst.",
         "The data-sighted analyst is a research problem, not an engineering task —",
         "   selection channels are genuinely hard, and we say so.",
         "An AI inside does not replace output checking; it raises the bar for it.",

@@ -106,6 +106,7 @@ the argument is honest about being incomplete rather than quiet about it.
 | P20 no per-observation model output | `glm.py` (output contract), `analyst.py` (intent) | `test_glm.py`, `test_procedure_conformance.py` | ✓ |
 | P21 fitter noninterference | `stats.py`, `glm.py` (pure fit) | reproducibility meta-test (`test_glm_properties.py`), `test_glm_noninterference.py`, Alloy `P21` | ✓ |
 | P22 refusals from released-equivalent data | `glm.py` (`preconditions`), `service.py` | `test_glm.py` (non-numeric, term-naming refusals) | ✓ |
+| P23 analyst policy sees the public side only; narrator sees the dossier only | `inside_analyst.py` (`LoopState`, `Step`, `LLMNarrator`, `check_narrative`) | `test_inside_analyst.py` (declared fields, denied steps carry no frame, hostile data absent from the transcript, narrator input), `redteam/run_analyst_redteam.py` (data-borne injection, narrator invention) | ✓ |
 | R4 exactly the registered measures | `procedures.py` (`REGISTRY`), `query.py` (`Measure`) | `test_procedure_conformance.py`, `test_secure.py` | ✓ |
 | R5 complementary suppression | `disclosure.py` (`_secondary_suppress`, `_finalize`) | `test_disclosure.py`, `test_release_equality.py` | **undeveloped** |
 | R6 session lineage and budget | `disclosure.py` (`SessionAuditor`), `service.py` | `test_hardening.py`, `test_pipeline.py`, Alloy `temporal_session` | ✓ |
@@ -115,6 +116,7 @@ the argument is honest about being incomplete rather than quiet about it.
 | R16 skeleton export + model check | `procedures.py`, `formal/` | `test_skeleton_sync.py`, `test_formal_alloy_sync.py`, `test_formal_lean_sync.py`, CI `formal` job | ✓ |
 | R17 literal spec entry | `service.py` (`_literal_spec`) | `test_literal_spec.py` | ✓ |
 | R18 response time reveals nothing | `safetre_web/app.py` (`constant_response_time`) | `test_timing_channel.py`, `scripts/measure_timing_channel.py` | **undeveloped** |
+| R19 inside analyst: ordinary requests, one session, typed dossier | `inside_analyst.py` (`AnalystLoop`, `_ground_claims`, `VERDICTS`) | `test_inside_analyst.py` (lineage binds across steps, budget stops the loop, every step audited, ungrounded claims downgraded), `test_inside_analyst_redteam.py` + `redteam/analyst_attacks.yaml` (the model as adversary) | ✓ |
 
 ## Where the argument is unfinished
 

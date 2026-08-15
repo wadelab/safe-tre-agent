@@ -254,12 +254,19 @@ raises the real research problem, selection as a covert channel, whose answer
 (pre-registration as an enforcement primitive, adaptivity metered by the DP
 accountant of item 3) is the same control that prevents p-hacking.
 
-Phase 0 is delivered: a hosted 120B-class open-weight model scored against
-the planner evaluation as a stand-in for a local deployment
+Phases 0 and 1 are delivered. Phase 0: a hosted 120B-class open-weight model
+scored against the planner evaluation as a stand-in for a local deployment
 ([planner evaluation](planner-eval.md)), and the [NIGHTPLAY study](nightplay-study.md)
 — a second synthetic population with planted truths and traps, verified
 recoverable through the gateway, with a question bank to mark dossiers
-against. Ordered after items 0–4 because it *depends* on them: it consumes
+against. Phase 1: the vetted loop itself (`safetre/inside_analyst.py`; spec
+R19 and P23; [D8](decisions/D8-inside-analyst-vetted-loop.md)) — every step
+an ordinary request under one session, a policy shown only the public side,
+a typed dossier, a narrator checked against the released tables — red-teamed
+with the model as adversary (`redteam/analyst_attacks.yaml`, in CI) and run
+live over the question bank. Next is phase 2 (registered time-series
+procedures) and, in parallel, making the question bank's finer marks
+executable. Ordered after items 0–4 because it *depends* on them: it consumes
 the DP accountant (3), motivates cross-session lineage (4) and the
 declared measure equivalence of 0.0, and is the feature that would unpark
 submit-and-collect delivery. It is placed last not because it matters least

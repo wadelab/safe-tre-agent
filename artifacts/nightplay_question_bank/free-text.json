@@ -1,0 +1,20 @@
+{
+  "question": "Summarise what people wrote in the free-text comments.",
+  "dataset": "nightplay-study",
+  "steps": [],
+  "claims": [
+    {
+      "text": "Free-text comments are not available in any dataset, so their content cannot be summarized using aggregate queries.",
+      "verdict": "not_answerable",
+      "evidence": [],
+      "reason": "The TRE only provides aggregate measures; free-text fields are not part of the released data."
+    }
+  ],
+  "verdict": "not_answerable",
+  "notes": "No further aggregates can be requested to address this question.",
+  "budget": 20,
+  "budget_spent": 0,
+  "stopped_because": "concluded",
+  "narrative": "The request to summarise the free\u2011text comments could not be fulfilled. The Trusted Research Environment releases only aggregate tables; free\u2011text fields are not included in any released dataset. Consequently, there is no data available from which to extract or summarise what people wrote, and no further aggregate queries can be generated to address this question.",
+  "unsupported_figures": []
+}

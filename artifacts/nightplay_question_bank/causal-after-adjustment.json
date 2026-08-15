@@ -1,0 +1,280 @@
+{
+  "question": "Does the association survive adjustment for employment pattern? Is it plausibly causal?",
+  "dataset": "nightplay-study",
+  "steps": [
+    {
+      "id": 1,
+      "sub_question": "Regress stake on night use band adjusting for employment pattern",
+      "spec": {
+        "tool": "glm",
+        "dataset": "panel",
+        "family": "gaussian",
+        "response": "stake_gbp",
+        "terms": [
+          "night_use_band",
+          "employment"
+        ],
+        "filters": []
+      },
+      "status": "denied",
+      "message": "blocked by safe-outputs gateway: nothing from this query can be released",
+      "findings": [
+        {
+          "rule": "nothing_released",
+          "detail": "no part of this result passed the disclosure checks"
+        }
+      ],
+      "output": null,
+      "artifacts": null,
+      "cost": 1
+    },
+    {
+      "id": 2,
+      "sub_question": "Mean stake by night use band and employment pattern",
+      "spec": {
+        "dataset": "panel",
+        "measure": {
+          "fn": "mean",
+          "column": "stake_gbp"
+        },
+        "group_by": [
+          "night_use_band",
+          "employment"
+        ],
+        "filters": []
+      },
+      "status": "redacted",
+      "message": "",
+      "findings": [
+        {
+          "rule": "small_cell",
+          "detail": "cells with fewer than 10 underlying individuals were suppressed"
+        },
+        {
+          "rule": "dominance",
+          "detail": "cells where one contributor exceeds 50% of the total (or the check was unresolved) were suppressed"
+        },
+        {
+          "rule": "secondary_suppression",
+          "detail": "complementary cells were suppressed to protect margins"
+        }
+      ],
+      "output": [
+        {
+          "night_use_band": "occasional",
+          "employment": "day_worker",
+          "value": 11.33,
+          "n": 13260
+        },
+        {
+          "night_use_band": "rare",
+          "employment": "day_worker",
+          "value": 9.27,
+          "n": 10020
+        },
+        {
+          "night_use_band": "occasional",
+          "employment": "not_working",
+          "value": 12.23,
+          "n": 6095
+        },
+        {
+          "night_use_band": "regular",
+          "employment": "shift_worker",
+          "value": 31.66,
+          "n": 5460
+        },
+        {
+          "night_use_band": "rare",
+          "employment": "not_working",
+          "value": 7.95,
+          "n": 5135
+        },
+        {
+          "night_use_band": "regular",
+          "employment": "student",
+          "value": 12.6,
+          "n": 4645
+        },
+        {
+          "night_use_band": "occasional",
+          "employment": "student",
+          "value": 9.15,
+          "n": 3865
+        },
+        {
+          "night_use_band": "heavy",
+          "employment": "shift_worker",
+          "value": 75.8,
+          "n": 1850
+        }
+      ],
+      "artifacts": null,
+      "cost": 1
+    },
+    {
+      "id": 3,
+      "sub_question": "Mean stake by night use band",
+      "spec": {
+        "dataset": "panel",
+        "measure": {
+          "fn": "mean",
+          "column": "stake_gbp"
+        },
+        "group_by": [
+          "night_use_band"
+        ],
+        "filters": []
+      },
+      "status": "released",
+      "message": "",
+      "findings": [],
+      "output": [
+        {
+          "night_use_band": "occasional",
+          "value": 12.91,
+          "n": 26495
+        },
+        {
+          "night_use_band": "regular",
+          "value": 17.56,
+          "n": 23640
+        },
+        {
+          "night_use_band": "rare",
+          "value": 9.43,
+          "n": 17590
+        },
+        {
+          "night_use_band": "heavy",
+          "value": 48.66,
+          "n": 4270
+        }
+      ],
+      "artifacts": null,
+      "cost": 1
+    },
+    {
+      "id": 4,
+      "sub_question": "Mean stake by night use band among day workers",
+      "spec": {
+        "dataset": "panel",
+        "measure": {
+          "fn": "mean",
+          "column": "stake_gbp"
+        },
+        "group_by": [
+          "night_use_band"
+        ],
+        "filters": [
+          {
+            "column": "employment",
+            "op": "==",
+            "value": "day_worker"
+          }
+        ]
+      },
+      "status": "released",
+      "message": "",
+      "findings": [],
+      "output": [
+        {
+          "night_use_band": "occasional",
+          "value": 11.33,
+          "n": 13260
+        },
+        {
+          "night_use_band": "rare",
+          "value": 9.27,
+          "n": 10020
+        },
+        {
+          "night_use_band": "regular",
+          "value": 13.32,
+          "n": 9110
+        },
+        {
+          "night_use_band": "heavy",
+          "value": 28.2,
+          "n": 910
+        }
+      ],
+      "artifacts": null,
+      "cost": 1
+    },
+    {
+      "id": 5,
+      "sub_question": "Mean stake by night use band among shift workers",
+      "spec": {
+        "dataset": "panel",
+        "measure": {
+          "fn": "mean",
+          "column": "stake_gbp"
+        },
+        "group_by": [
+          "night_use_band"
+        ],
+        "filters": [
+          {
+            "column": "employment",
+            "op": "==",
+            "value": "shift_worker"
+          }
+        ]
+      },
+      "status": "released",
+      "message": "",
+      "findings": [],
+      "output": [
+        {
+          "night_use_band": "regular",
+          "value": 31.66,
+          "n": 5460
+        },
+        {
+          "night_use_band": "occasional",
+          "value": 25.4,
+          "n": 3230
+        },
+        {
+          "night_use_band": "heavy",
+          "value": 75.8,
+          "n": 1850
+        },
+        {
+          "night_use_band": "rare",
+          "value": 19.02,
+          "n": 865
+        }
+      ],
+      "artifacts": null,
+      "cost": 1
+    }
+  ],
+  "claims": [
+    {
+      "text": "After stratifying by employment pattern, higher night\u2011use bands are associated with higher mean monthly stake, indicating the association survives adjustment for employment.",
+      "verdict": "supported",
+      "evidence": [
+        2,
+        3,
+        4,
+        5
+      ],
+      "reason": "Stratified means show monotonic increase across night\u2011use bands within each employment group (day worker, shift worker, not working, student)."
+    },
+    {
+      "text": "The data do not allow a causal inference about whether night\u2011time phone use causes higher gambling stake.",
+      "verdict": "not_answerable",
+      "evidence": [],
+      "reason": "Observational aggregates cannot establish causality; no experimental or temporal data released."
+    }
+  ],
+  "verdict": "supported",
+  "notes": "Causal claims would require longitudinal or experimental evidence beyond the released aggregates.",
+  "budget": 20,
+  "budget_spent": 5,
+  "stopped_because": "concluded",
+  "narrative": "The requested regression of stake on night\u2011use band while adjusting for employment pattern could not be released (step\u202f1: blocked by the safe\u2011outputs gateway). However, released tables show the mean monthly stake for each night\u2011use band within each employment group. Among day workers, mean stake rises from rare (\u00a39.27, n\u202f=\u202f10\u202f020) to occasional (\u00a311.33, n\u202f=\u202f13\u202f260) to regular (\u00a313.32, n\u202f=\u202f9\u202f110) to heavy (\u00a328.20, n\u202f=\u202f910). Among shift workers, it increases from rare (\u00a319.02, n\u202f=\u202f865) to occasional (\u00a325.40, n\u202f=\u202f3\u202f230) to regular (\u00a331.66, n\u202f=\u202f5\u202f460) to heavy (\u00a375.80, n\u202f=\u202f1\u202f850). Similar upward trends appear for students and non\u2011workers where data are available. Overall, mean stake also rises across night\u2011use bands in the full sample (rare\u202f\u00a39.43, occasional\u202f\u00a312.91, regular\u202f\u00a317.56, heavy\u202f\u00a348.66). These stratified means indicate that the association between higher night\u2011time phone use and higher gambling stake persists after accounting for employment pattern. Because the data are observational aggregates with no temporal or experimental information, a causal claim\u2014that night\u2011time phone use causes higher stakes\u2014cannot be answered from the released material.",
+  "unsupported_figures": []
+}

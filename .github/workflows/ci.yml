@@ -26,11 +26,13 @@ jobs:
       - name: Sync (frozen — exactly uv.lock)
         run: uv sync --all-extras --frozen
       - name: Lint (ruff)
-        run: uv run ruff check safetre safetre_web tests scripts evals redteam formal
+        run: uv run ruff check safetre safetre_web tests scripts evals redteam formal studies
       - name: Tests
         run: uv run pytest -q
       - name: Red-team (gateway off vs on)
         run: uv run python redteam/run_redteam.py
+      - name: Red-team the inside analyst (the model as adversary)
+        run: uv run python redteam/run_analyst_redteam.py
       # The round reproducers, which the corpus cannot express: they need a
       # process restart, a mutilated log, or a raising planner. Each exits
       # nonzero while any finding is open, and round 9's also self-checks that

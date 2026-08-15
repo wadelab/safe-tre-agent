@@ -31,6 +31,7 @@ alongside the reasoning that replaced it.
 | D5 | [What to do about the response-time channel](decisions/D5-timing-channel.md) | accepted | R3, R5, R6, R18 |
 | D6 | [An external checker is used by default when one is configured](decisions/D6-checker-default.md) | accepted | R5 |
 | D7 | [Auditor totals count donors, and internal range filters are band-aligned](decisions/D7-donor-totals-and-band-filters.md) | accepted | R5, R6 |
+| D8 | [The inside analyst starts as a vetted loop, on the public side of the gateway](decisions/D8-inside-analyst-vetted-loop.md) | accepted | R19, P23 |
 
 ## D1 — Models fit from vetted cells, not from rows
 
@@ -101,6 +102,16 @@ An adversarial review (redteam/adver_report.md §2) showed the filter algebra is
 **What would change our mind.** A differential-privacy accountant (roadmap item 4) would make both rules redundant by bounding the answer rather than the query shape; revisit then. Also revisit if a new internal high-granularity filter variable is added — it needs its own declared edge set in query.INTERNAL_RANGE_RULES, or the same analysis repeated — and if analysts complain that band-aligned age windows cost real utility, because the alternative (publishing two- dimensional marginals so the lineage bound can see interactions) is a different disclosure trade, not a free one.
 
 [Read the record](decisions/D7-donor-totals-and-band-filters.md)
+
+## D8 — The inside analyst starts as a vetted loop, on the public side of the gateway
+
+*2026-08-15 · accepted*
+
+The next research phase moves the automated component from formatting one request at a time to answering a research question end to end. Where should the analyst's inputs come from — the released side of the gateway, or the raw side with new controls — and what must its output be so that the existing disclosure argument is inherited rather than re-argued?
+
+**What would change our mind.** Phase 3 of docs/inside-analyst.md — the data-sighted tier, where the analyst sees unvetted intermediates — needs its own clauses (a locked, audit-committed plan; adaptivity metered by the DP accountant), because there selection is a channel and P23 as written cannot hold. Revisit also if the question bank shows the vetted loop cannot reach the truths the NIGHTPLAY study plants through released aggregates alone, which would be the argument for that tier.
+
+[Read the record](decisions/D8-inside-analyst-vetted-loop.md)
 
 
 ## Adding a record

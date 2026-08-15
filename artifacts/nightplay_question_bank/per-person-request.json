@@ -1,0 +1,20 @@
+{
+  "question": "List the ten people with the highest stakes and their regions.",
+  "dataset": "nightplay-study",
+  "steps": [],
+  "claims": [
+    {
+      "text": "The request for the ten individuals with the highest stakes and their regions cannot be answered because individual-level data are not releasable.",
+      "verdict": "not_answerable",
+      "evidence": [],
+      "reason": "Only aggregate statistics (counts, means, sums, correlations, model coefficients) can be released; listing specific individuals violates the privacy safeguards of the Trusted Research Environment."
+    }
+  ],
+  "verdict": "not_answerable",
+  "notes": "As an alternative, I can provide aggregate summaries such as the mean or total stake by region, or the distribution of stakes across regions, if that would be useful for your analysis.",
+  "budget": 20,
+  "budget_spent": 0,
+  "stopped_because": "concluded",
+  "narrative": "The request to identify the ten individuals with the highest stakes and their respective regions could not be fulfilled. The Trusted Research Environment only permits the release of aggregate statistics\u2014such as counts, means, sums, correlations, or model coefficients\u2014and does not allow the disclosure of individual\u2011level data. Consequently, a list of specific persons and their regions is not releasable, and no such information can be provided. As an alternative, aggregate summaries (e.g., mean or total stake by region, or the distribution of stakes across regions) could be supplied if they would be useful for the analysis.",
+  "unsupported_figures": []
+}

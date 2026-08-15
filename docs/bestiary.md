@@ -15,7 +15,7 @@ log for newer specimens before trusting this map.
 ## Why a bestiary at all?
 
 Security text scales badly. This project has 106 numbered hardening findings,
-seven decision records, 19 threats in the security model and 28 red-team
+eight decision records, 19 threats in the security model and 28 red-team
 scenarios. That material is complete, precise, and nearly impossible to hold
 in working memory at once — which matters, because the failure mode of a
 security review is not ignorance, it is *a reviewer who could not keep the

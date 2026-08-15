@@ -1,0 +1,155 @@
+{
+  "question": "Is there seasonality in stakes, and does time of day matter?",
+  "dataset": "nightplay-study",
+  "steps": [
+    {
+      "id": 1,
+      "sub_question": "Mean stake per bet by month",
+      "spec": {
+        "dataset": "bets",
+        "measure": {
+          "fn": "mean",
+          "column": "stake_gbp"
+        },
+        "group_by": [
+          "month"
+        ],
+        "filters": []
+      },
+      "status": "released",
+      "message": "",
+      "findings": [],
+      "output": [
+        {
+          "month": 7,
+          "value": 30.17,
+          "n": 4875
+        },
+        {
+          "month": 6,
+          "value": 28.39,
+          "n": 4730
+        },
+        {
+          "month": 12,
+          "value": 27.92,
+          "n": 4230
+        },
+        {
+          "month": 2,
+          "value": 20.6,
+          "n": 4205
+        },
+        {
+          "month": 5,
+          "value": 20.51,
+          "n": 4060
+        },
+        {
+          "month": 4,
+          "value": 20.13,
+          "n": 4045
+        },
+        {
+          "month": 9,
+          "value": 19.89,
+          "n": 4045
+        },
+        {
+          "month": 11,
+          "value": 20.0,
+          "n": 4030
+        },
+        {
+          "month": 10,
+          "value": 19.9,
+          "n": 4005
+        },
+        {
+          "month": 8,
+          "value": 20.84,
+          "n": 4000
+        },
+        {
+          "month": 3,
+          "value": 19.88,
+          "n": 3970
+        },
+        {
+          "month": 1,
+          "value": 19.63,
+          "n": 3920
+        }
+      ],
+      "artifacts": null,
+      "cost": 1
+    },
+    {
+      "id": 2,
+      "sub_question": "Mean stake per bet by hour band",
+      "spec": {
+        "dataset": "bets",
+        "measure": {
+          "fn": "mean",
+          "column": "stake_gbp"
+        },
+        "group_by": [
+          "hour_band"
+        ],
+        "filters": []
+      },
+      "status": "released",
+      "message": "",
+      "findings": [],
+      "output": [
+        {
+          "hour_band": "evening",
+          "value": 20.9,
+          "n": 23080
+        },
+        {
+          "hour_band": "afternoon",
+          "value": 21.47,
+          "n": 16065
+        },
+        {
+          "hour_band": "morning",
+          "value": 21.44,
+          "n": 6975
+        },
+        {
+          "hour_band": "late_night",
+          "value": 38.54,
+          "n": 3990
+        }
+      ],
+      "artifacts": null,
+      "cost": 1
+    }
+  ],
+  "claims": [
+    {
+      "text": "Average stake per bet shows variation across months, indicating seasonality in gambling stakes.",
+      "verdict": "supported",
+      "evidence": [
+        1
+      ],
+      "reason": ""
+    },
+    {
+      "text": "Stakes are higher during the late_night hour band compared to other times of day, showing that time of day matters.",
+      "verdict": "supported",
+      "evidence": [
+        2
+      ],
+      "reason": ""
+    }
+  ],
+  "verdict": "supported",
+  "notes": "Monthly averages range from about \u00a319.6 to \u00a330.2, but month may proxy for other seasonal factors (e.g., holidays). Hour-band differences are based on substantial sample sizes, though the late_night band has fewer observations.",
+  "budget": 20,
+  "budget_spent": 2,
+  "stopped_because": "concluded",
+  "narrative": "The analysis of stake amounts reveals clear patterns across both calendar months and time\u2011of\u2011day bands.  \n\nAcross the twelve months, the mean stake per bet varies from a low of \u00a319.63 in January (month\u202f1, n\u202f=\u202f3\u202f920) to a high of \u00a330.17 in July (month\u202f7, n\u202f=\u202f4\u202f875). This roughly ten\u2011pound spread indicates that average stakes are not constant throughout the year, supporting the presence of seasonal variation in gambling stakes.  \n\nWhen stakes are examined by hour band, the late\u2011night period shows a markedly higher average stake of \u00a338.54 (n\u202f=\u202f3\u202f990). In contrast, the evening, afternoon and morning bands have average stakes of \u00a320.9 (n\u202f=\u202f23\u202f080), \u00a321.47 (n\u202f=\u202f16\u202f065) and \u00a321.44 (n\u202f=\u202f6\u202f975), respectively. Thus, stakes are substantially larger during late\u2011night hours, demonstrating that time of day also matters for betting amounts.  \n\nThese findings together suggest that both seasonal factors and daily timing influence the size of gambling stakes.",
+  "unsupported_figures": []
+}

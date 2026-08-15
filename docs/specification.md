@@ -242,6 +242,26 @@ is untrusted, so an analyst-authored spec introduces no new trust). A request
 that begins as a JSON object but does not parse MUST be rejected loudly; it
 MUST NOT be handed to the planner as text.
 
+**R19** — An automated analyst that answers a research question by issuing
+several requests (the *inside analyst*, phase 1: the vetted loop) MUST issue
+each of them as an ordinary request through the same service entry point as
+a human analyst — a natural-language sub-question with the spec it proposes
+for it — under ONE session auditor for the whole question, so that the query
+budget, the differencing lineage, intent vetting, the fidelity gates, typed
+validation, the gateway and the audit log apply to every step unchanged. Its
+conclusion MUST be a typed dossier: each claim carries a verdict from a
+closed vocabulary (`supported`, `not_supported`, `null`, `not_answerable`)
+and cites the released steps that support it; a claim about the data that
+cites no released step MUST be downgraded to `not_answerable` with the reason
+recorded; a loop that stops on budget or step count without concluding MUST
+say so in the same vocabulary rather than answering. A refusal at any step
+MUST be reported as a typed `not_answerable`, never as an answer to a
+substituted question. *(Added 2026-08-15 with the
+[inside analyst](inside-analyst.md); the planner evaluation's finding that
+planners **deflect** — propose a valid, safe, different question when
+refusing would be right — is what makes the typed verdict a requirement
+rather than a nicety.)*
+
 ## Prohibitions — what it MUST NOT do
 
 These are the safety invariants. They hold for every request, whatever the
@@ -407,6 +427,22 @@ returns" (#62): a justification that assumes the analyst holds something the
 gateway has just withheld. The terms are still named — in the audit log, where
 the output checker reads them.
 
+**P23** — The inside analyst's policy — the component that decides what to
+ask next, whether a model or a script — MUST NOT be shown anything a human
+user of the same session would not be shown: the status, the canonical
+message, the numberless findings and the RELEASED frames of each step, the
+public question and the remaining budget, and nothing else. A denied step
+MUST carry no frame. The narrator that writes the human-facing summary MUST
+be shown only the dossier, and every figure in its prose MUST be traceable to
+a released table — an untraceable figure is recorded on the dossier as
+unsupported. *(Added 2026-08-15. This is the clause that keeps the phase-1
+analyst on the public side of the gateway: informationally it stands where
+the human stands, so the disclosure argument (P19–P22, R15) is inherited
+rather than re-argued. It deliberately excludes the data-sighted tier of
+[the plan](inside-analyst.md), where the analyst would see unvetted
+intermediates and selection itself becomes a channel; that tier has no clause
+because it is not built.)*
+
 ## Non-goals — what it does NOT claim
 
 Stated so the claim is not over-read. Several are roadmap items, not permanent
@@ -466,6 +502,7 @@ SQL plan to be inspectable, and it was exposed nowhere until `Result.plans`.
 | P20 no per-observation model output | `glm.py` (output contract), `analyst.py` (intent) | `test_glm.py`, `test_procedure_conformance.py` | Implemented |
 | P21 fitter noninterference | `stats.py`, `glm.py` (pure fit) | reproducibility meta-test (`test_glm_properties.py`), `test_glm_noninterference.py`, Alloy `P21` | Implemented |
 | P22 refusals from released-equivalent data | `glm.py` (`preconditions`), `service.py` | `test_glm.py` (non-numeric, term-naming refusals) | Implemented |
+| P23 analyst policy sees the public side only; narrator sees the dossier only | `inside_analyst.py` (`LoopState`, `Step`, `LLMNarrator`, `check_narrative`) | `test_inside_analyst.py` (declared fields, denied steps carry no frame, hostile data absent from the transcript, narrator input), `redteam/run_analyst_redteam.py` (data-borne injection, narrator invention) | Implemented |
 | R1 natural-language request to untrusted spec | `service.py` (`handle`), `planner.py` | `test_pipeline.py`, `test_secure.py` | Implemented |
 | R2 validate before execution | `query.py` (`QuerySpec`), `service.py` | `test_secure.py`, `test_query_properties.py`, `test_formal_enumeration.py` | Implemented |
 | R3 read-only SQL under resource caps | `engine.py` (`compile_query`, `MEMORY_LIMIT`, `THREADS`, `ROW_CAP`) | `test_formal_enumeration.py`, `test_procedure_conformance.py`, `test_requirements.py` | Implemented |
@@ -484,6 +521,7 @@ SQL plan to be inspectable, and it was exposed nowhere until `Result.plans`.
 | R16 skeleton export + model check | `procedures.py`, `formal/` | `test_skeleton_sync.py`, `test_formal_alloy_sync.py`, `test_formal_lean_sync.py`, CI `formal` job | Implemented |
 | R17 literal spec entry | `service.py` (`_literal_spec`) | `test_literal_spec.py` | Implemented |
 | R18 response time reveals nothing | `safetre_web/app.py` (`constant_response_time`) | `test_timing_channel.py`, `scripts/measure_timing_channel.py` | Partial (the deployment boundary; a library embedder pads at their own) |
+| R19 inside analyst: ordinary requests, one session, typed dossier | `inside_analyst.py` (`AnalystLoop`, `_ground_claims`, `VERDICTS`) | `test_inside_analyst.py` (lineage binds across steps, budget stops the loop, every step audited, ungrounded claims downgraded), `test_inside_analyst_redteam.py` + `redteam/analyst_attacks.yaml` (the model as adversary) | Implemented |
 
 The red-team suite (`redteam/run_redteam.py`, R12) exercises P1–P6, P10–P11,
 and P19–P22 end to end, off gateway versus on. The bounded formal model

@@ -1,0 +1,139 @@
+{
+  "question": "Is late-night phone use linked to charitable giving?",
+  "dataset": "nightplay-study",
+  "steps": [
+    {
+      "id": 1,
+      "sub_question": "Mean donation amount by night-time phone use band",
+      "spec": {
+        "dataset": "giving",
+        "measure": {
+          "fn": "mean",
+          "column": "amount_gbp"
+        },
+        "group_by": [
+          "night_use_band"
+        ],
+        "filters": []
+      },
+      "status": "released",
+      "message": "",
+      "findings": [],
+      "output": [
+        {
+          "night_use_band": "occasional",
+          "value": 21.59,
+          "n": 4535
+        },
+        {
+          "night_use_band": "regular",
+          "value": 22.42,
+          "n": 4045
+        },
+        {
+          "night_use_band": "rare",
+          "value": 22.04,
+          "n": 3145
+        },
+        {
+          "night_use_band": "heavy",
+          "value": 20.46,
+          "n": 710
+        }
+      ],
+      "artifacts": null,
+      "cost": 1
+    },
+    {
+      "id": 2,
+      "sub_question": "one-way anova of donation amount by night use band",
+      "spec": {
+        "tool": "anova",
+        "dataset": "giving",
+        "response": "amount_gbp",
+        "factor": "night_use_band",
+        "filters": []
+      },
+      "status": "released",
+      "message": "",
+      "findings": [],
+      "output": [
+        {
+          "source": "night_use_band",
+          "df": 3,
+          "sum_sq": 3062.4076,
+          "mean_sq": 1020.8025,
+          "statistic": 4.445,
+          "p_value": 0.004
+        },
+        {
+          "source": "Residual",
+          "df": 12431,
+          "sum_sq": 2854831.7205,
+          "mean_sq": 229.6542,
+          "statistic": null,
+          "p_value": null
+        }
+      ],
+      "artifacts": {
+        "cells": [
+          {
+            "night_use_band": "heavy",
+            "mean": 20.46,
+            "n": 710,
+            "sum_sq": 442039.77
+          },
+          {
+            "night_use_band": "occasional",
+            "mean": 21.59,
+            "n": 4535,
+            "sum_sq": 3078913.9
+          },
+          {
+            "night_use_band": "rare",
+            "mean": 22.04,
+            "n": 3145,
+            "sum_sq": 2225968.14
+          },
+          {
+            "night_use_band": "regular",
+            "mean": 22.42,
+            "n": 4045,
+            "sum_sq": 3079980.45
+          }
+        ],
+        "model": [
+          {
+            "response": "amount_gbp",
+            "factor": "night_use_band",
+            "n": 12435,
+            "n_groups": 4,
+            "grand_mean": 21.9093,
+            "eta_squared": 0.0011,
+            "df_between": 3,
+            "df_within": 12431
+          }
+        ]
+      },
+      "cost": 2
+    }
+  ],
+  "claims": [
+    {
+      "text": "Late-night phone use is not meaningfully linked to charitable giving; the observed differences in mean donation across night-use bands are statistically significant but the effect size is negligible (eta_squared=0.0011).",
+      "verdict": "null",
+      "evidence": [
+        1,
+        2
+      ],
+      "reason": ""
+    }
+  ],
+  "verdict": "null",
+  "notes": "The analysis is cross-sectional and cannot establish causality; residual confounding by age, income, or employment may explain the small differences.",
+  "budget": 20,
+  "budget_spent": 3,
+  "stopped_because": "concluded",
+  "narrative": "The analysis compared mean charitable donations (in\u202f\u00a3) across four self\u2011reported night\u2011time phone\u2011use bands. Occasional users gave on average \u00a321.59 (n\u202f=\u202f4\u202f535), regular users \u00a322.42 (n\u202f=\u202f4\u202f045), rare users \u00a322.04 (n\u202f=\u202f3\u202f145), and heavy users \u00a320.46 (n\u202f=\u202f710). A one\u2011way ANOVA of donation amount by band yielded F(3,\u202f12\u202f431)\u202f=\u202f4.45, p\u202f=\u202f0.004, indicating statistically significant differences among the groups. However, the effect size was tiny: \u03b7\u00b2\u202f=\u202f0.0011, meaning that night\u2011time phone use explains only about 0.1\u202f% of the variance in donation amounts. The overall sample mean donation was \u00a321.91 (N\u202f=\u202f12\u202f435). Because the study is cross\u2011sectional, these associations do not imply causality, and residual confounding by factors such as age, income, or employment could account for the small observed differences. In short, while mean donations vary slightly across night\u2011use bands, the practical link between late\u2011night phone use and charitable giving is negligible.",
+  "unsupported_figures": []
+}

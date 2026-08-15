@@ -114,6 +114,41 @@ and fixes are in [docs/hardening-log.md](docs/hardening-log.md).
 
 ### Added
 
+- **The inside analyst, phase 1: the vetted loop (`safetre/inside_analyst.py`;
+  spec R19 and P23; [D8](docs/decisions/D8-inside-analyst-vetted-loop.md);
+  [explained simply](docs/inside-analyst-elif.md)).** An analyst that answers a
+  research question rather than a request: it plans sub-requests, sends each
+  through the unchanged `QueryService` as a natural-language sub-question with
+  its proposed spec — so intent vetting, the fidelity gates, typed validation,
+  the gateway, the budget, the differencing lineage and the audit log apply to
+  every step — under ONE session for the whole question, reads only what a
+  human user of that session would see (`LoopState` has exactly those fields; a
+  denied step carries no frame), and concludes with a typed dossier: claims
+  with verdicts from a closed vocabulary, each citing released steps, an
+  ungrounded claim downgraded to `not_answerable`. The policy is pluggable —
+  a model over the planner's own client interface, whose malformed replies
+  become typed refusals, or a script for tests. A narrator is shown the
+  dossier alone and `check_narrative` lists any figure in its prose no
+  released table supports (rounding to the figure's own precision accepted).
+  `scripts/run_inside_analyst.py` runs one question; `studies/nightplay/
+  run_question_bank.py` runs and marks the NIGHTPLAY bank.
+  - **Red-teamed with the model as adversary** (`redteam/analyst_attacks.yaml`,
+    `redteam/run_analyst_redteam.py`, in the default suite and as a CI step):
+    fourteen scripted analysts — row-level egress, identifier filters, free
+    text and timestamps, an injected sub-question, differencing pairs, the
+    whale cell, data-borne injection through a category value, budget and
+    invalid and malformed floods, a fabricated conclusion, an inventing
+    narrator — under the row-level oracle. None leaked. A fifteenth
+    reproduces the known-open cross-view pair (#95) on the second study by
+    construction and is carried as `known_open`, failing if it ever stops
+    reproducing unaudited.
+  - What the first day taught: the lineage binds across the analyst's steps
+    (a marginal, then a model excluding a sub-threshold group, is a
+    differencing pair — model-first releases both); the narrative check
+    caught a space-grouped "72 000" on the first live run and now understands
+    it; and the fidelity gate is only as good as the study lexicon (the
+    NIGHTPLAY definition gained "night-time phone use" and kin).
+
 - **The inside-analyst plan, and its phase 0
   ([docs/inside-analyst.md](docs/inside-analyst.md), roadmap item 5).** A
   design note for the next research phase — moving the automated component
