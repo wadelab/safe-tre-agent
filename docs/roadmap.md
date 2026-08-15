@@ -240,6 +240,31 @@ serial sessions are inside the differencing control. Ordered after ACRO and DP
 because both change what gets released, and the lineage store should record
 the final semantics, not the stand-in's.
 
+## 5. The inside analyst
+
+The planner today formats one request at a time from outside the boundary.
+The next research phase moves the automated component inside it — an analyst
+that plans, issues procedures, iterates and assembles a typed evidence
+dossier, with every release still passing the same gateway — and the design
+note ([the inside analyst](inside-analyst.md)) sets out why that decomposes
+on one distinction: which side of the gateway the model's inputs come from. An
+analyst that reads only *released* results is safe by construction and
+delivers most of the value; an analyst that sees unvetted intermediates
+raises the real research problem, selection as a covert channel, whose answer
+(pre-registration as an enforcement primitive, adaptivity metered by the DP
+accountant of item 3) is the same control that prevents p-hacking.
+
+Phase 0 is delivered: a hosted 120B-class open-weight model scored against
+the planner evaluation as a stand-in for a local deployment
+([planner evaluation](planner-eval.md)), and the [NIGHTPLAY study](nightplay-study.md)
+— a second synthetic population with planted truths and traps, verified
+recoverable through the gateway, with a question bank to mark dossiers
+against. Ordered after items 0–4 because it *depends* on them: it consumes
+the DP accountant (3), motivates cross-session lineage (4) and the
+declared measure equivalence of 0.0, and is the feature that would unpark
+submit-and-collect delivery. It is placed last not because it matters least
+but because it is the thing the others are for.
+
 ## Delivered
 
 Former roadmap items that have shipped; each has a maintained record
@@ -273,14 +298,22 @@ elsewhere.
   and the interactive demo is what reviewers use. Quantisation (spec R18) is
   what makes the interactive version defensible meanwhile; unpark this if the
   system is ever pointed at real data.
-- **FHE fixed-analysis backend** — a research experiment combining this
-  project with a homomorphic-encryption toolbox: a fixed, manifest-validated
-  encrypted statistic (correlation, linear regression) whose decrypted
-  aggregate still passes the gateway, session audit and human review. If it
-  enters at all, it enters as a fixed tool behind the manifest — no LLM access
-  to encryption primitives, no arbitrary encrypted SQL, no bypass of
-  validation or release checks — and makes no production cryptographic claim
-  until backed by a real FHE scheme (CKKS/BFV/BGV).
+- **FHE cell-source backend** — a research experiment combining this
+  project with homomorphic encryption, re-scoped by the
+  [inside analyst](inside-analyst.md) note: because models are cells-first,
+  the only computation that need run under FHE is per-cell aggregation
+  (count, sum, sum of squares), the most FHE-friendly workload there is;
+  everything downstream runs after decryption on tiny aggregate tables,
+  unchanged. It enters as a *cell-source seam* symmetric to the `CellVetter`
+  seam, with decryption and vetting fused inside the gateway — plaintext exists
+  only there — and it changes the trust model in exactly three places:
+  untrusted compute, multi-custodian federation, and making the inside
+  analyst's blindness cryptographic (a homomorphic circuit cannot branch on
+  the data, so a locked plan is a property of the substrate). No LLM access to
+  encryption primitives, no arbitrary encrypted SQL, no bypass of validation
+  or release checks, and no production cryptographic claim until backed by a
+  real scheme (CKKS/BFV/BGV) with noise flooding at decryption; integrity
+  stays with the audit chain and replay, stated as a non-goal.
 - **Container-isolated escalation path** (gVisor/Firecracker) — only if the
   legacy code path is ever promoted; today it exists for the red-team
   narrative.

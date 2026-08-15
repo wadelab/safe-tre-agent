@@ -114,6 +114,50 @@ and fixes are in [docs/hardening-log.md](docs/hardening-log.md).
 
 ### Added
 
+- **The inside-analyst plan, and its phase 0
+  ([docs/inside-analyst.md](docs/inside-analyst.md), roadmap item 5).** A
+  design note for the next research phase — moving the automated component
+  from outside the boundary, where it formats one request at a time, to an
+  analyst that works inside it with every release still passing the same
+  gateway — organised around one distinction: which side of the gateway the
+  model's inputs come from. An analyst that reads only released results is
+  safe by construction; one that sees unvetted intermediates raises the real
+  problem, selection as a covert channel, whose answer (a locked,
+  audit-committed plan; adaptivity metered by the DP accountant) is the same
+  control that prevents p-hacking. The homomorphic-encryption item is
+  re-scoped on the same page and in the roadmap: cells-first means only
+  per-cell aggregation need run under FHE, entering as a cell-source seam with
+  decryption fused into vetting. Plain-language version:
+  `scripts/make_inside_analyst_deck.py`.
+  - **Phase 0a — a local-class planner, measured.** A hosted 120B-class
+    open-weight model, standing in for a local deployment, scored against the
+    planner evaluation beside a same-day rerun of the remote planner the demo
+    has used ([docs/planner-eval.md](docs/planner-eval.md), second
+    measurement). Reading its misses moved two facts the prompt never stated
+    into the demo definition's `planner_hints` and `planner_examples` — what a
+    row of each dataset is and which `event_type` filter a spend question
+    needs; the exact filter-object shape and the inward snap of age bounds —
+    after which the stand-in matched or exceeded the incumbent's planning
+    accuracy while refusing far more often. Both planners still *deflect*
+    when refusing would be right, which is the boundary's job and becomes a
+    typed-verdict requirement for the analyst.
+  - **Phase 0b — the NIGHTPLAY study (`studies/nightplay/`,
+    [docs/nightplay-study.md](docs/nightplay-study.md)).** A second synthetic
+    population built backwards from what an analyst should find: six linked
+    tables including a person × month panel, five public views served through
+    the ordinary dataset-definition mechanism with no code change, six planted
+    truths (a dose–response, an observed confounder, a planted null,
+    heterogeneity, seasonality and a within-day cycle, a longitudinal harm
+    signal) and seven planted traps for the arithmetic (NULLs, cancelling
+    contributions, a whale, single-person influence, sub-threshold subgroups,
+    hostile strings as undeclared category values, heavy tails), each measured
+    on the unvetted rows and written to a manifest beside the CSVs.
+    `studies/nightplay/verify.py` plays the reference analyst through the real
+    `QueryService` and shows every truth recoverable from vetted releases and
+    every trap caught (14/14); `tests/test_nightplay_study.py` runs the same on
+    a fresh population in the default suite. `studies/nightplay/questions.yaml`
+    is the nine-question marking scheme for a future dossier.
+
 - **Shadow data (`safetre/shadow.py`, `scripts/make_shadow.py`,
   [docs](docs/shadow-data.md)).** A researcher cannot see the real rows, which
   is the point of the system and also what makes it awkward to use: you write

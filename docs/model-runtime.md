@@ -20,6 +20,11 @@ research requests into `QuerySpec` JSON. A useful planning target is a good
 120B-class model: think two Spark-class NVIDIA test systems for development and
 an H100-class or similar accelerator profile for production.
 
+That assumption now has a number under it: a hosted 120B-class open-weight
+model, standing in for a local deployment, plans about as well as the remote
+planner the demo has used and refuses more often
+([planner evaluation](planner-eval.md), second measurement).
+
 Do not make safety depend on that capability. Even a strong local model is still
 untrusted:
 

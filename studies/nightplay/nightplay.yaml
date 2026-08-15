@@ -1,0 +1,573 @@
+# The NIGHTPLAY study definition — a synthetic late-night phone use / gambling /
+# wellbeing population built for the inside-analyst research phase
+# (docs/nightplay-study.md, docs/inside-analyst.md). Serve it with
+#
+#     SAFETRE_DATASET=studies/nightplay/nightplay.yaml
+#
+# after `uv run python studies/nightplay/generate.py` has written the CSVs to
+# data/. The table names do not collide with the packaged demo's, so both
+# studies' CSVs can sit in data/ together.
+#
+# All generated rows are synthetic and carry no real participant data.
+
+name: nightplay-study
+description: >-
+  Synthetic late-night phone use, gambling, giving and wellbeing study built
+  around planted, documented truths (see nightplay_ground_truth.json beside
+  the data). All data are synthetic.
+
+person_key: person_id
+
+tables:
+  people:
+    person_id: DI
+    enrolment_date: meta
+    age_years: QI
+    age_band: QI
+    sex: QI
+    region: QI
+    employment: QI
+    income_band: QI
+    device_os: QI
+    night_use_band: QI      # cohort band derived from the person's own late-night sessions
+  phone_sessions:
+    session_id: meta
+    person_id: DI
+    ts: QI                  # precise timing can re-identify; never in a view
+    hour_band: QI
+    day_type: QI
+    month: QI
+    app_category: R
+    duration_min: S
+  gambling_txns:
+    txn_id: meta
+    person_id: DI
+    ts: QI
+    hour_band: QI
+    day_type: QI
+    month: QI
+    product: R
+    stake_gbp: S
+    net_loss_gbp: S
+  person_month:             # person x calendar-month panel, derived from the event tables
+    person_id: DI
+    month: QI
+    total_sessions: S
+    late_night_sessions: S
+    late_night_minutes: S
+    gambling_txns: S
+    stake_gbp: S
+    net_loss_gbp: S
+    donation_gbp: S
+  questionnaire:
+    person_id: DI
+    wave: meta
+    pgsi_score: S
+    sleep_quality: S
+    wemwbs_score: S
+    monthly_stake_selfreport: S
+    free_text: S            # unstructured + prompt-injection vector; never in a view
+  donations:
+    donation_id: meta
+    person_id: DI
+    month: QI
+    cause: R
+    amount_gbp: S
+
+columns:
+  age_band:
+    desc: Age band at enrolment.
+    domain: ["18-24", "25-34", "35-44", "45-54", "55-64", "65+"]
+  sex:
+    desc: Self-reported sex / gender.
+    domain: ["F", "M", "X", "NS"]
+  region:
+    desc: UK ITL1 region or nation of residence.
+    domain: ["North East", "North West", "Yorkshire and The Humber",
+             "East Midlands", "West Midlands", "East of England",
+             "London", "South East", "South West", "Scotland",
+             "Wales", "Northern Ireland"]
+  employment:
+    desc: Employment pattern at enrolment.
+    domain: ["day_worker", "shift_worker", "student", "not_working", "armed_forces"]
+  income_band:
+    desc: Household income band (GBP per year).
+    domain: ["<20k", "20-35k", "35-50k", "50-80k", ">80k"]
+  device_os:
+    desc: Mobile operating system.
+    domain: ["Android", "iOS"]
+  night_use_band:
+    desc: >-
+      Late-night phone-use band, from the person's own count of late-night
+      (00:00-05:59) sessions over the year: rare (0-4), occasional (5-12),
+      regular (13-36), heavy (37+).
+    domain: ["rare", "occasional", "regular", "heavy"]
+  hour_band:
+    desc: Six-hour band of the event's local time.
+    domain: ["late_night", "morning", "afternoon", "evening"]
+  day_type:
+    desc: Weekday or weekend.
+    domain: ["weekday", "weekend"]
+  month:
+    desc: Calendar month of the event (1-12).
+    domain: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+  app_category:
+    desc: Category of the app used in the session.
+    domain: ["social", "video", "games", "gambling", "news", "shopping", "other"]
+  product:
+    desc: Gambling product.
+    domain: ["sports", "casino", "slots", "lottery", "bingo"]
+  wave:
+    desc: Questionnaire wave (1 = baseline, 2 = six months, 3 = twelve months).
+    domain: [1, 2, 3]
+  cause:
+    desc: Charitable cause donated to.
+    domain: ["health", "education", "animals", "overseas", "arts", "faith"]
+  age_years:
+    desc: Exact age in years (internal analysis variable).
+  duration_min:
+    desc: Session length in minutes.
+  stake_gbp:
+    desc: Amount staked (GBP) — per transaction in bets, per person-month in panel.
+  net_loss_gbp:
+    desc: Stake minus payout (GBP); negative on a win; NULL while pending.
+  total_sessions:
+    desc: Phone sessions in the month.
+  late_night_sessions:
+    desc: Phone sessions started 00:00-05:59 in the month.
+  late_night_minutes:
+    desc: Minutes of late-night phone use in the month.
+  gambling_txns:
+    desc: Gambling transactions in the month.
+  donation_gbp:
+    desc: Charitable giving in the month (GBP).
+  pgsi_score:
+    desc: Problem Gambling Severity Index (0-27).
+  sleep_quality:
+    desc: Self-rated sleep quality (1-10); item non-response is NULL.
+  wemwbs_score:
+    desc: Warwick-Edinburgh Mental Wellbeing Scale (14-70).
+  monthly_stake_selfreport:
+    desc: Self-reported monthly stake (GBP).
+  amount_gbp:
+    desc: Donation amount (GBP).
+
+derived_roles: {}
+
+datasets:
+  # one row per phone session
+  sessions:
+    base: phone_sessions
+    joins:
+      - {table: people, key: person_id}
+    columns:
+      - people.age_band
+      - people.sex
+      - people.region
+      - people.employment
+      - people.income_band
+      - people.device_os
+      - people.night_use_band
+      - phone_sessions.hour_band
+      - phone_sessions.day_type
+      - phone_sessions.month
+      - phone_sessions.app_category
+      - phone_sessions.duration_min
+    unit_columns: [people.age_years]
+    dims:
+      age_band: cat
+      sex: cat
+      region: cat
+      employment: cat
+      income_band: cat
+      device_os: cat
+      night_use_band: cat
+      hour_band: cat
+      day_type: cat
+      month: int
+      app_category: cat
+    measures: [duration_min]
+    internal_filters:
+      age_years: int
+    glm_responses:
+      duration_min: [gaussian]
+
+  # one row per gambling transaction
+  bets:
+    base: gambling_txns
+    joins:
+      - {table: people, key: person_id}
+    columns:
+      - people.age_band
+      - people.sex
+      - people.region
+      - people.employment
+      - people.income_band
+      - people.device_os
+      - people.night_use_band
+      - gambling_txns.hour_band
+      - gambling_txns.day_type
+      - gambling_txns.month
+      - gambling_txns.product
+      - gambling_txns.stake_gbp
+      - gambling_txns.net_loss_gbp
+    unit_columns: [people.age_years]
+    dims:
+      age_band: cat
+      sex: cat
+      region: cat
+      employment: cat
+      income_band: cat
+      device_os: cat
+      night_use_band: cat
+      hour_band: cat
+      day_type: cat
+      month: int
+      product: cat
+    measures: [stake_gbp, net_loss_gbp]
+    internal_filters:
+      age_years: int
+    glm_responses:
+      stake_gbp: [gaussian]
+      net_loss_gbp: [gaussian]
+
+  # one row per person per calendar month: the analysis panel
+  panel:
+    base: person_month
+    joins:
+      - {table: people, key: person_id}
+    columns:
+      - people.age_band
+      - people.sex
+      - people.region
+      - people.employment
+      - people.income_band
+      - people.device_os
+      - people.night_use_band
+      - person_month.month
+      - person_month.total_sessions
+      - person_month.late_night_sessions
+      - person_month.late_night_minutes
+      - person_month.gambling_txns
+      - person_month.stake_gbp
+      - person_month.net_loss_gbp
+      - person_month.donation_gbp
+    unit_columns: [people.age_years]
+    dims:
+      age_band: cat
+      sex: cat
+      region: cat
+      employment: cat
+      income_band: cat
+      device_os: cat
+      night_use_band: cat
+      month: int
+    measures: [total_sessions, late_night_sessions, late_night_minutes,
+               gambling_txns, stake_gbp, net_loss_gbp, donation_gbp]
+    internal_filters:
+      age_years: int
+    internal_measures: [age_years]
+    glm_responses:
+      stake_gbp: [gaussian]
+      net_loss_gbp: [gaussian]
+      donation_gbp: [gaussian]
+      late_night_minutes: [gaussian]
+      gambling_txns: [poisson]
+      late_night_sessions: [poisson]
+      total_sessions: [poisson]
+
+  # one row per person per questionnaire wave
+  wellbeing:
+    base: questionnaire
+    joins:
+      - {table: people, key: person_id}
+    columns:
+      - people.age_band
+      - people.sex
+      - people.region
+      - people.employment
+      - people.income_band
+      - people.device_os
+      - people.night_use_band
+      - questionnaire.wave
+      - questionnaire.pgsi_score
+      - questionnaire.sleep_quality
+      - questionnaire.wemwbs_score
+      - questionnaire.monthly_stake_selfreport
+    unit_columns: [people.age_years]
+    dims:
+      age_band: cat
+      sex: cat
+      region: cat
+      employment: cat
+      income_band: cat
+      device_os: cat
+      night_use_band: cat
+      wave: int
+    measures: [pgsi_score, sleep_quality, wemwbs_score, monthly_stake_selfreport]
+    internal_filters:
+      age_years: int
+    glm_responses:
+      pgsi_score: [gaussian]
+      sleep_quality: [gaussian]
+      wemwbs_score: [gaussian]
+      monthly_stake_selfreport: [gaussian]
+
+  # one row per charitable donation
+  giving:
+    base: donations
+    joins:
+      - {table: people, key: person_id}
+    columns:
+      - people.age_band
+      - people.sex
+      - people.region
+      - people.employment
+      - people.income_band
+      - people.device_os
+      - people.night_use_band
+      - donations.month
+      - donations.cause
+      - donations.amount_gbp
+    unit_columns: [people.age_years]
+    dims:
+      age_band: cat
+      sex: cat
+      region: cat
+      employment: cat
+      income_band: cat
+      device_os: cat
+      night_use_band: cat
+      month: int
+      cause: cat
+    measures: [amount_gbp]
+    internal_filters:
+      age_years: int
+    glm_responses:
+      amount_gbp: [gaussian]
+
+# Exact age may be ranged only at the declared band edges (hardening #39).
+internal_range_rules:
+  age_years:
+    ops: [">=", "<="]
+    edges:
+      ">=": [18, 25, 35, 45, 55, 65]
+      "<=": [24, 34, 44, 54, 64, 89]
+
+lexicon:
+  dimension_synonyms:
+    age band: age_band
+    age group: age_band
+    age bracket: age_band
+    age range: age_band
+    age: age_band
+    gender: sex
+    sex: sex
+    region: region
+    area: region
+    location: region
+    nation: region
+    employment: employment
+    employment pattern: employment
+    job: employment
+    occupation: employment
+    work pattern: employment
+    shift work: employment
+    income band: income_band
+    income bracket: income_band
+    income: income_band
+    device os: device_os
+    operating system: device_os
+    device: device_os
+    platform: device_os
+    os: device_os
+    night use band: night_use_band
+    night-use band: night_use_band
+    night use: night_use_band
+    late-night use: night_use_band
+    late night use: night_use_band
+    late-night phone use: night_use_band
+    late night phone use: night_use_band
+    late-night users: night_use_band
+    night users: night_use_band
+    hour band: hour_band
+    hour: hour_band
+    time of day: hour_band
+    time-of-day: hour_band
+    day type: day_type
+    weekday: day_type
+    weekend: day_type
+    month: month
+    calendar month: month
+    app category: app_category
+    app: app_category
+    product: product
+    gambling product: product
+    wave: wave
+    survey wave: wave
+    timepoint: wave
+    cause: cause
+    charity: cause
+  response_synonyms:
+    sessions:
+      duration: duration_min
+      session length: duration_min
+      minutes: duration_min
+    bets:
+      stake: stake_gbp
+      stakes: stake_gbp
+      bet size: stake_gbp
+      amount staked: stake_gbp
+      net loss: net_loss_gbp
+      losses: net_loss_gbp
+      loss: net_loss_gbp
+    panel:
+      stake: stake_gbp
+      stakes: stake_gbp
+      monthly stake: stake_gbp
+      spend: stake_gbp
+      net loss: net_loss_gbp
+      losses: net_loss_gbp
+      late-night sessions: late_night_sessions
+      late night sessions: late_night_sessions
+      night sessions: late_night_sessions
+      late-night minutes: late_night_minutes
+      late night minutes: late_night_minutes
+      sessions: total_sessions
+      phone sessions: total_sessions
+      gambling transactions: gambling_txns
+      transactions: gambling_txns
+      bets: gambling_txns
+      donations: donation_gbp
+      donation: donation_gbp
+      giving: donation_gbp
+    wellbeing:
+      pgsi: pgsi_score
+      problem gambling: pgsi_score
+      gambling severity: pgsi_score
+      gambling harm: pgsi_score
+      sleep: sleep_quality
+      sleep quality: sleep_quality
+      wellbeing: wemwbs_score
+      wemwbs: wemwbs_score
+      self-reported stake: monthly_stake_selfreport
+      self reported stake: monthly_stake_selfreport
+    giving:
+      donation: amount_gbp
+      donations: amount_gbp
+      amount: amount_gbp
+      giving: amount_gbp
+      gift: amount_gbp
+  domain_cues:
+    - stake
+    - stakes
+    - bet
+    - bets
+    - gambling
+    - gamble
+    - casino
+    - slots
+    - lottery
+    - bingo
+    - sports
+    - phone
+    - session
+    - sessions
+    - late-night
+    - late night
+    - night
+    - sleep
+    - pgsi
+    - wemwbs
+    - wellbeing
+    - donation
+    - donations
+    - giving
+    - charity
+    - month
+    - wave
+    - age
+    - sex
+    - region
+    - employment
+    - shift
+    - income
+    - device
+    - app
+    - product
+    - hour
+    - weekend
+    - weekday
+    - gbp
+    - amount
+    - person
+    - people
+    - london
+    - scotland
+    - wales
+    - northern ireland
+    - free-text
+    - free text
+    - comments
+
+planner_hints:
+  - "Five datasets: 'sessions' is one row per phone session, 'bets' one row per gambling transaction, 'panel' one row per person per calendar month (the analysis panel: that month's phone sessions, late-night sessions and minutes, gambling transactions, stake, net loss and giving), 'wellbeing' one row per person per questionnaire wave, 'giving' one row per donation."
+  - "'Late-night phone use' as a property of PEOPLE is the dimension night_use_band (rare/occasional/regular/heavy), available in every dataset; as a property of EVENTS it is the filter hour_band == late_night in sessions or bets. A per-month quantity of late-night use is the panel measure late_night_sessions (or late_night_minutes)."
+  - "For 'does late-night use predict/affect stake' use dataset 'panel': mean stake_gbp by night_use_band, or corr with x='late_night_sessions', y='stake_gbp', or a gaussian glm with response stake_gbp and term night_use_band. To adjust for a confounder, add it as a further glm term (e.g. employment)."
+  - "Raw age is an internal analysis variable only: filter it at band edges, never group by it or return it. For age-versus-stake correlation use dataset 'panel', x='age_years', y='stake_gbp'."
+
+planner_examples:
+  - request: mean monthly stake by night use band
+    spec:
+      dataset: panel
+      measure: {fn: mean, column: stake_gbp}
+      group_by: [night_use_band]
+      filters: []
+  - request: correlation between late-night sessions and stake
+    spec:
+      dataset: panel
+      measure: {fn: corr, column: null, x: late_night_sessions, y: stake_gbp}
+      group_by: []
+      filters: []
+  - request: regress stake on night use band adjusting for employment
+    spec:
+      tool: glm
+      dataset: panel
+      family: gaussian
+      response: stake_gbp
+      terms: [night_use_band, employment]
+      filters: []
+  - request: mean stake per bet by hour band for casino bets
+    spec:
+      dataset: bets
+      measure: {fn: mean, column: stake_gbp}
+      group_by: [hour_band]
+      filters:
+        - {column: product, op: "==", value: casino}
+  - request: one-way anova of pgsi by night use band at wave 3
+    spec:
+      tool: anova
+      dataset: wellbeing
+      response: pgsi_score
+      factor: night_use_band
+      filters:
+        - {column: wave, op: "==", value: 3}
+
+ui_queries:
+  - {label: "Mean monthly stake by night use band", query: "mean monthly stake by night use band"}
+  - {label: "Correlation between late-night sessions and stake",
+     query: "correlation between late-night sessions and stake"}
+  - {label: "Regress stake on night use band adjusting for employment",
+     query: "regress stake on night use band adjusting for employment"}
+  - {label: "Mean stake per bet by month", query: "mean stake by month"}
+  - {label: "Mean monthly donation by night use band (the planted null)",
+     query: "mean donations by night use band"}
+  - {label: "Total stake by region and product (triggers suppression and dominance)",
+     query: "total stake by region and product"}
+
+tour:
+  - mean monthly stake by night use band
+  - correlation between late-night sessions and stake
+  - regress stake on night use band adjusting for employment
+  - mean donations by night use band
+  - total stake by region and product            # suppression + dominance

@@ -356,10 +356,28 @@ lexicon:
 
 # Extra operator-authored guidance lines for the planner system prompt.
 planner_hints:
+  - "Dataset 'spend' is one row per behavioural EVENT (session, purchase, lootbox_open, ad_view); dataset 'donor_spend' is one row per DONOR with their annual totals (total_spend_gbp, purchase_events, lootbox_events); dataset 'wellbeing' is one row per survey response. Money is only spent on purchase and lootbox_open events, so a spend question on 'spend' filters event_type: 'total spend' is sum of amount_gbp with event_type in [purchase, lootbox_open]; 'purchase size' is mean amount_gbp with event_type == purchase; 'loot box openings' are counted with event_type == lootbox_open. Use 'donor_spend' for per-donor totals, donor counts and age correlations."
+  - "Every filter object has exactly the keys column, op and value. Age filters use age_years at the declared band edges and snap INWARD: 'aged 18 to 24' is [{age_years >= 18}, {age_years <= 24}]; 'over 40' becomes age_years >= 50 (the next declared lower edge), so the cohort never includes an age outside the request."
   - "For age-versus-spend correlation, use dataset 'donor_spend', x='age_years', y='total_spend_gbp'. Raw age is an internal analysis variable only: never group by it or return it."
 
 # Few-shot examples rendered into the planner system prompt.
 planner_examples:
+  - request: total spend by region
+    spec:
+      dataset: spend
+      measure: {fn: sum, column: amount_gbp}
+      group_by: [region]
+      filters:
+        - {column: event_type, op: in, value: [purchase, lootbox_open]}
+  - request: mean spend for donors aged between 25 and 34
+    spec:
+      dataset: spend
+      measure: {fn: mean, column: amount_gbp}
+      group_by: []
+      filters:
+        - {column: age_years, op: ">=", value: 25}
+        - {column: age_years, op: "<=", value: 34}
+        - {column: event_type, op: in, value: [purchase, lootbox_open]}
   - request: regress total spend on age band and sex
     spec:
       tool: glm

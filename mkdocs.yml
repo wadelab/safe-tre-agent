@@ -55,6 +55,7 @@ nav:
       - Model runtime: model-runtime.md
       - Tool manifest: tool-manifest.md
       - Planner evaluation: planner-eval.md
+      - The inside analyst (plan): inside-analyst.md
       - Roadmap: roadmap.md
   - Public demo:
       - Overview: public-demo.md
@@ -68,6 +69,7 @@ nav:
       - Test deployment: test-deployment.md
       - Deployment: deployment.md
       - Serving a different study: datasets.md
+      - The NIGHTPLAY study: nightplay-study.md
       - Shadow data: shadow-data.md
       - Certification & hardware: certification.md
       - Development: development.md
