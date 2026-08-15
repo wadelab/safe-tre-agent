@@ -81,12 +81,6 @@ hosted server is involved.
 | See the formal-methods analysis | [Formal methods](formal-methods-analysis.md) |
 | See candidate verifiable extensions | [Verifiable extensions](verifiable-extensions.md) |
 
-### Positioning
-
-| If you want to… | Read |
-|---|---|
-| Position it for fellowship funding | [Fellowship positioning](fellowship.md) |
-
 ## The one-paragraph technical version
 
 A researcher asks a question in natural language. An (untrusted) LLM turns it
