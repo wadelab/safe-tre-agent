@@ -84,10 +84,11 @@ figure img{ display:block; width:100%; height:auto; border:1px solid var(--rule)
 """
 
 
-def _webp(name, width=1100):
-    for f in os.listdir(IMGS):
+def _webp(name, imgs=None, width=1100):
+    imgs = imgs or IMGS
+    for f in os.listdir(imgs):
         if f == name or f.startswith(name.split(".")[0]):
-            with Image.open(os.path.join(IMGS, f)) as im:
+            with Image.open(os.path.join(imgs, f)) as im:
                 im = im.convert("RGB")
                 h = round(im.height * width / im.width)
                 buf = io.BytesIO()
@@ -96,8 +97,8 @@ def _webp(name, width=1100):
     raise SystemExit(f"framework image not found: {name}")
 
 
-def build():
-    raw = open(os.path.join(SRC, "content.md"), encoding="utf-8").read()
+def build(src=SRC, imgs=IMGS, expect=4):
+    raw = open(os.path.join(src, "content.md"), encoding="utf-8").read()
     raw = re.sub(r"<!--.*?-->", "", raw, flags=S)
     m = re.match(r"^\s*---\n(.*?)\n---\n(.*)$", raw, S)
     meta = yaml.safe_load(m.group(1))
@@ -105,10 +106,10 @@ def build():
 
     # inline images and wrap each in a <figure>
     def img(mo):
-        src = re.search(r'src="([^"]+)"', mo.group(0)).group(1)
+        img_src = re.search(r'src="([^"]+)"', mo.group(0)).group(1)
         alt = (re.search(r'alt="([^"]*)"', mo.group(0)) or ["", ""])[1]
         return (f'<figure><img loading="lazy" alt="{alt}" '
-                f'src="{_webp(os.path.basename(src))}"></figure>')
+                f'src="{_webp(os.path.basename(img_src), imgs)}"></figure>')
     body = re.sub(r"<p>\s*(<img[^>]*>)\s*</p>", lambda mo: img(mo), body)
 
     font = open(FONT, encoding="utf-8").read()
@@ -120,17 +121,20 @@ def build():
     colophon = ('<div class="colophon">A companion to the bestiary · '
                 'safe-tre-agent · research prototype on synthetic data.</div>')
     n = body.count("<figure>")
-    if n != 4:
-        raise SystemExit(f"expected 4 illustrations, embedded {n}")
+    if n != expect:
+        raise SystemExit(f"expected {expect} illustrations, embedded {n}")
     return (f'<title>{meta["title"]}</title>\n<style>{font}</style>\n{STYLE}\n'
             f'<div class="page">{hero}<div class="wrap">{body}</div>{colophon}</div>\n')
 
 
 def main():
     ap = argparse.ArgumentParser()
+    ap.add_argument("--src", default=SRC, help="dir holding content.md + front matter")
+    ap.add_argument("--imgs", default=IMGS, help="dir holding the illustrations")
     ap.add_argument("--out", default=OUT)
+    ap.add_argument("--expect", type=int, default=4, help="required illustration count")
     a = ap.parse_args()
-    html = build()
+    html = build(a.src, a.imgs, a.expect)
     os.makedirs(os.path.dirname(a.out), exist_ok=True)
     open(a.out, "w", encoding="utf-8").write(html)
     print(f"wrote {os.path.relpath(a.out, ROOT)} ({os.path.getsize(a.out)/1e6:.1f} MB)")
