@@ -134,7 +134,7 @@ the new "declare every released column" contract exists to make impossible.
 | Model shapes, all machine-checked | 767 (718 GLM + 49 ANOVA) |
 | Tests collected in the default suite | 1056 (plus an exhaustive `-m slow` pass) |
 | Red-team scenarios, every attack blocked by a named control | 34 (29 attacks, 5 benign) |
-| Solver-checked properties (Alloy, in CI) | 19, across three models |
+| Solver-checked properties (Alloy, in CI) | 20, across four models |
 | Coefficient agreement with reference implementations | ~1e-14 (exact maths), 1e-8 (tested bound) |
 | New runtime dependencies | 0 (the fitter is stdlib-only) |
 

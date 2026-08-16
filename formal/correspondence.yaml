@@ -107,3 +107,23 @@ temporal_session.als:
     kind: attack
     hardening: 59
     twin: redteam/round9_repro.py::v3_deletion_is_refused
+
+selection_ledger.als:
+  someLedger:
+    kind: guard
+    note: >-
+      a session that reaches the budget and therefore refuses a later probe, so
+      ChannelBounded is not vacuously satisfied by a world where nothing is ever
+      charged.
+  UnboundedWithoutLedger:
+    kind: attack
+    twin: tests/test_plans.py::test_the_selection_channel_is_bounded_across_a_session
+    note: >-
+      without the ledger an analyst charges every exclude_sparse probe and
+      learns more bits of withheld cohort structure than the budget allows —
+      the round-8 existence-oracle shape, recovered one exclusion at a time.
+  BenignSessionAllowed:
+    kind: guard
+    note: >-
+      a within-budget session charges every probe and is never refused, so the
+      bound does not over-deny the data-sighted move it is meant to meter.

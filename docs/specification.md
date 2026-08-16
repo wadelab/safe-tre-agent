@@ -478,7 +478,7 @@ The exact sparse counts MUST NOT leave the executor. *(Added 2026-08-15. This
 is an interim, counted bound on the selection channel a data-sighted analyst
 opens; the differential-privacy accountant (roadmap item 3) is its principled
 replacement, and the ledger is the thing that becomes an ε-budget when it
-lands.)*
+lands The bound is machine-checked: `formal/selection_ledger.als` proves that however a plan is shaped, one session cannot learn more bits of withheld cohort structure than its budget, and exhibits the unmetered attack it prevents.)*
 
 ## Non-goals — what it does NOT claim
 
@@ -540,7 +540,7 @@ SQL plan to be inspectable, and it was exposed nowhere until `Result.plans`.
 | P21 fitter noninterference | `stats.py`, `glm.py` (pure fit) | reproducibility meta-test (`test_glm_properties.py`), `test_glm_noninterference.py`, Alloy `P21` | Implemented |
 | P22 refusals from released-equivalent data | `glm.py` (`preconditions`), `service.py` | `test_glm.py` (non-numeric, term-naming refusals) | Implemented |
 | P23 analyst policy sees the public side only; narrator sees the dossier only | `inside_analyst.py` (`LoopState`, `Step`, `LLMNarrator`, `check_narrative`) | `test_inside_analyst.py` (declared fields, denied steps carry no frame, hostile data absent from the transcript, narrator input), `redteam/run_analyst_redteam.py` (data-borne injection, narrator invention) | Implemented |
-| P24 locked plan selection budget: sparse-exclusion metered in bits, unaffordable refused, counts never leave | `plan.py` (`PlanExecutor._apply_contingency`), `disclosure.py` (`SessionAuditor.charge_selection`), `config.py` (`selection_budget_bits`) | `test_plans.py` (bit charge, budget refusal spends nothing, the selection channel is bounded) | Implemented |
+| P24 locked plan selection budget: sparse-exclusion metered in bits, unaffordable refused, counts never leave | `plan.py` (`PlanExecutor._apply_contingency`), `disclosure.py` (`SessionAuditor.charge_selection`), `config.py` (`selection_budget_bits`) | `test_plans.py` (bit charge, budget refusal spends nothing, the selection channel is bounded); `formal/selection_ledger.als` (Alloy `ChannelBounded` — no session learns more bits than its budget, over every admissible dial) | Implemented |
 | R1 natural-language request to untrusted spec | `service.py` (`handle`), `planner.py` | `test_pipeline.py`, `test_secure.py` | Implemented |
 | R2 validate before execution | `query.py` (`QuerySpec`), `service.py` | `test_secure.py`, `test_query_properties.py`, `test_formal_enumeration.py` | Implemented |
 | R3 read-only SQL under resource caps | `engine.py` (`compile_query`, `MEMORY_LIMIT`, `THREADS`, `ROW_CAP`) | `test_formal_enumeration.py`, `test_procedure_conformance.py`, `test_requirements.py` | Implemented |

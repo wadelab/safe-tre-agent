@@ -59,6 +59,10 @@ MODELS: dict[str, dict[str, set[str]]] = {
             "CrossViewBenignPairAllowed",
         },
     },
+    "selection_ledger.als": {
+        "checks": {"ChannelBounded"},
+        "runs": {"someLedger", "UnboundedWithoutLedger", "BenignSessionAllowed"},
+    },
     "temporal_session.als": {
         "checks": {
             "P17_SpentMonotone",

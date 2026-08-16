@@ -264,7 +264,7 @@ SELECTION it needs, and nothing more; `tests/test_plans.py` pins that the
 channel is bounded across a session (the round-8 shape), that a refusal spends
 nothing, and that the counts never leak. This is the interim the DP accountant
 (roadmap item 3) replaces: the bit ledger is the thing that becomes an
-ε-budget when it lands. The executor is deterministic — no model decides a
+ε-budget when it lands. The bound is machine-checked too: `formal/selection_ledger.als` (Alloy) proves no session learns more bits of withheld cohort structure than its budget and exhibits the unmetered attack it prevents, so the one new disclosure channel sits on the same formal footing as the differencing lineage. The executor is deterministic — no model decides a
 release — and is not yet wired to the LLM loop; the loop today is the phase-1
 vetted analyst, and a model authoring plans is the next step.
 

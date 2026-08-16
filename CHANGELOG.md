@@ -8,6 +8,21 @@ and fixes are in [docs/hardening-log.md](docs/hardening-log.md).
 
 ### Security
 
+- **The selection channel is now machine-checked (`formal/selection_ledger.als`).**
+  The differencing lineage had an Alloy model; the one new disclosure channel
+  the inside analyst's data-sighted tier opens (the bit-metered
+  `exclude_sparse`, R20/P24) did not — it rested on `test_plans.py` alone. It
+  now sits on the same footing: a bounded model where one `Fact` is one bit of
+  withheld cohort structure and each locked-plan stage spends `|probe|` bits
+  against the session budget. `ChannelBounded` proves that however a plan is
+  shaped, no session learns more bits than its budget, over every admissible
+  dial value; `UnboundedWithoutLedger` exhibits the unmetered attack it
+  prevents (the round-8 existence-oracle shape), twinned to
+  `test_the_selection_channel_is_bounded_across_a_session`; two guard runs keep
+  the check non-vacuous and show the bound does not over-deny. Four Alloy
+  models now, twenty checks; classified in `formal/correspondence.yaml` and run
+  by the CI `formal` job. The P24 clause and traceability cite it.
+
 - **Hardening #95 closed, and #107 found on the way ([hardening log](docs/hardening-log.md),
   round 13).** The differencing lineage compared cohorts within one dataset
   name while the catalogue publishes several views of one population, so a
