@@ -29,7 +29,7 @@ the mission, bounded so it can never outwit the crew.
 
 ## The Analyst Inside
 
-![The Analyst Inside](chimp/slide_01_the_analyst_inside.png)
+![The Analyst Inside](chimp/slide_01_the_analyst_inside.webp)
 
 Here is the whole cast in one frame. The **Researcher** still stands outside;
 the **Keep** still holds the data behind its padlocked gate. What is new is the
@@ -41,7 +41,7 @@ that true whether Chimp is dim, brilliant, or actively misbehaving.
 
 ## Chimp in the Enclosure
 
-![Chimp in the Enclosure](chimp/slide_02_chimp_in_the_enclosure.png)
+![Chimp in the Enclosure](chimp/slide_02_chimp_in_the_enclosure.webp)
 
 Chimp is plainly capable and plainly *contained* — a caged genius, happy at its
 desk. It sits behind glass, next to the sealed diaries it may never open. Its
@@ -54,7 +54,7 @@ the vault is a modest one, on a short menu, by deliberate design.
 
 ## A Whole Question, One Gate
 
-![A Whole Question, One Gate](chimp/slide_03_a_whole_question_one_gate.png)
+![A Whole Question, One Gate](chimp/slide_03_a_whole_question_one_gate.webp)
 
 This is where Chimp earns its keep. The Researcher no longer sends one little
 form; they send a whole *question* — *is late-night phone use linked to
@@ -69,7 +69,7 @@ identical gauntlet the old single query did.
 
 ## The Menu on the Wall
 
-![The Menu on the Wall](chimp/slide_04_the_menu_on_the_wall.png)
+![The Menu on the Wall](chimp/slide_04_the_menu_on_the_wall.webp)
 
 This is why the modesty is not just a promise. Chimp's *entire* vocabulary is a
 short menu of fill-in-the-blank sentences — the average of ▢ by ▢, the
@@ -83,7 +83,7 @@ say. **A fixed menu. No sixth kind of sentence.**
 
 ## The Sealed Plan
 
-![The Sealed Plan](chimp/slide_05_the_sealed_plan.png)
+![The Sealed Plan](chimp/slide_05_the_sealed_plan.webp)
 
 There is one genuinely clever thing a human analyst does that we let Chimp do
 too — and it is the one that needed a leash. When a model is refused because a
@@ -98,7 +98,7 @@ data. When a proper privacy budget arrives, this jar is exactly what it becomes.
 
 ## The Window
 
-![The Window](chimp/slide_06_the_window.png)
+![The Window](chimp/slide_06_the_window.webp)
 
 One last reassurance, about control. Whether an analyst lives inside the keep at
 all is the **keeper's** decision, set at the gate, turned to `ON` or `OFF` by
