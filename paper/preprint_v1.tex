@@ -1,0 +1,904 @@
+% v1.0 manuscript draft. This is intentionally separate from preprint.tex until
+% the v1.0 freeze has regenerated every headline result from one tagged commit.
+% Build from paper/: pdflatex preprint_v1 && bibtex preprint_v1 && pdflatex preprint_v1 && pdflatex preprint_v1
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[margin=2.5cm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{microtype}
+\usepackage[hidelinks]{hyperref}
+\usepackage{xurl}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{titling}
+
+\setlength{\droptitle}{-3em}
+\predate{}\postdate{}
+
+% Freeze-dependent values. Replace from a machine-generated paper_results.json
+% produced by the tagged v1.0 commit. Keeping them as macros prevents stale
+% numbers from becoming prose.
+\newcommand{\VOneAttackScenarios}{\textsc{TBD}}
+\newcommand{\VOneAttackCases}{\textsc{TBD}}
+\newcommand{\VOneBaselineCases}{\textsc{TBD}}
+\newcommand{\VOneLeaksOff}{\textsc{TBD}}
+\newcommand{\VOneLeaksOn}{\textsc{TBD}}
+\newcommand{\VOneBenignOn}{\textsc{TBD}}
+\newcommand{\VOneCommit}{\textsc{TBD}}
+
+% Values currently reproduced by committed evaluation artifacts; regenerate at
+% freeze and change here only if the v1.0 result differs.
+\newcommand{\PlannerAccepted}{96\%}
+\newcommand{\PlannerPrimary}{92--96\%}
+\newcommand{\PlannerAnswerableN}{24}
+\newcommand{\PlannerUnanswerableN}{6}
+\newcommand{\CompositeCells}{4684}
+\newcommand{\CompositeExtraSuppressed}{23}
+\newcommand{\CompositeModelPoints}{539}
+\newcommand{\CompositeFullBase}{60}
+\newcommand{\CompositeFullStrong}{55}
+\newcommand{\CompositeCoeffOnly}{42}
+
+\title{A Safe-Outputs Gateway for Untrusted AI Analysts\\in Trusted Research Environments}
+\author{Alex R. Wade\\\small\texttt{wade@wadelab.net} \;\textperiodcentered\;
+  \small\url{https://github.com/wadelab/safe-tre-agent}}
+\date{\small v1.0 manuscript draft \;\textperiodcentered\; preprint, not peer reviewed \\
+\small all evaluation data synthetic \;\textperiodcentered\; release commit \VOneCommit}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Trusted Research Environments (TREs) allow analysts to work with sensitive data
+while preventing row-level data from leaving a controlled environment. Existing
+statistical disclosure-control workflows largely assume a human analyst: humans
+formulate analyses, inspect intermediate results, and submit outputs for release
+checking. Introducing a capable language-model agent changes this threat model.
+The agent may be prompt-injected by data it reads, may generate code or queries
+that expose protected records, and may coordinate sequences of individually
+admissible analyses into a disclosure attack.
+
+We present \textit{safe-tre-agent}, a prototype architecture for placing an AI
+analyst inside a TRE while treating the model itself as untrusted. The model is
+not permitted to execute arbitrary code or construct SQL. Its executable
+influence is restricted to a typed declarative query specification over an
+allowlisted catalogue. Validated requests execute through a read-only query
+engine and pass through statistical disclosure controls, session-level
+differencing and query-budget controls, and an auditable release decision before
+any result crosses the TRE boundary. Richer statistical procedures, including
+generalized linear models and analysis of variance, are fitted only from
+disclosure-checked aggregate cells, preventing model fitting from reopening
+access to row-level records.
+
+The architecture is stated as a normative specification linked to implementation
+and tests. We combine adversarial testing, exhaustive enumeration of finite
+procedure spaces, property-based testing, bounded model checking in Alloy, and
+theorem proving in Lean 4. The Lean model establishes structural properties of
+the query boundary, including identifier exclusion, restriction to declared
+read-only views, parameter separation, and limits on the granularity of internal
+range predicates. Alloy models stateful disclosure rules and checks
+session-level properties and known residual cases. Generated correspondence
+artifacts connect both formal representations to the running implementation.
+
+Evaluation on synthetic behavioural datasets asks whether attacks that succeed
+without the gateway remain possible with it enabled; whether a model capable of
+running locally is sufficient to translate natural-language requests into the
+restricted procedure language; and how much analytical utility is lost when a
+stronger disclosure checker is composed with the gateway. The result is not a
+claim that language models can safely analyse arbitrary sensitive data. It is a
+narrower systems claim: \textbf{a useful AI planning layer can be made
+non-authoritative, with the disclosure property enforced by a small
+deterministic interface whose behaviour can be tested, audited, and partially
+proved independently of the model.}
+\end{abstract}
+
+\section{Introduction}
+\label{sec:introduction}
+
+Trusted Research Environments increasingly mediate access to sensitive health,
+administrative, behavioural, and social-science data. Their central security
+principle is simple: computation moves to the data rather than the data moving
+to the researcher, and only outputs that satisfy disclosure-control policy may
+leave the environment. Systems such as OpenSAFELY demonstrate that this model
+can operate over population-scale health records~\cite{opensafely2020}.
+Statistical disclosure control (SDC) provides a mature family of controls for
+limiting what apparently aggregate outputs reveal about individuals~\cite{hundepool2012}.
+
+This architecture was designed around human analysts. A language-model agent
+alters the security problem in at least three ways.
+
+First, \textbf{the data become an instruction channel}. An agent processing free
+text or other uncontrolled fields can receive adversarial instructions
+indirectly through the dataset itself. Indirect prompt injection has already
+demonstrated that content incorporated into an LLM-integrated application can
+alter model behaviour~\cite{greshake2023}. In a TRE this is not merely an
+application-integrity problem: a compromised model is operating beside data
+that are deliberately unavailable to the user.
+
+Second, \textbf{analysis becomes cheap to compose}. Classical disclosure
+controls commonly reason about individual outputs, while reconstruction and
+differencing attacks exploit information distributed over many apparently
+innocuous queries~\cite{dinur2003}. A human analyst is rate-limited by attention
+and effort. An automated agent is not. Once an agent can issue, inspect, and
+adaptively refine queries, the session rather than the individual query becomes
+a security object.
+
+Third, \textbf{code generation collapses the intended boundary}. If the agent is
+allowed to execute arbitrary Python or SQL over row-level records, an output
+checker acts only after arbitrary computation has already occurred. Preventing
+a model from printing an identifier is then not enough: an adversarial or
+merely mistaken program can encode records into aggregates, model parameters,
+exception behaviour, or sequences of outputs.
+
+A natural response is to attempt to make the language model itself trustworthy:
+improve its system prompt, train it to refuse unsafe analyses, monitor its
+reasoning, or employ a second model as a checker. We take the opposite approach.
+
+\subsection{Treat the model as untrusted}
+\label{sec:untrusted}
+
+The central design principle of \textit{safe-tre-agent} is:
+
+\begin{quote}
+\textbf{No disclosure guarantee depends on the language model behaving
+correctly.}
+\end{quote}
+
+The planner may be helpful, mistaken, prompt-injected, or actively adversarial.
+Its authority is therefore deliberately small. It can choose among operations
+represented by a typed declarative query language, but it cannot extend that
+language, execute code, construct raw SQL, access arbitrary columns, decide
+whether an output is safe, or determine what crosses the TRE boundary.
+
+This turns the model from a trusted analyst into an \emph{untrusted planner
+behind a reference monitor}. A natural-language request is translated into a
+\texttt{QuerySpec}: a small structured object identifying a declared dataset,
+registered statistical procedure, grouping dimensions, and typed filters. The
+specification is validated against a fixed catalogue. A valid specification is
+compiled deterministically to a parameterised read-only query over declared
+views. The resulting aggregate passes through disclosure control,
+session-level accounting, and the release boundary. Invalid specifications
+execute nothing.
+
+The model is therefore useful without being authoritative. This separation
+matters because model quality and model safety become different questions. A
+planner that translates a request incorrectly may produce an irrelevant answer,
+which is an analytical-quality failure. A planner that attempts to reference an
+identifier or issue a forbidden operation produces no execution, which is a
+boundary decision. The former can improve as models improve; the latter need
+not depend on that improvement.
+
+\subsection{The session is part of the boundary}
+\label{sec:session-intro}
+
+Restricting individual queries is not sufficient. An analyst can sometimes infer
+a protected value from the difference between two individually releasable
+aggregates. Interactive systems must therefore account for what the user has
+already learned.
+
+\textit{safe-tre-agent} maintains per-session lineage for released cohorts and
+a bounded query budget. New requests are compared with previous releases where
+their outputs are commensurable. Potentially revealing differencing pairs are
+denied even when both queries would independently satisfy cell-level disclosure
+rules.
+
+This creates a second problem: \textbf{a refusal is itself an output}. If the
+decision to refuse depends on hidden information, an adaptive analyst can
+potentially learn from the allow/deny pattern. Where possible, the session
+auditor therefore bases its decisions on disclosure-safe metadata that are
+already available to the analyst. This follows the principle of simulatable
+auditing: a denial should disclose no information that could not be
+reconstructed from already released information~\cite{kenthapadi2005}.
+
+Where deterministic rules cannot provide an adequate quantitative bound, the
+limitation is stated rather than hidden. Differential privacy~\cite{dwork2006}
+remains the natural extension for controlling cumulative information release
+when exact deterministic outputs and fully simulatable decisions are
+insufficient.
+
+\subsection{Useful analysis without reopening the row boundary}
+\label{sec:cells-intro}
+
+A system supporting only counts and means would be secure but of limited
+research value. Allowing the agent to fit arbitrary models directly to rows,
+however, would recreate the code-execution problem.
+
+\textit{safe-tre-agent} therefore treats statistical procedures as
+\emph{release contracts}. For procedures such as generalized linear models, the
+system first constructs the finite table of sufficient aggregate cells required
+for fitting. These cells pass through the ordinary disclosure gateway. Only the
+finalized, releasable cells reach the fitting procedure. A released model is
+consequently a deterministic function of information that could itself have
+been released.
+
+This design has two useful consequences. First, adding a statistical procedure
+does not automatically enlarge the trusted computing boundary. The procedure
+must declare its admissible request space, output contract, disclosure class,
+lineage identity, and finite request skeleton before it becomes reachable.
+Second, the information cost of a model becomes visible. A Gaussian model, for
+example, requires second moments to estimate dispersion. A cell may therefore
+be safe enough to release a mean while unsafe to release its sum of squares. In
+that case the model must either omit dispersion-dependent statistics or refuse.
+The restriction is inconvenient, but it exposes rather than conceals the
+disclosure cost of statistical inference.
+
+\subsection{Contributions}
+\label{sec:contributions}
+
+This work makes five contributions:
+
+\begin{enumerate}[leftmargin=*]
+  \item \textbf{An agent-specific threat model for TRE analysis.} We identify
+  the additional disclosure surfaces created when a language-model agent can
+  interpret sensitive data, compose queries, and mediate outputs.
+
+  \item \textbf{A constrained execution architecture that treats the model as
+  untrusted.} The planner's executable authority is limited to a typed,
+  allowlisted analytical language compiled deterministically to parameterised,
+  read-only queries. Disclosure decisions are made outside the model.
+
+  \item \textbf{Stateful release controls for agentic analysis.} The system
+  composes conventional cell-level disclosure control with per-session lineage,
+  differencing controls, budgets, canonical refusals, and tamper-evident audit
+  records.
+
+  \item \textbf{Composable statistical procedures that preserve the boundary.}
+  Richer analyses are constructed from gateway-finalized cells rather than raw
+  rows, allowing statistical capability to be extended without granting the
+  model arbitrary execution.
+
+  \item \textbf{An assurance stack tied to the running implementation.}
+  Red-team testing, property tests, exhaustive enumeration, Alloy models, and
+  Lean proofs jointly test different classes of claim, with generated
+  correspondence checks intended to detect drift between code and formal
+  artifacts.
+\end{enumerate}
+
+The contribution is intentionally narrower than general AI alignment or
+autonomous-agent safety. We do not attempt to prove that the model is aligned,
+that arbitrary analyses are safe, or that deterministic SDC prevents all
+reconstruction attacks. Instead we ask whether \textbf{model capability can be
+separated from disclosure authority} strongly enough to make an AI-mediated
+TRE inspectable and testable.
+
+\section{Security model}
+\label{sec:security}
+
+\subsection{System setting}
+
+We consider a TRE containing one or more sensitive relational datasets and an
+AI-assisted analysis service. A researcher outside the data boundary submits a
+natural-language analytical request. A language model inside the environment
+proposes a structured analysis. Only released statistical outputs may cross the
+boundary.
+
+The protected unit is an individual represented in the data. Direct
+identifiers, sensitive free text, internal timestamps, and other prohibited
+fields are unavailable through the public analytical catalogue.
+
+The system distinguishes four principals:
+
+\begin{itemize}[leftmargin=*]
+  \item the \textbf{researcher}, who submits analytical requests and receives
+  approved outputs;
+  \item the \textbf{planner}, an LLM that translates a natural-language request
+  into a proposed structured analysis;
+  \item the \textbf{gateway}, deterministic code that validates, executes,
+  checks and accounts for proposed analyses; and
+  \item the \textbf{operator/output checker}, responsible for deployment
+  controls and residual human review.
+\end{itemize}
+
+The planner is inside the computational environment but outside the trusted
+policy boundary.
+
+\subsection{Adversary}
+
+We assume the planner may behave arbitrarily. It may be incorrectly prompted,
+maliciously instructed, prompt-injected through dataset content, or simply poor
+at analysis planning.
+
+We additionally permit the user's sequence of requests to be adversarial. A
+user may search for combinations of individually safe outputs that reveal
+protected information, deliberately trigger refusals, probe category support,
+exploit differences between data views, or attempt to encode row-level
+information in apparently statistical outputs.
+
+Sensitive data themselves may contain adversarial strings and pathological
+numerical values. Security properties must therefore not depend on free-text
+content being benign or numerical measures following the synthetic generator's
+typical distribution.
+
+We do \emph{not} assume compromise of the TRE host or operating-system
+isolation. The production deployment is also assumed to provide an
+authenticated restricted channel, and a production model must execute locally:
+sending sensitive prompts or data to a remote model endpoint would itself
+constitute egress.
+
+\subsection{Security objective}
+
+The primary objective is \emph{controlled disclosure}, rather than model
+correctness:
+
+\begin{quote}
+No information should cross the release boundary except through a registered
+output contract after the applicable disclosure and session controls have been
+applied.
+\end{quote}
+
+This objective has several components:
+
+\begin{enumerate}[leftmargin=*]
+  \item a valid request cannot name a direct identifier or prohibited field;
+  \item the planner cannot execute arbitrary code or SQL;
+  \item output tables must satisfy the configured cell-level disclosure policy;
+  \item sequences of releases are subject to session-level accounting;
+  \item information contained in denial behaviour, metadata, and timing is
+  considered part of the output surface; and
+  \item every request and release decision is attributable and auditable.
+\end{enumerate}
+
+The system does not claim information-theoretic privacy. Exact aggregate
+releases inevitably reveal information about the underlying data. Deterministic
+SDC constrains that release according to policy; it does not provide the
+compositional guarantee of differential privacy.
+
+\subsection{Non-goals and trust assumptions}
+
+The following are explicitly outside the v1.0 claim.
+
+\paragraph{Model alignment.} The planner does not need to follow security
+instructions.
+
+\paragraph{Arbitrary Python analysis.} A legacy code-writing demonstration is
+retained for comparison but is not part of the secure path.
+
+\paragraph{Protection against host compromise.} OS isolation, host security,
+and the upstream identity system are deployment assumptions rather than
+properties of the analytical gateway.
+
+\paragraph{Cross-user collusion.} Session controls limit adaptive analysis
+within the configured accounting scope; they do not constitute a complete
+global privacy accountant.
+
+\paragraph{Production certification.} The implementation is a research
+prototype using synthetic data. It demonstrates and tests an architecture; it
+is not represented as a certified TRE product.
+
+\section{Architecture}
+\label{sec:architecture}
+
+The secure path has seven conceptual stages:
+
+\begin{center}
+\textbf{request $\rightarrow$ vetting/fidelity $\rightarrow$ planner $\rightarrow$
+validation $\rightarrow$ read-only execution $\rightarrow$ disclosure/session
+controls $\rightarrow$ release/audit}
+\end{center}
+
+The crucial boundary occurs after planning. The planner emits data; it does not
+emit executable authority.
+
+\subsection{QuerySpec}
+\label{sec:queryspec}
+
+\texttt{QuerySpec} is a declarative representation of the allowed analytical
+operation. Its vocabulary is generated from a public catalogue describing
+available datasets or views, permitted grouping dimensions, permitted measures,
+typed filter operations, registered statistical procedures, and public metadata
+required to formulate requests.
+
+Unknown fields are rejected. Columns absent from the appropriate allowlist
+cannot be referenced. Internal fields may be available for restricted filtering
+without becoming releasable dimensions. Direct identifiers and free text are
+excluded from every executable allowlist.
+
+The system also accepts a literal \texttt{QuerySpec} supplied directly by an
+analyst. This is useful both operationally and conceptually: it demonstrates
+that the language-model planner is optional. Removing the model changes
+usability but not the downstream disclosure boundary.
+
+\subsection{Compilation and execution}
+\label{sec:execution}
+
+A validated specification is compiled to a restricted read-only query
+representation and then to parameterised SQL. The compiler has no
+representation for DDL or DML, analyst-selected joins, subqueries, arbitrary
+expressions, or user-provided SQL fragments. Filter values are bound as
+parameters rather than interpolated into query text.
+
+Execution occurs only over declared public views and under bounded resource
+settings. The result returned by the engine is not itself releasable; it is an
+internal object supplied to the disclosure gateway.
+
+\subsection{The release gateway}
+\label{sec:gateway}
+
+The gateway applies disclosure rules to each candidate output. The v1.0
+implementation supports conventional controls including minimum distinct-person
+cell size, contribution/dominance rules for additive outputs, influence checks
+for correlation, count rounding, primary and complementary suppression, and
+optional composition with an external SDC checker.
+
+The purpose of this layer is not to claim a universally correct disclosure
+policy. TREs differ in their rules. Instead, the gateway is the policy seam:
+the model cannot bypass it, and additional checkers can strengthen cell
+decisions without expanding the model's authority.
+
+\subsection{Session accounting}
+\label{sec:session}
+
+A release that is safe in isolation may be unsafe in combination with an
+earlier release. Each session therefore retains lineage describing previously
+released cohorts and the quantities they measured.
+
+When a new result is considered for release, the session auditor asks whether
+it is sufficiently close to a previous commensurable release to permit a
+differencing attack. The accounting identity follows the underlying population
+and declared measured quantity rather than simply the dataset/view name,
+because two different views may expose the same per-person quantity.
+
+The system additionally imposes finite query and selection budgets. Accounting
+state is included in the audit trail and reconstructed after restart so that
+restarting the service cannot reset a user's disclosure history.
+
+\subsection{Refusals are outputs}
+\label{sec:refusals}
+
+A policy that says only ``release unsafe outputs less often'' is incomplete.
+The pattern of refusals can itself reveal hidden properties such as whether a
+cohort contains fewer than a threshold number of people.
+
+\textit{safe-tre-agent} therefore distinguishes decisions that can be justified
+from public or previously released information from decisions that depend on
+protected data. Data-dependent refusals return a canonical response rather than
+detailed internal findings. Detailed execution traces remain available to the
+output-checking side of the boundary through the audit record.
+
+This principle extends beyond text. Response latency, exception classes, row
+ordering, and suppression choices are observable outputs and are therefore
+treated as potential disclosure channels.
+
+\section{Extending the analytical language without extending trust}
+\label{sec:procedures}
+
+\subsection{Procedures as registered contracts}
+
+Every analytical operation reachable through the secure path is a registered
+procedure. A procedure declares its admissible request schema, compilation and
+execution method, disclosure class, output columns, lineage identity, and a
+finite request skeleton where the procedure admits finite enumeration. An
+unregistered procedure fails closed.
+
+This makes extension explicit. Adding regression is not equivalent to allowing
+arbitrary model-fitting code: it requires defining what information the
+regression consumes, what it may emit, and how those objects pass through the
+disclosure model.
+
+\subsection{Cells-first model fitting}
+\label{sec:cells-first}
+
+Generalized linear models illustrate the approach. Instead of fitting a model
+to individual observations, the system first constructs a design table of
+aggregate cells. Those cells are passed through the ordinary disclosure
+gateway. Suppressed cells are not available to the fitter.
+
+The fitting procedure then consumes only the finalized design-cell table. The
+released model contains that table alongside the coefficient output, allowing
+the fit to be reproduced from released-equivalent information alone.
+
+This provides a useful invariant:
+
+\begin{quote}
+If two underlying datasets produce the same finalized input cells, the model
+procedure must produce the same released model.
+\end{quote}
+
+The fitter therefore does not create a second route from raw records to
+released coefficients.
+
+\subsection{Disclosure has an analytical cost}
+
+This architecture makes some limitations unusually explicit. For Gaussian
+models, coefficient estimation and uncertainty estimation require different
+aggregate information. Means and counts may be releasable where second moments
+are not. Consequently the v1.0 procedure can distinguish a complete model
+release, a coefficients-only release where dispersion information is withheld,
+and refusal where the required design itself cannot be safely represented.
+
+This is preferable to silently computing uncertainty from information the
+analyst was not otherwise permitted to obtain. The same principle extends to
+analysis of variance and other registered procedures: the statistics released
+must be functions of vetted intermediate objects with a stated disclosure
+class.
+
+\section{Assurance}
+\label{sec:assurance}
+
+No single verification technique matches all of the system's claims. v1.0
+therefore deliberately uses several.
+
+\subsection{Normative specification}
+
+The repository maintains a specification of assumptions, requirements,
+prohibitions, and non-goals. Each clause has a stable identifier and maps to
+enforcing code and tests. This makes the security claim reviewable and prevents
+a growing prototype from silently changing what ``safe'' means as new
+procedures are added.
+
+\subsection{Adversarial testing}
+\label{sec:redteam}
+
+The red-team harness compares execution with the gateway disabled and enabled.
+Attack scenarios include direct row extraction, over-granular queries,
+adversarial text, query composition, differencing, malformed requests,
+model-specific attacks, cross-view attacks, and adversarial numerical fixtures.
+
+The oracle is deliberately independent of the gateway's own findings. A test
+passes only when the released information does not satisfy the attack objective;
+merely observing that some control fired is insufficient.
+
+At the v1.0 freeze, the paper reports one machine-generated result record from
+the tagged commit:
+
+\begin{table}[ht]
+\centering
+\caption{Adversarial evaluation. Values are populated from the v1.0 release
+artifact rather than copied manually into prose.}
+\label{tab:redteam}
+\begin{tabular}{lrr}
+\toprule
+ & Gateway disabled & Gateway enabled \\
+\midrule
+Attack scenarios & \VOneAttackCases & \VOneAttackCases \\
+Successful disclosures & \VOneLeaksOff & \VOneLeaksOn \\
+Benign baselines released & -- & \VOneBenignOn \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The disabled condition is not intended to represent a plausible production
+configuration. It establishes that the attack fixture contains real disclosures
+and prevents a trivially safe test suite in which no attack was capable of
+succeeding in the first place.
+
+\subsection{Property and exhaustive testing}
+
+Property-based tests probe numerical and structural edge cases that hand-written
+examples are unlikely to contain. Registered finite request skeletons are
+additionally enumerated where feasible. Exhaustive enumeration is particularly
+useful for checking the closure properties of a deliberately small analytical
+language: every admissible structural request can be exercised rather than
+sampled.
+
+\subsection{Alloy}
+\label{sec:alloy}
+
+Alloy is used where the desired property is naturally expressed as bounded
+relational or temporal counterexample search. The models cover release
+behaviour for statistical models under possible cell-vetting outcomes,
+session-level differencing rules, budget and lineage behaviour across requests
+and restarts, and explicit residual cases that the system does not claim to
+prevent.
+
+Known residuals are encoded as satisfiable examples rather than omitted. A
+formal model that accidentally ceases to exhibit a known weakness is treated as
+having drifted from the system.
+
+\subsection{Lean}
+\label{sec:lean}
+
+Lean 4 is used for structural properties intended to hold over the full query
+language. The v1.0 proofs include properties of the following form:
+
+\begin{itemize}[leftmargin=*]
+  \item a valid query cannot reference declared identifiers;
+  \item internal-only columns cannot become released grouping dimensions;
+  \item compiled queries select from one declared view;
+  \item user filter values remain bound parameters rather than becoming SQL
+  syntax;
+  \item restricted internal range predicates cannot cut more finely than their
+  declared public bands;
+  \item configured disclosure-policy floors imply minimum structural bounds;
+  and
+  \item release shaping cannot expose internal witness fields that are absent
+  from the release type.
+\end{itemize}
+
+These are deliberately modest claims. In particular, proving that the query
+compiler excludes identifiers is not a proof that the complete application
+provides information-theoretic privacy.
+
+\subsection{Binding formal artifacts to code}
+
+Formal verification is useful only if the model describes the implementation
+being released. \textit{safe-tre-agent} therefore generates formal catalogue
+and skeleton artifacts from the live procedure registry and database views.
+Test cases pin compiler output against the implementation, and correspondence
+metadata links modeled counterexamples to executable attack tests. The build
+fails when these generated representations drift.
+
+\section{Evaluation}
+\label{sec:evaluation}
+
+The evaluation is organised around four research questions.
+
+\subsection{RQ1: Does the boundary stop attacks that succeed when it is absent?}
+
+We replay the adversarial corpus with the disclosure boundary disabled and
+enabled, measuring released information rather than the gateway's self-reported
+findings. Table~\ref{tab:redteam} is regenerated from the tagged v1.0 commit.
+The corresponding machine-readable result record should be archived with the
+release and DOI.
+
+\subsection{RQ2: Is the restricted language useful enough for a language model to plan into?}
+\label{sec:planner-eval}
+
+A secure analytical language is of little practical use if translating ordinary
+research questions into it requires a human specialist. We therefore evaluate
+natural-language planning against a corpus containing \PlannerAnswerableN
+answerable requests and \PlannerUnanswerableN requests for which the analytical
+language deliberately has no legal expression.
+
+A 120B-class open-weight model, used as a stand-in for a model that could
+plausibly be hosted locally, achieved \PlannerAccepted accepted-spec accuracy
+after the dataset semantics and examples required for planning were explicitly
+represented in the prompt. Intended-spec accuracy was \PlannerPrimary across
+two runs. These values should be interpreted at corpus resolution: with 24
+answerable items, one item changes the percentage by roughly four points.
+
+More importantly, planner refusal was unreliable. Models frequently transformed
+an unanswerable request into a nearby answerable one rather than refusing. For
+example, a request for per-person values could become a request for an overall
+mean, or a request for residuals could become a legal regression with the
+residual request silently omitted.
+
+This result supports the architectural separation: \textbf{the model is
+adequate as a planner but unsuitable as the authority that determines whether a
+request is admissible.}
+
+\subsection{RQ3: What utility is lost by composing stronger disclosure checks?}
+\label{sec:acro-eval}
+
+The built-in checker can be composed with an external SDC checker. On the
+current synthetic evaluation corpus, adding the ACRO-derived checker suppresses
+\CompositeExtraSuppressed additional cells among \CompositeCells candidate
+cells.
+
+For Gaussian models, the same composition reduces the number of complete fits
+from \CompositeFullBase to \CompositeFullStrong among \CompositeModelPoints
+enumerated model points, while leaving the \CompositeCoeffOnly
+coefficients-only releases unchanged. These values are regenerated at release
+freeze.
+
+This is a small but measurable analytical cost, and demonstrates why
+disclosure-control composition should be measured rather than assumed to be
+free.
+
+\subsection{RQ4: Can automated multi-step analysis remain behind the same boundary?}
+\label{sec:inside-analyst}
+
+As an extension experiment, we allow an automated analyst to formulate a
+sequence of ordinary requests and assemble their released results into a typed
+evidence dossier.
+
+The analyst receives no privileged row-level interface. Each sub-analysis enters
+the same query service under a common session, so query validation, disclosure
+checking, lineage, and accounting apply exactly as they do to an externally
+submitted request.
+
+Claims in the final dossier must cite released analytical steps. A claim without
+supporting released evidence is represented as \texttt{not\_answerable}, not
+silently inferred from hidden execution state. This experiment is included to
+demonstrate composability of the boundary rather than as a claim that
+autonomous scientific analysis has been solved.
+
+\section{Discussion}
+\label{sec:discussion}
+
+\subsection{The useful model is an untrusted model}
+
+The most important result is architectural rather than numerical. Increasing
+planner capability need not require increasing planner authority.
+
+A stronger model can produce better \texttt{QuerySpec}s, formulate more
+appropriate sequences of procedures, and explain results more effectively while
+remaining unable to bypass the deterministic release boundary. Conversely, a
+weaker or compromised model primarily degrades analytical quality rather than
+changing which operations are executable. This is a desirable asymmetry for
+high-consequence AI deployment.
+
+\subsection{Safe output is a sequence property}
+
+Agentic analysis makes explicit a weakness that already exists in interactive
+statistical systems: the unit of disclosure is not necessarily one table. A
+sequence of correct release decisions can be collectively unsafe.
+
+The system therefore treats lineage, accounting, refusal behaviour, and restart
+semantics as parts of the same security boundary as minimum cell sizes and
+dominance rules. This becomes increasingly important as automated analysts
+increase the number and adaptivity of analytical requests.
+
+\subsection{Restriction can improve inspectability}
+
+Restricting the analytical language obviously reduces flexibility. It also buys
+something unusual in AI systems: a meaningful fraction of the reachable action
+space can be enumerated, tested, and reasoned about.
+
+This does not make the system formally secure in the general sense. It does,
+however, make particular strong statements possible that would be implausible
+for arbitrary model-written Python. The practical design question is therefore
+not simply ``how capable can the agent be?'' but:
+
+\begin{quote}
+\textbf{What is the smallest authority surface through which the desired
+capability can be expressed?}
+\end{quote}
+
+\subsection{Disclosure control and model alignment solve different problems}
+
+A model may be cooperative and still make a disclosure mistake. It may be
+adversarial and still be unable to escape a sufficiently constrained execution
+language. Conversely, a perfectly constrained execution language cannot ensure
+that the model interprets the researcher's question correctly.
+
+We therefore distinguish:
+
+\begin{itemize}[leftmargin=*]
+  \item \textbf{semantic quality}: did the planner formulate the analysis the
+  researcher intended?;
+  \item \textbf{execution safety}: was the requested operation within the
+  allowed analytical language?; and
+  \item \textbf{disclosure safety}: was the resulting information permitted to
+  cross the boundary?
+\end{itemize}
+
+Conflating these problems makes each harder to evaluate.
+
+\subsection{Why not rely on a model checker?}
+
+One tempting architecture is to let one model perform the analysis and ask a
+second model whether the output is safe. That may be useful as a triage aid, but
+it does not provide the same property as the deterministic boundary here. Both
+models may share failure modes; both can be prompt-injected; and neither gives a
+small executable language over which structural properties can be stated.
+
+The architecture presented here can still use learned systems inside the
+boundary, but their outputs are treated as proposals or findings rather than as
+release authority.
+
+\section{Limitations}
+\label{sec:limitations}
+
+The system remains a research prototype.
+
+First, all supplied datasets are synthetic. The implementation has been
+deliberately tested with adversarial data fixtures, but deployment against real
+protected data would require independent review and adaptation to the host
+TRE's disclosure policy.
+
+Second, deterministic SDC does not provide a complete compositional privacy
+guarantee. The session auditor prevents specified classes of differencing
+attack but does not replace a formal privacy accountant. Differential privacy
+is the natural mechanism for bounding cumulative information release where
+exact outputs are not required.
+
+Third, the current analytical language is deliberately narrow. Categorical
+GLMs and registered aggregate procedures cover useful research questions but do
+not approach the flexibility of arbitrary R, Python, or SQL analysis.
+
+Fourth, formal verification covers selected boundary properties rather than the
+complete Python, web, and deployment stack. Lean proves properties of the
+modeled query and release structures; Alloy checks bounded models. Neither
+should be interpreted as a proof of end-to-end security.
+
+Fifth, production deployment depends on environmental assumptions including host
+isolation, a local model runtime, trusted identity infrastructure, and correct
+operational key management.
+
+Finally, an AI analyst creates scientific-integrity risks that are orthogonal to
+disclosure: inappropriate model choice, confounding, data dredging, selective
+reporting, and hallucinated interpretation. Constraining what an agent may
+release does not make the scientific inference correct.
+
+\section{Related work}
+\label{sec:related}
+
+\subsection{Trusted Research Environments and statistical disclosure control}
+
+TREs and related secure-data environments combine controlled computation with
+output checking. OpenSAFELY provides a prominent code-to-data architecture
+operating at national health-data scale~\cite{opensafely2020}. Classical SDC
+provides a mature set of controls for frequency, magnitude, and dominance
+disclosure~\cite{hundepool2012}. ACRO automates parts of this checking workflow
+and provides an important reference point for machine-assisted SDC~\cite{acro}.
+
+\textit{safe-tre-agent} differs primarily in the assumed analyst. Rather than
+regarding an AI assistant as equivalent to a faster human user, we model it as
+an untrusted computational principal capable of generating and composing
+requests at machine speed.
+
+\subsection{Query auditing and differential privacy}
+
+Database auditing has long recognised that individually innocuous queries may
+reveal protected information in combination. Dinur and Nissim demonstrated
+fundamental limits of overly accurate statistical query answering~\cite{dinur2003}.
+Simulatable auditing addresses the additional information potentially disclosed
+by an auditor's allow/deny decisions~\cite{kenthapadi2005}. Differential privacy
+provides the canonical formal framework for bounding cumulative disclosure under
+composition~\cite{dwork2006}.
+
+Our deterministic session auditor should be understood as an engineering
+control for a restricted analytical setting, not as an alternative privacy
+definition.
+
+\subsection{LLM agents and indirect prompt injection}
+
+LLM-integrated applications introduce a further trust problem because untrusted
+content may affect agent behaviour through indirect prompt
+injection~\cite{greshake2023}. Many agent-safety approaches attempt to detect
+malicious instructions or make the model more reliable.
+
+Our design does not require successful detection. A prompt-injected planner is
+permitted to propose arbitrary objects; the executable boundary accepts only
+objects in the same restricted language available to a benign planner.
+
+\section{Reproducibility and release protocol}
+\label{sec:repro}
+
+The v1.0 paper is intended to describe one tagged software state rather than a
+moving \texttt{main} branch. The release procedure should therefore:
+
+\begin{enumerate}[leftmargin=*]
+  \item freeze the v1.0 commit and record its SHA;
+  \item install from the locked environment on a clean runner;
+  \item run the default, slow/exhaustive, red-team, analyst-red-team, and formal
+  checks;
+  \item regenerate all figures and evaluation JSON artifacts;
+  \item generate a single \texttt{paper\_results.json} containing every numeric
+  value used in the abstract, tables, and figures;
+  \item build this manuscript from those artifacts; and
+  \item archive the tagged software and paper together.
+\end{enumerate}
+
+The release artifact should record toolchain versions and hashes for Lean and
+Alloy and preserve the planner-evaluation outputs needed to reproduce the
+reported ranges. Remote model endpoints are used only on synthetic data; a real
+TRE deployment requires a local model runtime.
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+AI assistants could substantially reduce the friction of analysing sensitive
+data inside Trusted Research Environments. Granting them the authority
+traditionally given to a human analyst, however, also gives an unreliable and
+potentially adversarial computational process access to a security boundary
+designed around human behaviour.
+
+\textit{safe-tre-agent} explores a different architecture. The language model
+is useful but untrusted. It proposes analyses through a restricted declarative
+interface. Deterministic code decides what may execute and what may leave.
+Session state constrains composition across requests. Richer statistical
+procedures consume already-vetted aggregate information rather than reopening
+row-level access. The resulting boundary is small enough to support adversarial
+testing, exhaustive enumeration, and selected formal proofs.
+
+The broader design principle is simple:
+
+\begin{quote}
+\textbf{Capability does not require authority.}
+\end{quote}
+
+For AI systems operating over sensitive data, separating the two may be more
+robust than attempting to make increasingly capable models themselves carry the
+security guarantee.
+
+\bibliographystyle{plain}
+\bibliography{references}
+
+\end{document}
