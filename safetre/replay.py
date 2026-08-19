@@ -40,14 +40,17 @@ from .config import PolicyConfig
 from .plan import Plan, PlanExecutor
 from .recorder import build_manifests
 from .research_record import (
-    Manifests, ReplayCertificate, ReplayClass, ResearchRecord, StageRecord,
-    StageType, canonical_json, commit_public, sha256_hex,
+    Manifests, ReplayCertificate, ReplayClass, ReplayOutcome, ResearchRecord,
+    StageRecord, StageType, canonical_json, commit_public, sha256_hex,
 )
 
-REPRODUCED = "COMPUTATION_REPRODUCED"
-NOT_REPRODUCED = "COMPUTATION_NOT_REPRODUCED"
-SEMANTICS_MISMATCH = "SEMANTICS_MISMATCH"
-REFUSED = "REPLAY_REFUSED"
+# Aliases onto the closed vocabulary in `research_record`, kept because they
+# read better at the call sites here. The vocabulary is the control; these are
+# spellings of it, and there is no way to add a sixth outcome by writing one.
+REPRODUCED = ReplayOutcome.COMPUTATION_REPRODUCED
+NOT_REPRODUCED = ReplayOutcome.COMPUTATION_NOT_REPRODUCED
+SEMANTICS_MISMATCH = ReplayOutcome.SEMANTICS_MISMATCH
+REFUSED = ReplayOutcome.REPLAY_REFUSED
 
 # Shipped with every certificate. Machine verification is not scientific
 # validity, and a reviewer who reads only this list should still come away
@@ -91,12 +94,13 @@ def _semantics_diff(recorded: dict[str, str], observed: dict[str, str]) -> list[
             for k in keys if recorded.get(k) != observed.get(k)]
 
 
-def _certificate(record_id: str, record_digest: str, outcome: str,
+def _certificate(record_id: str, record_digest: str, outcome: ReplayOutcome,
                  semantics: dict[str, str], stages: list[dict[str, Any]],
                  detail: str) -> ReplayCertificate:
     body = {"record_id": record_id, "record_digest": record_digest,
-            "outcome": outcome, "replay_semantics": semantics, "stages": stages,
-            "detail": detail, "not_verified": list(NOT_VERIFIED)}
+            "outcome": outcome.value, "replay_semantics": semantics,
+            "stages": stages, "detail": detail,
+            "not_verified": list(NOT_VERIFIED)}
     return ReplayCertificate(
         certificate_id="rc-" + sha256_hex(canonical_json(body))[:24], **body)
 
@@ -231,4 +235,5 @@ def certifies(certificate: ReplayCertificate, record: ResearchRecord) -> bool:
 
 
 __all__ = ["NOT_REPRODUCED", "NOT_VERIFIED", "REFUSED", "REPRODUCED",
-           "SEMANTICS_MISMATCH", "ReplayContext", "certifies", "replay"]
+           "SEMANTICS_MISMATCH", "ReplayContext", "ReplayOutcome", "certifies",
+           "replay"]

@@ -254,7 +254,7 @@ def main(argv: list[str] | None = None) -> int:
                   "lockfile_digest": _lockfile_digest()})
     certificate = replay(record, context)
     record = record.model_copy(update={"certificate": certificate})
-    _say(7, f"replay: {certificate.outcome} ({certificate.certificate_id})")
+    _say(7, f"replay: {certificate.outcome.value} ({certificate.certificate_id})")
     if certificate.outcome != REPRODUCED:
         print(f"FAIL: {certificate.detail}", file=sys.stderr)
         return 1
@@ -330,7 +330,7 @@ def main(argv: list[str] | None = None) -> int:
     print()
     print(f"record  {record_id}")
     print(f"bundle  {out_dir}")
-    print(f"replay  {certificate.outcome}")
+    print(f"replay  {certificate.outcome.value}")
     print(f"signed  {A.backend()} (test key)")
     return 0
 

@@ -207,6 +207,73 @@ class AnalysisClassification(str, Enum):
     """Everything else. The honest default, and what a laundered plan gets."""
 
 
+class ReplayOutcome(str, Enum):
+    """What a replay can conclude. A CLOSED vocabulary, and that is the control.
+
+    The bestiary's Peacock is an assurance claim that sounds broader than it is,
+    and its cage is typed verification statuses with narrow semantics. A free
+    string is not that cage: nothing stopped `ReplayCertificate(outcome=
+    "VERIFIED")`, and a test asserting that `replay()` never returns the word
+    checks what the function produces rather than what the type permits — which
+    is a different, weaker claim, and the wrong one when the certificate is the
+    thing that gets quoted.
+    """
+
+    COMPUTATION_REPRODUCED = "COMPUTATION_REPRODUCED"
+    """Re-running the committed plan over the attested snapshot under the
+    recorded semantics produced the same bytes. That sentence is the whole
+    claim; there is deliberately no member that means more."""
+
+    COMPUTATION_NOT_REPRODUCED = "COMPUTATION_NOT_REPRODUCED"
+    SEMANTICS_MISMATCH = "SEMANTICS_MISMATCH"
+    """The record's declared semantics are not the semantics here, so nothing
+    was executed."""
+    REPLAY_REFUSED = "REPLAY_REFUSED"
+
+
+class Assurance(str, Enum):
+    """One dimension a reviewer might be tempted to read into a green tick.
+
+    Named separately, because collapsing them is the Peacock's whole trick:
+    "verified" reads as all five at once, and in v0 they do not all hold —
+    `DATA_SNAPSHOT_ATTESTED` in particular does not, since the snapshot
+    commitment is keyed and internal rather than a custodian signature. Every
+    tick has to answer one explicit question, so each of these gets its own row
+    in the reviewer report with its own status and its own reason.
+
+    There is no member for scientific validity. That is not an oversight and it
+    is not a status the machine may compute (the Alchemist).
+    """
+
+    COMPUTATION_REPRODUCED = "COMPUTATION_REPRODUCED"
+    DATA_SNAPSHOT_ATTESTED = "DATA_SNAPSHOT_ATTESTED"
+    DISCLOSURE_POLICY_VERIFIED = "DISCLOSURE_POLICY_VERIFIED"
+    PLAN_ORDER_VERIFIED = "PLAN_ORDER_VERIFIED"
+    SIGNATURE_VALID = "SIGNATURE_VALID"
+
+
+class EvidenceKind(str, Enum):
+    """What a released number IS. Closed, for the Peacock's reason: a free
+    string here would let a record file something as `ScientificallyValid`."""
+
+    GROUP_STATISTIC = "GroupStatistic"
+    MODEL_COEFFICIENT = "ModelCoefficient"
+    CONFIDENCE_INTERVAL = "ConfidenceInterval"
+    NOT_ANSWERABLE = "NotAnswerable"
+    MODEL_FIT = "ModelFit"
+    """The released fit block. An addition to the build plan's four, because
+    milestone 3 requires every released number to have lineage and the model
+    path releases this one; filing it as provenance metadata would have met the
+    type list by putting released numbers where the lineage checks do not look."""
+
+
+class ArtifactRole(str, Enum):
+    RELEASED_OUTPUT = "released_output"
+    RELEASED_ARTIFACT = "released_artifact"
+    INPUT_CELLS = "input_cells"
+    PRIVATE_PROBE = "private_probe"
+
+
 class StageType(str, Enum):
     AGGREGATE = "aggregate"
     MODEL = "model"
@@ -330,8 +397,7 @@ class ArtifactRef(_VrrModel):
     }
 
     artifact_id: str
-    role: str
-    """`released_output`, `released_artifact`, `input_cells`, `private_probe`."""
+    role: ArtifactRole
     disclosure_class: Disclosure
     commitment: str
     commitment_scheme: str
@@ -536,9 +602,7 @@ class EvidenceItem(_VrrModel):
     }
 
     evidence_id: str
-    kind: str
-    """`GroupStatistic`, `ModelCoefficient`, `ConfidenceInterval`,
-    `NotAnswerable`."""
+    kind: EvidenceKind
     source_stage: str
     audit_ref: str
     procedure: str
@@ -712,7 +776,7 @@ class ReplayCertificate(_VrrModel):
     record_digest: str
     """Binds to the EXACT record: change a reported value and this moves, so a
     certificate cannot be carried across to a record it never saw."""
-    outcome: str
+    outcome: ReplayOutcome
     replay_semantics: dict[str, str]
     stages: list[dict[str, Any]] = []
     detail: str = ""
@@ -728,7 +792,7 @@ class ReplayCertificate(_VrrModel):
     # which is the tamper-evident place for it.
 
     def reproduced(self) -> bool:
-        return self.outcome == "COMPUTATION_REPRODUCED"
+        return self.outcome is ReplayOutcome.COMPUTATION_REPRODUCED
 
 
 class ResearchRecord(_VrrModel):
@@ -763,7 +827,7 @@ class ResearchRecord(_VrrModel):
                 raise RecordError(
                     f"evidence {ev.evidence_id!r} cites stage "
                     f"{ev.source_stage!r}, which is not in the trace")
-            if ev.kind != "NotAnswerable" and not st.released():
+            if ev.kind is not EvidenceKind.NOT_ANSWERABLE and not st.released():
                 raise RecordError(
                     f"evidence {ev.evidence_id!r} cites stage "
                     f"{ev.source_stage!r}, which released nothing; a number "
@@ -822,7 +886,8 @@ VRR_OBJECTS: tuple[type[_VrrModel], ...] = (
 
 
 __all__ = [
-    "AnalysisClassification", "ArtifactRef", "DatasetManifest", "Disclosure",
+    "AnalysisClassification", "ArtifactRef", "ArtifactRole", "Assurance",
+    "DatasetManifest", "Disclosure", "EvidenceKind", "ReplayOutcome",
     "DisclosureManifest", "EvidenceItem", "Manifests", "PrivateExecutionTrace",
     "PublicProvenance", "RecordError", "ReplayCertificate", "ReplayClass",
     "ResearchRecord", "SoftwareManifest", "StageRecord", "StageStatus",

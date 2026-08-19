@@ -39,8 +39,8 @@ from __future__ import annotations
 from typing import Any
 
 from .research_record import (
-    AnalysisClassification, Disclosure, EvidenceItem, PrivateExecutionTrace,
-    PublicProvenance, RecordError, StageRecord, StageType,
+    AnalysisClassification, Disclosure, EvidenceItem, EvidenceKind,
+    PrivateExecutionTrace, PublicProvenance, RecordError, StageRecord, StageType,
 )
 
 # The stage fields that may appear in a public provenance node. An allowlist,
@@ -90,7 +90,7 @@ def compile_public_provenance(trace: PrivateExecutionTrace,
     stated as the shape of the function rather than as a rule someone has to
     remember to obey.
     """
-    cited = [e for e in evidence if e.kind != "NotAnswerable"]
+    cited = [e for e in evidence if e.kind is not EvidenceKind.NOT_ANSWERABLE]
     evidence_stages = {e.source_stage for e in cited}
 
     nodes: list[dict[str, Any]] = []

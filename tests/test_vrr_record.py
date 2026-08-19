@@ -37,8 +37,9 @@ from safetre import recorder as R
 from safetre.audit import AuditLog
 from safetre.config import load_policy_config
 from safetre.research_record import (
-    VRR_OBJECTS, ArtifactRef, Disclosure, PublicProvenance, RecordError,
-    ReplayClass, StageStatus, StageType, commit_private, commit_public,
+    VRR_OBJECTS, ArtifactRef, Assurance, Disclosure, EvidenceItem,
+    PublicProvenance, RecordError, ReplayCertificate, ReplayClass, ReplayOutcome,
+    StageStatus, StageType, commit_private, commit_public,
     internal_commitment_key,
 )
 from tests.vrr_harness import (
@@ -350,3 +351,113 @@ def test_an_artifact_ref_needs_a_disclosure_class():
     with pytest.raises(ValidationError):
         ArtifactRef(artifact_id="a", role="released_output",
                     commitment="sha256:x", commitment_scheme="sha256")
+
+
+# --------------------------------------------------------------------------- #
+# 🦚 the Peacock: an assurance claim that sounds broader than it is            #
+# --------------------------------------------------------------------------- #
+#
+# `docs/bestiary-vrr-additions.md` names the cage as typed verification statuses
+# with narrow semantics, and the keeper as schema tests that reject generic
+# status labels. The first version of these types used free strings, so
+# `ReplayCertificate(outcome="VERIFIED")` was accepted and only the VALUE
+# `replay()` happened to return was pinned — a weaker claim, and the wrong one
+# when the certificate is the part that gets quoted.
+
+@pytest.mark.parametrize("label", [
+    "VERIFIED", "verified", "OK", "PASS", "SCIENTIFICALLY_VALID", "REPRODUCIBLE",
+    "PRE_REGISTERED", "TRUSTED",
+])
+def test_a_certificate_cannot_be_given_a_generic_status(label):
+    with pytest.raises(ValidationError):
+        ReplayCertificate(certificate_id="rc-x", record_id="r",
+                          record_digest="0" * 64, outcome=label,
+                          replay_semantics={})
+
+
+@pytest.mark.parametrize("label", ["ScientificallyValid", "Verified", "Claim",
+                                   "Finding", "Result"])
+def test_evidence_cannot_be_given_a_generic_kind(label):
+    with pytest.raises(ValidationError):
+        EvidenceItem(evidence_id="ev-x", kind=label, source_stage="s",
+                     audit_ref="", procedure="glm")
+
+
+def test_the_outcome_vocabulary_is_closed_and_narrow():
+    assert {o.value for o in ReplayOutcome} == {
+        "COMPUTATION_REPRODUCED", "COMPUTATION_NOT_REPRODUCED",
+        "SEMANTICS_MISMATCH", "REPLAY_REFUSED"}
+    # no member means more than "the computation reproduced"
+    assert not [o for o in ReplayOutcome
+                if "VALID" in o.value or "TRUST" in o.value or o.value == "VERIFIED"]
+
+
+def test_no_assurance_dimension_covers_scientific_validity():
+    # `SIGNATURE_VALID` is about a signature, so a bare "VALID" search is the
+    # wrong test; what must be absent is a dimension about the SCIENCE
+    assert {a.value for a in Assurance} == {
+        "COMPUTATION_REPRODUCED", "DATA_SNAPSHOT_ATTESTED",
+        "DISCLOSURE_POLICY_VERIFIED", "PLAN_ORDER_VERIFIED", "SIGNATURE_VALID"}
+    assert not [a for a in Assurance
+                if any(w in a.value for w in ("SCIENTIF", "CORRECT", "SOUND",
+                                              "CAUSAL", "APPROPRIATE"))]
+
+
+def test_an_artifact_role_is_a_closed_vocabulary():
+    with pytest.raises(ValidationError):
+        ArtifactRef(artifact_id="a", role="anything_i_like",
+                    disclosure_class=Disclosure.PUBLIC, commitment="sha256:x",
+                    commitment_scheme="sha256")
+
+
+# --------------------------------------------------------------------------- #
+# 🔐 the Glass Safe: a hash that does not hide the secret                     #
+# --------------------------------------------------------------------------- #
+
+def test_an_unkeyed_hash_of_a_private_value_falls_to_a_dictionary_attack():
+    """The keeper the bestiary asks for, run as an actual attack rather than an
+    assertion about which function was called.
+
+    The private values a record has to bind are the low-entropy ones — a
+    suppressed cell count, a Boolean branch, a category name — and for those a
+    content hash is a lookup table. So: publish one, then enumerate the domain.
+    """
+    domains = {
+        "suppressed_cells": list(range(0, 200)),
+        "branch_taken": [True, False],
+        "sparse_level": ["armed_forces", "clergy", "day_worker", "not_working",
+                         "shift_worker", "student"],
+    }
+    for field, domain in domains.items():
+        secret = domain[1]
+
+        # the naive "protection": a raw content hash of the private value
+        published = commit_public({field: secret})
+        recovered = [guess for guess in domain
+                     if commit_public({field: guess}) == published]
+        assert recovered == [secret], (
+            f"{field}: the dictionary attack should recover the value — if it "
+            "does not, this test has stopped demonstrating the threat")
+
+        # the keyed commitment, over the same value and the same domain. The
+        # attacker holds the domain and the scheme, and lacks only the key.
+        sealed = commit_private({field: secret}, KEY)
+        assert not [guess for guess in domain
+                    if commit_public({field: guess}) == sealed]
+        assert not [guess for guess in domain
+                    if commit_private({field: guess}, b"a-guess-at-the-key") == sealed]
+        # and there is no unkeyed door: the API refuses to make one
+        with pytest.raises(RecordError, match="lookup table"):
+            commit_private({field: secret}, b"")
+
+
+def test_no_released_record_publishes_an_unkeyed_hash_of_a_private_artifact(vrr_record):
+    for stage in vrr_record.trace.stages:
+        for ref in stage.output_refs:
+            if ref.disclosure_class is Disclosure.PUBLIC:
+                assert ref.commitment.startswith("sha256:")
+            else:
+                assert ref.commitment.startswith("hmac-sha256/vrr-v1:"), (
+                    f"{ref.artifact_id} is not public and is committed with "
+                    f"{ref.commitment_scheme!r}; an unkeyed hash of a withheld "
+                    "artifact is a lookup table, not a commitment")

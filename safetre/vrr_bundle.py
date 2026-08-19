@@ -38,7 +38,8 @@ from typing import Any
 from . import evidence as _evidence
 from . import replay as _replay
 from .research_record import (
-    EvidenceItem, RecordError, ResearchRecord, canonical_json, sha256_hex,
+    Assurance, EvidenceItem, RecordError, ResearchRecord, canonical_json,
+    sha256_hex,
 )
 
 REPORT = "README.md"
@@ -88,23 +89,73 @@ def _record_header(record: ResearchRecord) -> dict[str, Any]:
     }
 
 
+# Below this length a private string cannot be swept for by substring search
+# without drowning the result in false positives: `private_detail` may hold
+# `{"retries": 3}`, and "3" occurs in every bundle ever written. So the sweep is
+# explicitly partial, and says which half it covers.
+_SWEEPABLE = 8
+
+
+def _private_strings(record: ResearchRecord) -> list[tuple[str, str]]:
+    """(label, string) for every distinctive private value in the trace.
+
+    `private_detail` is included, and it is the reason this function exists in
+    this shape. It is the one PRIVATE_ONLY field with no schema — free-form
+    bookkeeping, whatever a caller wants — so it is where careless content will
+    end up, and the first version of this sweep did not look at it. A control
+    test that planted a canary there and copied it into a public field passed,
+    which is the wrong outcome for a belt-and-braces check.
+
+    Short and numeric leaves are skipped (see `_SWEEPABLE`). That is a real
+    limit, not a hedge: a suppressed count of 6 cannot be found by searching for
+    "6". The control that covers it is structural — `provenance._PUBLIC_NODE_KEYS`
+    is an allowlist, so `private_detail` has no route into a node at all — and
+    this sweep is the second layer, for leaks the first layer did not predict.
+    """
+    out: list[tuple[str, str]] = []
+
+    def walk(label: str, value: object) -> None:
+        if isinstance(value, str):
+            if len(value) >= _SWEEPABLE:
+                out.append((label, value))
+        elif isinstance(value, dict):
+            for k, v in value.items():
+                walk(f"{label}.{k}", v)
+        elif isinstance(value, (list, tuple)):
+            for i, v in enumerate(value):
+                walk(f"{label}[{i}]", v)
+
+    for stage in record.trace.stages:
+        where = f"stage {stage.stage_id}"
+        for level in stage.excluded_levels:
+            if level:
+                out.append((f"{where}: excluded level {level!r}", level))
+        if stage.message:
+            out.append((f"{where}: private message", stage.message))
+        for finding in stage.findings:
+            detail = str(finding.get("detail", ""))
+            if detail:
+                out.append((f"{where}: private finding detail", detail))
+        walk(f"{where}: private_detail", stage.private_detail)
+        # NOT `executed_parameters`. It is PRIVATE_ONLY as a whole, but most of
+        # it is the committed spec verbatim — the dataset, the family, the
+        # response, the terms — and those are request-decided and published in
+        # the plan, so sweeping them flags the bundle for quoting itself. (It
+        # does: `family`, `response` and both `terms` all fired.) Its private
+        # residue is the filter values a contingency derived from the data, and
+        # those are `excluded_levels`, swept above by name.
+    if record.trace.user:
+        out.append(("the executing user's identity", record.trace.user))
+    return out
+
+
 def _scan_for_private(record: ResearchRecord, written: dict[str, str]) -> list[str]:
     """Every private string of the trace that reached a written file."""
-    findings = []
-    for name, text in sorted(written.items()):
-        for stage in record.trace.stages:
-            for level in stage.excluded_levels:
-                if level and level in text:
-                    findings.append(f"{name}: excluded level {level!r}")
-            if stage.message and stage.message in text:
-                findings.append(f"{name}: a stage's private message")
-            for finding in stage.findings:
-                detail = str(finding.get("detail", ""))
-                if detail and detail in text:
-                    findings.append(f"{name}: a stage's private finding detail")
-        if record.trace.user and record.trace.user in text:
-            findings.append(f"{name}: the executing user's identity")
-    return findings
+    private = _private_strings(record)
+    return [f"{name}: {label}"
+            for name, text in sorted(written.items())
+            for label, secret in private
+            if secret in text]
 
 
 def export_bundle(record: ResearchRecord, out_dir: str,
@@ -185,6 +236,52 @@ def _evidence_table(rows: list[dict[str, Any]]) -> list[str]:
             f"{_evidence.render(item)} | `{item.source_stage}` | "
             f"{item.manuscript_ref or '—'} |")
     return lines
+
+
+def _assurance_rows(provenance: dict[str, Any], certificate: dict[str, Any] | None,
+                    dataset: dict[str, Any]) -> list[tuple[str, str, str]]:
+    """One row per assurance dimension: (dimension, status, what it rests on).
+
+    The Peacock's rule — every green tick answers one explicit question — as a
+    table rather than a promise. Derived here from the bundle's own JSON rather
+    than stored as a field, so `verify_bundle_dir`'s byte comparison covers it;
+    a stored assurance block could be edited to say `established` without
+    breaking anything else in the bundle.
+
+    `DATA_SNAPSHOT_ATTESTED` is `not established` and that is the honest answer
+    for v0, not a defect in this function. The snapshot commitment is a keyed
+    HMAC the custodian holds: it binds them to the tables if they later choose
+    to open it, and it is not a signature anyone can check. Reading
+    `COMPUTATION_REPRODUCED` as "and the data were what they say" is exactly the
+    collapse this table exists to prevent.
+    """
+    reproduced = (certificate or {}).get("outcome") == _replay.REPRODUCED.value
+    precommitted = (provenance.get("classification") == "TRE_PRECOMMITTED"
+                    and bool(provenance.get("audit_chain_verified")))
+    semantics = (certificate or {}).get("replay_semantics") or {}
+    return [
+        (Assurance.COMPUTATION_REPRODUCED.value,
+         "established" if reproduced else "NOT established",
+         "re-running the committed plan over the snapshot under the recorded "
+         "semantics produced the released bytes"
+         if reproduced else "the replay did not reproduce this record"),
+        (Assurance.DATA_SNAPSHOT_ATTESTED.value, "not established",
+         "the snapshot commitment is a keyed HMAC held by the custodian, not a "
+         "signature a reader can check; that the snapshot is the population it "
+         "claims to be rests on the custodian's word"),
+        (Assurance.DISCLOSURE_POLICY_VERIFIED.value,
+         "established" if (reproduced and semantics.get("policy_digest")) else "NOT established",
+         f"the replay ran under policy digest `{semantics.get('policy_digest', 'unrecorded')}` "
+         "and would have refused a different one"),
+        (Assurance.PLAN_ORDER_VERIFIED.value,
+         "established" if precommitted else "not established",
+         "the plan commitment precedes every governed stage in an audit chain "
+         "that verifies"
+         if precommitted else "no pre-specification claim is made for this record"),
+        (Assurance.SIGNATURE_VALID.value, "check it yourself",
+         "this document cannot assert its own signature; run "
+         "`safetre.vrr_bundle.verify_bundle_dir` with the custodian's public key"),
+    ]
 
 
 _CLASSIFICATION_PROSE = {
@@ -378,6 +475,19 @@ def render_report_from_public(*, record_id: str, provenance: dict[str, Any],
     add("")
 
     add("## 9. What is and is not verified")
+    add("")
+    add("Each row answers one question and only that question. A single "
+        "badge covering all of them would be the more impressive document and "
+        "the less honest one — in particular, that the computation reproduced "
+        "says nothing about whether the data were what the manifest claims.")
+    add("")
+    add("| assurance | status | what it rests on |")
+    add("|---|---|---|")
+    for dimension, status, basis in _assurance_rows(provenance, certificate, dataset):
+        add(f"| `{dimension}` | {status} | {basis} |")
+    add("")
+    add("There is no row for scientific validity, and no machine-generated "
+        "field anywhere in this bundle asserts it.")
     add("")
     add("Verified mechanically by this bundle:")
     add("")

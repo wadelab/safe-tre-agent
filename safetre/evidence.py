@@ -45,16 +45,17 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any
 
-from .research_record import EvidenceItem, RecordError, StageRecord, StageType
+from .research_record import (
+    EvidenceItem, EvidenceKind, RecordError, StageRecord, StageType,
+)
 
-GROUP_STATISTIC = "GroupStatistic"
-MODEL_COEFFICIENT = "ModelCoefficient"
-CONFIDENCE_INTERVAL = "ConfidenceInterval"
-NOT_ANSWERABLE = "NotAnswerable"
-MODEL_FIT = "ModelFit"
+GROUP_STATISTIC = EvidenceKind.GROUP_STATISTIC
+MODEL_COEFFICIENT = EvidenceKind.MODEL_COEFFICIENT
+CONFIDENCE_INTERVAL = EvidenceKind.CONFIDENCE_INTERVAL
+NOT_ANSWERABLE = EvidenceKind.NOT_ANSWERABLE
+MODEL_FIT = EvidenceKind.MODEL_FIT
 
-KINDS = (GROUP_STATISTIC, MODEL_COEFFICIENT, CONFIDENCE_INTERVAL, NOT_ANSWERABLE,
-         MODEL_FIT)
+KINDS = tuple(EvidenceKind)
 
 # Columns a released aggregate frame uses for the measured value and its cell
 # size. Everything else in the row is a cell key.
@@ -92,7 +93,7 @@ def _evidence_id(item: EvidenceItem) -> str:
     return "ev-" + item.identity_digest()[:16]
 
 
-def _finish(kind: str, stage: StageRecord, keys: dict[str, Any],
+def _finish(kind: EvidenceKind, stage: StageRecord, keys: dict[str, Any],
             values: dict[str, Any], *, procedure: str, units: str | None,
             precision: int | None) -> EvidenceItem:
     draft = EvidenceItem(
@@ -239,7 +240,7 @@ def render(item: EvidenceItem) -> str:
     from `values` at the recorded `precision` is the whole mechanism — there is
     no path here back to the data.
     """
-    if item.kind == NOT_ANSWERABLE:
+    if item.kind is NOT_ANSWERABLE:
         return "not answerable"
     value = _primary(item.values)
     if value is None:

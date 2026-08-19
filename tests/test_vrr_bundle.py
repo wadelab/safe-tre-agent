@@ -35,10 +35,13 @@ import pytest
 from safetre import attestation as A
 from safetre import vrr_bundle as B
 from safetre.config import load_policy_config
+from safetre.provenance import compile_public_provenance
 from safetre.replay import ReplayContext, replay
 from safetre.research_record import RecordError
 from studies.nightplay import verify as V
-from tests.vrr_harness import CUSTODIAN, KEY, POPULATION, SNAPSHOT, build_record
+from tests.vrr_harness import (
+    ADJUSTED, CONFOUNDED, CUSTODIAN, KEY, POPULATION, SNAPSHOT, build_record,
+)
 
 SEED = b"a-fixed-32-byte-test-signing-key"
 
@@ -396,3 +399,167 @@ def test_a_level_the_committed_plan_itself_names_can_be_waived(signed):
         B.export_bundle(forged, path + "-declared")
     B.export_bundle(forged, path + "-declared", allow_expected_levels=(level,))
     assert os.path.exists(os.path.join(path + "-declared", B.REPORT))
+
+
+# --------------------------------------------------------------------------- #
+# 🧪 the Alchemist: a perfectly reproduced bad analysis                        #
+# --------------------------------------------------------------------------- #
+#
+# The one beast in `docs/bestiary-vrr-additions.md` with no deterministic cage:
+# every hash matches, the replay is exact, the signature is valid, and the model
+# adjusted for the wrong thing. Its keeper is a fixture — an intentionally
+# reproducible but scientifically wrong analysis — to check the report awards it
+# no correctness badge. NIGHTPLAY plants the trap on purpose (T2), so the
+# fixture is the study's own confounded model rather than something contrived.
+
+@pytest.fixture
+def confounded(vrr_study, vrr_service, vrr_manifests, vrr_log, tmp_path):
+    tables, _ = vrr_study
+    _, run, record = build_record(vrr_service, vrr_manifests, vrr_log, CONFOUNDED)
+    context = ReplayContext(
+        tables=tables, policy_config=load_policy_config(),
+        service_factory=V.build_service, snapshot_id=SNAPSHOT,
+        commitment_key=KEY, population=POPULATION, custodian=CUSTODIAN)
+    record = record.model_copy(update={"certificate": replay(record, context)})
+    secret, public = A.generate_keypair(seed=SEED)
+    out = str(tmp_path / "confounded")
+    B.export_bundle(record, out, attestation=A.attest(record, secret, public))
+    return record, run, out, public
+
+
+def test_the_confounded_analysis_really_does_replay_and_verify(confounded):
+    """The premise. If this record did not verify, the test below would be
+    checking that a *broken* bundle awards no badge, which proves nothing."""
+    record, _, path, public = confounded
+    assert record.certificate.reproduced()
+    ok, findings = B.verify_bundle_dir(path, public_key=public)
+    assert ok, findings
+
+
+def test_the_confounded_estimate_is_wrong_by_a_third(confounded, vrr_service,
+                                                     vrr_manifests, tmp_path):
+    """And it is wrong in the direction NIGHTPLAY planted, so the fixture is
+    demonstrably a bad analysis rather than merely an unadjusted one."""
+    from safetre.audit import AuditLog
+
+    _, run, _, _ = confounded
+    naive = {(r["term"], r["level"]): r["estimate"] for r in run.stages[0].output}
+
+    other = AuditLog(str(tmp_path / "adjusted.db"))
+    _, adjusted_run, _ = build_record(vrr_service, vrr_manifests, other, ADJUSTED)
+    adjusted = {(r["term"], r["level"]): r["estimate"]
+                for r in adjusted_run.stages[0].output}
+
+    key = ("night_use_band", "heavy")
+    assert naive[key] > adjusted[key] * 1.2, (
+        f"unadjusted {naive[key]} vs adjusted {adjusted[key]}: the planted "
+        "confounder should inflate the naive estimate")
+
+
+def test_a_reproducible_wrong_analysis_gets_no_correctness_badge(confounded):
+    _, _, path, _ = confounded
+    report = _report(path)
+
+    # nothing anywhere in the bundle asserts the science
+    for name in B.FILES:
+        with open(os.path.join(path, name), encoding="utf-8") as fh:
+            text = fh.read().upper()
+        for badge in ("SCIENTIFICALLY_VALID", "SCIENTIFICALLY VALID", "IS VALID",
+                      "IS CORRECT", "CONCLUSION SUPPORTED", "CAUSAL"):
+            assert badge not in text, f"{name} awards {badge!r}"
+
+    # and the report says so, next to the green ticks rather than far from them
+    assert "Machine verification is not scientific validity" in report
+    assert "no machine-generated field anywhere in this bundle asserts it" in report
+    assert "the cohort, model and covariates were scientifically appropriate" in report
+
+
+def test_the_assurance_table_does_not_collapse_into_one_badge(confounded):
+    """The Peacock's rule, checked on the bundle a reviewer receives: the
+    computation reproducing must not be presented as the data being attested."""
+    _, _, path, _ = confounded
+    report = _report(path)
+    assert "| `COMPUTATION_REPRODUCED` | established" in report
+    assert "| `DATA_SNAPSHOT_ATTESTED` | not established" in report
+    assert "rests on the custodian's word" in report
+
+
+# --------------------------------------------------------------------------- #
+# 🗣️ the Court Reporter: publishes everything because "transparency"          #
+# --------------------------------------------------------------------------- #
+#
+# The keeper the bestiary asks for is planted strings, not the ones that happen
+# to be there. `test_no_private_string_is_anywhere_in_the_bundle` sweeps for the
+# category the contingency really excluded, which is a genuine private fact but
+# also the only one this plan produces. Planting is what covers the fields no
+# current analysis fills — and one of them, `private_detail`, is deliberately
+# untyped, which is exactly where a future caller will put something careless.
+
+PLANTED = {
+    "private_detail": "CANARY-DIAGNOSTIC-4f2a: donor 88213 holds 91% of the cell",
+    "message": "CANARY-MESSAGE-9c1b: suppressed 6 cells below threshold",
+    "finding": "CANARY-FINDING-77de: armed_forces has 6 donors",
+    "executed_filter": "CANARY-FILTER-1e05",
+    "user": "CANARY-USER-b3c9",
+    "probe": "CANARY-PROBE-a740",
+}
+
+
+@pytest.fixture
+def planted(vrr_service, vrr_manifests, vrr_log, tmp_path):
+    """A record with a hostile string in every private field there is."""
+    _, _, record = build_record(vrr_service, vrr_manifests, vrr_log)
+    stage = record.trace.stages[0]
+    loaded = stage.model_copy(update={
+        "private_detail": {"diagnostic": PLANTED["private_detail"],
+                           "retries": 3, "rejected": ["a-candidate-model"]},
+        "message": PLANTED["message"],
+        "findings": [{"rule": "dominance", "detail": PLANTED["finding"]}],
+        "executed_parameters": dict(stage.executed_parameters, filters=[
+            {"column": "employment", "op": "!=", "value": PLANTED["executed_filter"]}]),
+        "excluded_levels": [PLANTED["probe"]],
+    })
+    trace = record.trace.model_copy(update={"stages": [loaded],
+                                           "user": PLANTED["user"]})
+    loaded_record = record.model_copy(update={"trace": trace})
+    secret, public = A.generate_keypair(seed=SEED)
+    out = str(tmp_path / "planted")
+    B.export_bundle(loaded_record, out,
+                    attestation=A.attest(loaded_record, secret, public))
+    return loaded_record, out
+
+
+def test_no_planted_private_string_reaches_the_public_bundle(planted):
+    _, path = planted
+    for name in B.FILES:
+        with open(os.path.join(path, name), encoding="utf-8") as fh:
+            text = fh.read()
+        for label, canary in PLANTED.items():
+            assert canary not in text, f"{label} leaked into {name}"
+        assert "CANARY" not in text, f"an unlabelled canary reached {name}"
+
+
+def test_the_planted_record_is_otherwise_a_normal_bundle(planted):
+    """So the test above is not passing because the export quietly failed."""
+    record, path = planted
+    assert sorted(os.listdir(path)) == sorted(B.FILES)
+    assert len(_load(path, "evidence.json")) == len(record.evidence)
+    assert _load(path, "provenance.json")["nodes"]
+
+
+def test_planting_a_canary_in_a_public_field_is_caught(planted, vrr_service,
+                                                       vrr_manifests, vrr_log,
+                                                       tmp_path):
+    """The control. The sweep must be able to fail, or the two tests above are
+    checking that a string nobody copied did not get copied."""
+    record, _ = planted
+    stage = record.trace.stages[0]
+    leaky = stage.model_copy(update={
+        "public_parameters": dict(stage.public_parameters,
+                                  response=PLANTED["private_detail"])})
+    trace = record.trace.model_copy(update={"stages": [leaky]})
+    forged = record.model_copy(update={"trace": trace})
+    forged = forged.model_copy(update={
+        "provenance": compile_public_provenance(trace, forged.evidence)})
+    with pytest.raises(RecordError, match="private trace content"):
+        B.export_bundle(forged, str(tmp_path / "leaky"))

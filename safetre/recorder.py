@@ -66,7 +66,7 @@ from . import manifest as _manifest
 from .config import PolicyConfig
 from .procedures import model_registry, registry_skeleton
 from .research_record import (
-    AnalysisClassification, ArtifactRef, DatasetManifest, Disclosure,
+    AnalysisClassification, ArtifactRef, ArtifactRole, DatasetManifest, Disclosure,
     DisclosureManifest, Manifests, PrivateExecutionTrace, ReplayClass,
     SoftwareManifest, StageRecord, StageStatus, StageType,
     canonical_json, commit_private, commit_public, digest_of,
@@ -260,13 +260,13 @@ def _artifacts(stage_id: str, sr: Any, key: bytes) -> list[ArtifactRef]:
     refs: list[ArtifactRef] = []
     if sr.output is not None:
         refs.append(ArtifactRef(
-            artifact_id=f"{stage_id}:output", role="released_output",
+            artifact_id=f"{stage_id}:output", role=ArtifactRole.RELEASED_OUTPUT,
             disclosure_class=Disclosure.PUBLIC,
             commitment=commit_public(sr.output), commitment_scheme="sha256",
             shape=[len(sr.output), len(sr.output[0]) if sr.output else 0]))
     for name, rows in sorted((sr.artifacts or {}).items()):
         refs.append(ArtifactRef(
-            artifact_id=f"{stage_id}:{name}", role="released_artifact",
+            artifact_id=f"{stage_id}:{name}", role=ArtifactRole.RELEASED_ARTIFACT,
             disclosure_class=Disclosure.PUBLIC,
             commitment=commit_public(rows), commitment_scheme="sha256",
             shape=[len(rows), len(rows[0]) if rows else 0]))
@@ -276,7 +276,7 @@ def _artifacts(stage_id: str, sr: Any, key: bytes) -> list[ArtifactRef]:
         # keyed, and never surfaced: the level names it found are the levels the
         # gateway suppresses.
         refs.append(ArtifactRef(
-            artifact_id=f"{stage_id}:probe", role="private_probe",
+            artifact_id=f"{stage_id}:probe", role=ArtifactRole.PRIVATE_PROBE,
             disclosure_class=Disclosure.PRIVATE_ONLY,
             commitment=commit_private({"excluded": sorted(sr.excluded)}, key),
             commitment_scheme="hmac-sha256/vrr-v1", shape=None))

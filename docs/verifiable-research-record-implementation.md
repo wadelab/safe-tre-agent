@@ -140,6 +140,48 @@ pinned against the RFC's own vectors. **The fallback is for research v0 and test
 keys** — it is readable and correct, not constant-time — and the bundle records
 which backend signed it.
 
+## The bestiary's keepers
+
+`docs/bestiary-vrr-additions.md` names eleven beasts and, for each, the
+executable checks that cage it. Nine now have keepers; the doc's own rule is that
+a beast enters the main reserve only once it has been reproduced, caged and given
+one, so those nine are ready to promote and be numbered.
+
+| Beast | Keeper |
+|---|---|
+| 🦚 Peacock | closed status vocabularies (`ReplayOutcome`, `EvidenceKind`, `ArtifactRole`), a per-dimension assurance table in the report, schema tests rejecting eight generic labels |
+| 🕰️ Time Traveller | reversed-order laundering attack; audit-chain reordering attack; decoy-row attack |
+| 🗺️ Cartographer | six paired-trace perturbations, all six at once, and a control |
+| 🔐 Glass Safe | a real dictionary attack: recovers the value from an unkeyed hash, fails against the keyed commitment |
+| 🧵 Seamstress | component-swap, stale-certificate and signature-tamper tests |
+| 🧟 Zombie Certificate | five one-change tamper tests plus report-edit detection |
+| 🎣 Citation Fisher | identity covers procedure, stage and keys, so same-value-different-estimand items stay distinct; collision raises |
+| 🗣️ Court Reporter | six planted canaries across every private field, with a control proving the sweep can fail |
+| 🧪 Alchemist | NIGHTPLAY's planted confounder (T2) as a record that replays exactly, verifies, and is wrong by a third — asserted to earn no correctness badge |
+
+Two are deferred with reason. 🎭 **Method Actor** needs a model in the path
+(milestone 10); there is none, so the keeper would be vacuous. 🎰 **Loaded Dice**
+needs a stochastic release (milestone 11); `NOT_REPLAYABLE` exists so a future
+one cannot be filed as exact, and nothing in v0 releases under it.
+
+### What the Peacock cost
+
+Its cage is "typed verification statuses with narrow semantics", and the first
+version used free strings: `ReplayCertificate(outcome="VERIFIED")` and
+`EvidenceItem(kind="ScientificallyValid")` were both accepted. The test that
+looked like the keeper checked the value `replay()` returns, not the value the
+type permits — a weaker claim, and the wrong one when the certificate is the part
+that gets quoted.
+
+The second half of the cage was missing too. The bestiary lists five assurance
+dimensions precisely because collapsing them is the trick, and section 9 of the
+report now gives each its own row, its own status and its own basis. That
+surfaced something the prose had buried: **`DATA_SNAPSHOT_ATTESTED` is not
+established in v0.** The snapshot commitment is a keyed HMAC the custodian holds,
+not a signature a reader can check, so "the computation reproduced" carries no
+claim that the data were what the manifest says. The table says so in the row
+next to the green ticks rather than in a caveat further down.
+
 ## Research v0 against its own definition of done
 
 | Criterion | State |

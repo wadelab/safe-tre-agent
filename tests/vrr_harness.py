@@ -53,6 +53,22 @@ POSTHOC = {
 }
 
 
+# The Alchemist's fixture: an analysis that will replay perfectly and is
+# scientifically wrong. NIGHTPLAY plants the trap (truth T2) — shift workers use
+# their phones at night more AND gamble more for reasons of their own, so the
+# unadjusted model attributes their gambling to late-night use. Every hash will
+# match. The estimate is confounded by roughly a third.
+CONFOUNDED = {
+    "question": "Does late-night phone use drive gambling stake?",
+    "stages": [
+        {"id": "naive", "sub_question": "regress stake on night use band",
+         "spec": {"tool": "glm", "dataset": "panel", "family": "gaussian",
+                  "response": "stake_gbp", "terms": ["night_use_band"],
+                  "filters": []}},
+    ],
+}
+
+
 class SwallowsThePlanCommit:
     """An audit log that records every stage but drops the plan commitment.
 
