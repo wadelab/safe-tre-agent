@@ -228,11 +228,56 @@ the compiler wrote. That framing is the lesson of round 14: #109 and #110 were
 both fields correctly omitted from one place and recoverable from another, and a
 model asserting "the compiler dropped it" would have held throughout.
 
-**Milestone 9's Lean half is not done.** The four Lean targets need the Lean
-toolchain, which this work could not run; writing proofs that have never been
-compiled and calling the milestone finished would be the overclaim the 🦚 Peacock
-card is about. The Alloy half stands on its own — it is solver-checked in CI —
-and the Lean targets remain open.
+**Milestone 9's Lean half is drafted, not done.** `formal/lean/draft/Record.lean`
+covers all four targets — the noninterference theorem
+(`compile_ignores_private_state`), the release-lineage obligation, the renderer's
+type, and the `nameable`-stages theorem that is the Lean twin of the Alloy
+model's `PublicRecordNamesOnlyReleasingStages`, with #109 and #110 as named
+corollaries.
+
+It sits in `draft/` rather than `SafeTre/` because **it has never been compiled**:
+CI runs `lake build` on every push and the sync test requires every module under
+`SafeTre/` to be imported by the root, so filing an unchecked file there would
+turn the formal job red and claim a proof nobody has replayed. Promote it with
+
+```sh
+git mv formal/lean/draft/Record.lean formal/lean/SafeTre/Record.lean
+# add `import SafeTre.Record` to formal/lean/SafeTre.lean
+cd formal/lean && lake build
+```
+
+and expect to fix the list lemmas: the project has no Mathlib, so only Lean 4
+core is available, and the three proofs marked `(?)` in the file are where core's
+names and shapes are most likely to bite. The Alloy half stands on its own and is
+solver-checked in CI.
+
+## Merging this to main: what the off switch is
+
+There is no feature flag, and that is deliberate — the layer is off in a stronger
+sense than a flag provides.
+
+**The dependency arrow points one way.** The record modules import the gateway's
+types; no module the gateway uses imports a record module. Building a record is
+not a thing the release path can do, so it cannot be slowed, broken or influenced
+by one. `tests/test_vrr_isolation.py` pins it both statically (an AST walk over
+every module in `safetre` and `safetre_web`) and at runtime (a subprocess that
+imports the gateway and asserts no record module reached `sys.modules`). Without
+that check the property would be true today and quietly false after the first
+convenient import.
+
+**And it must be configured, not merely called.** `internal_commitment_key()` has
+no default and raises: a record cannot be built until an operator sets
+`SAFETRE_VRR_COMMIT_KEY`, because the fallback would be an unkeyed hash of
+low-entropy private values.
+
+So a deployment that wants none of this gets none of it by doing nothing, and a
+deployment that wants it turns it on by calling it with a key. What merging does
+NOT do is make the VRR part of the v1.0 safety claim — that is a separate
+decision, and [the entry guide](vrr-next.md) still says the answer is not yet.
+
+The one thing to weigh before merging: the required-checks list in `AGENTS.md`
+grows a third red-team corpus (`redteam/run_vrr_redteam.py`, about a minute), and
+CI's formal job grows a fifth Alloy model.
 
 ## What is deliberately not done
 
