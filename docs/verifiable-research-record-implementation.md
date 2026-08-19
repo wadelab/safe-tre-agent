@@ -1,0 +1,142 @@
+# Verifiable research records: what is built
+
+*The state of the [build plan](verifiable-research-record-build-plan.md) in
+code. Milestones 0–8 are implemented and pinned by tests; 9–11 are not started,
+and the record says so about itself rather than leaving a reader to assume.*
+
+Run the whole thing:
+
+```sh
+uv run python scripts/run_vrr_demo.py --question headline-association \
+    --out artifacts/vrr-demo
+```
+
+That command commits a plan, runs a scripted NIGHTPLAY analysis through the
+unchanged gateway, records what happened, compiles the public half, replays the
+computation from the attested snapshot, exports a signed bundle, runs a
+deliberate post-hoc follow-up and watches it get labelled exploratory, then
+tampers with the export and watches verification fail. No language model is
+involved at any point, so a failure is a provenance failure.
+
+## The modules
+
+| Module | Milestone | What it is |
+|---|---|---|
+| `safetre/research_record.py` | 0, 6 | the five record types, disclosure classes, commitments, manifests |
+| `safetre/recorder.py` | 1, 5, 6 | a plan run + the audit chain → a private execution trace |
+| `safetre/evidence.py` | 3 | released numbers → evidence items with lineage |
+| `safetre/provenance.py` | 4 | private trace → public provenance |
+| `safetre/replay.py` | 2 | re-run the committed plan → replay certificate |
+| `safetre/attestation.py` | 8 | asymmetric signature over the bundle |
+| `safetre/vrr_bundle.py` | 7 | export, deterministic report, offline check |
+
+Nothing in the release path changed. `plan.py`, `service.py` and
+`disclosure.py` are untouched; the recorder reads the seams they already had —
+the `PlanRun` the executor returns and the rows the audit log wrote. The one
+addition to existing code is `AuditLog.rows_since`, a read-only accessor that
+returns each row's chain position and MAC so a record can *refer* to a row
+rather than copy it. That matters: if building the record had required a new
+execution path, the record would be evidence about a path that only exists when
+somebody is recording.
+
+## The two boundaries
+
+**Disclosure is a construction-time obligation.** Every field of every record
+type is classified `PUBLIC`, `OPAQUE_ATTESTATION` or `PRIVATE_ONLY`, and the
+check runs when the class is created, not when it is serialized — a record type
+with an unclassified field raises at import. The failure this guards against is
+mundane and certain: somebody adds a field, and the next exporter publishes it
+because publishing was the default.
+
+**A raw hash is not a hiding commitment.** Released artifacts get a plain
+SHA-256 a reviewer can recompute from the values in the bundle. Everything else
+gets a keyed HMAC under a key that never leaves the safepod, and surfaces as an
+`OPAQUE_ATTESTATION` — an internal binding tool, never advertised as publicly
+verifiable. The distinction is the point: the private artifacts a record needs
+to bind are the low-entropy ones (a suppressed count, a branch outcome, a
+category name), and an unkeyed hash of any of those is a lookup table.
+
+## Public provenance is compiled, not filtered
+
+A public provenance node exists because a released number needs explaining,
+never because a stage ran. Walk the stage list instead and the shape of the
+public graph starts answering questions about the cohort — how many stages the
+gateway denied, whether a data-sighted contingency fired, how many retries a fit
+needed — which is what the gateway's single canonical refusal exists to refuse
+one layer down.
+
+`tests/test_vrr_provenance.py` pins this as a release-equality property. Paired
+traces differ in exactly one private thing at a time — suppressed cell count,
+rejected candidate model, private branch decision, retry count, sparse category,
+private diagnostic — and the canonical public bytes must not move. A control
+test changes something public and requires that they do, so the file cannot pass
+by comparing two constants.
+
+## Pre-specification is derived, and narrower than it sounds
+
+A stage is `TRE_PRECOMMITTED` only if the row committing its governing plan sits
+earlier in the audit chain than the row the stage itself wrote. Run the analysis
+first and commit the plan afterwards — the laundering attack — and it comes out
+`EXPLORATORY_POSTHOC`. So does a stage the chain never witnessed, which is the
+fail-closed reading: a stage the audit history cannot see is not one it can
+vouch for.
+
+The label is deliberately not called pre-registration.
+[D9](decisions/D9-verifiable-research-record.md) and the
+[critical review](vrr-critical-review.md) are explicit that event order inside
+one TRE execution shows this execution did not choose its plan after seeing its
+own protected intermediates, and shows nothing about what the researcher had
+seen before the session opened. The generated report says so in those words.
+
+## The bundle
+
+```text
+artifacts/vrr/<record_id>/
+  record.json  provenance.json  evidence.json  replay_certificate.json
+  software_manifest.json  dataset_manifest.json  disclosure_manifest.json
+  attestation.json  README.md
+```
+
+Two files beyond the build plan's seven. The dataset manifest carries the
+population declaration — the denominator no number in the bundle states for
+itself — and the attestation travels with the thing it signs rather than beside
+it.
+
+`README.md` is a pure function of the JSON, so `verify_bundle_dir` re-renders it
+and compares bytes. A Markdown file a reviewer reads but cannot re-derive is
+prose asserting things about data they cannot see, which is the thing being
+replaced.
+
+Signing is Ed25519 over a payload that names what it covers: the record id and
+schema version, the public bundle digest, the replay certificate digest and the
+three manifest digests. `cryptography` is used when installed; otherwise the
+fallback is the RFC 8032 reference implementation in `safetre/attestation.py`,
+pinned against the RFC's own vectors. **The fallback is for research v0 and test
+keys** — it is readable and correct, not constant-time — and the bundle records
+which backend signed it.
+
+## Research v0 against its own definition of done
+
+| Criterion | State |
+|---|---|
+| the private trace is richer than the public trace | met — the probe, the excluded level, the rewritten filter and the gateway's findings are all private |
+| public provenance survives private-trace perturbation | met — six perturbations, plus all six at once |
+| every public number has evidence lineage | met — coefficients, design cells and the fit block |
+| plan-order classification is mechanically correct | met, including the laundering attack |
+| deterministic replay reproduces the result | met — `COMPUTATION_REPRODUCED` |
+| changing dataset/code/policy/result fails verification | met — six failure tests |
+| the bundle is externally signature-verifiable with a test key | met |
+| an exploratory follow-up is labelled as such | met — demo step 9 |
+| red-team cases for trace topology, weak commitments, plan laundering and stale certificates fail | met |
+| the existing query/disclosure red team passes unchanged | met — 29/29, unchanged |
+
+## What is deliberately not done
+
+Milestones 9, 10 and 11: the Lean and Alloy slice, the connection to the inside
+analyst, and DP/global accounting. The
+[`AccessContext`/`ReleaseDomain`](decisions/D10-authenticated-release-domains.md)
+implementation is also outstanding — `release_domain` is recorded as a string
+placeholder so the field exists before the machinery that enforces it.
+
+Until those exist this remains a research increment rather than part of the
+v1.0 safety claim, exactly as [the entry guide](vrr-next.md) says.

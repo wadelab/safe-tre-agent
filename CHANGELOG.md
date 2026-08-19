@@ -156,6 +156,59 @@ and fixes are in [docs/hardening-log.md](docs/hardening-log.md).
 
 ### Added
 
+- **Verifiable research records: the vertical slice (`safetre/research_record.py`,
+  `recorder.py`, `evidence.py`, `provenance.py`, `replay.py`, `attestation.py`,
+  `vrr_bundle.py`; [D9](docs/decisions/D9-verifiable-research-record.md),
+  [build plan](docs/verifiable-research-record-build-plan.md) milestones 0–8;
+  [what is built](docs/verifiable-research-record-implementation.md)).** One
+  protected analysis, published as something a reviewer can check without the
+  data and without trusting the model's prose. `uv run python
+  scripts/run_vrr_demo.py` commits a plan, runs a scripted NIGHTPLAY analysis
+  through the unchanged gateway, records it, compiles the public half, replays
+  the computation from the attested snapshot, exports a signed bundle, runs a
+  post-hoc follow-up that gets labelled exploratory, and tampers with the
+  export to show verification fail. No model anywhere in it.
+
+  Four things are load-bearing rather than structural. **Disclosure is a
+  construction-time obligation**: every field of every record type is classified
+  `PUBLIC`, `OPAQUE_ATTESTATION` or `PRIVATE_ONLY` when the class is created, so
+  a type with an unclassified field raises at import rather than being published
+  by whoever writes the next exporter. **A raw hash is not a hiding
+  commitment**: released artifacts get a recomputable SHA-256, everything else a
+  keyed HMAC under a key that never leaves the safepod, because the private
+  artifacts a record must bind are exactly the low-entropy ones. **Public
+  provenance is compiled from approved evidence, not filtered from the stage
+  list** — a node exists because a released number needs explaining, never
+  because a stage ran, so the public graph cannot start answering how many
+  stages the gateway denied; six paired-trace perturbations (suppressed cell
+  count, rejected candidate model, private branch, retry count, sparse category,
+  private diagnostic) must leave the canonical public bytes byte-identical, with
+  a control test that requires a public change to move them. **Pre-specification
+  is derived**: `TRE_PRECOMMITTED` needs the plan-commit row earlier in the audit
+  chain than the stage's own row, so running first and committing afterwards
+  comes out `EXPLORATORY_POSTHOC`, and so does a stage the chain never witnessed.
+  The label is not called pre-registration, in the record or in the generated
+  report, for the reason the [critical review](docs/vrr-critical-review.md)
+  gives.
+
+  A successful replay certificate says `COMPUTATION_REPRODUCED`, never
+  `VERIFIED`, and carries its own `not_verified` list. Semantics that do not
+  match the record's end the replay before a query runs: there is no silent
+  replay under newer code. The bundle's `README.md` is a pure function of the
+  JSON beside it, so `verify_bundle_dir` re-renders and compares bytes.
+  Signing is Ed25519 over a payload naming what it covers; `cryptography` when
+  installed, otherwise the RFC 8032 reference implementation pinned against the
+  RFC's vectors, which is for research v0 and test keys and says so.
+
+  **Nothing in the release path changed.** `plan.py`, `service.py` and
+  `disclosure.py` are untouched; the recorder reads the seams they already had.
+  The one addition is `AuditLog.rows_since`, a read-only accessor giving each
+  row's chain position and MAC so a record can refer to a row rather than copy
+  it. The existing red team passes unchanged (29/29). Milestones 9–11 (Lean and
+  Alloy, the inside analyst, DP) are not started, and this remains a research
+  increment rather than part of the v1.0 safety claim.
+
+
 - **The inside analyst's data-sighted tier ("Chimp" phase 3): locked plans
   and a metered selection channel (`safetre/plan.py`; spec R20, P24;
   [design note](docs/inside-analyst.md)).** The only safe way an automated

@@ -25,6 +25,7 @@ alongside the reasoning that replaced it.
 | | Decision | Status | Clauses |
 |---|---|---|---|
 | D1 | [Models fit from vetted cells, not from rows](decisions/D1-cells-first-models.md) | accepted | R14, R15, P19, P21 |
+| D10 | [Authenticated release domains and deterministic accounting come before differential privacy](decisions/D10-authenticated-release-domains.md) | accepted | R6, R10, P13 |
 | D2 | [Rule sets compose as a union, and the checker runs out of process](decisions/D2-acro-composition.md) | accepted | R5 |
 | D3 | [Second-moment cells get their own bound, and their own failure mode](decisions/D3-second-moment-parameters.md) | accepted | R5, R15, P19 |
 | D4 | [Inference from a dispersion that cannot be released](decisions/D4-robust-dispersion.md) | **parked** | R15, P21 |
@@ -32,6 +33,7 @@ alongside the reasoning that replaced it.
 | D6 | [An external checker is used by default when one is configured](decisions/D6-checker-default.md) | accepted | R5 |
 | D7 | [Auditor totals count donors, and internal range filters are band-aligned](decisions/D7-donor-totals-and-band-filters.md) | accepted | R5, R6 |
 | D8 | [The inside analyst starts as a vetted loop, on the public side of the gateway](decisions/D8-inside-analyst-vetted-loop.md) | accepted | R19, P23 |
+| D9 | [A published result is a verifiable research record, not an AI narrative](decisions/D9-verifiable-research-record.md) | accepted | R8, R11, R20 |
 
 ## D1 — Models fit from vetted cells, not from rows
 
@@ -42,6 +44,16 @@ Should a statistical model be fitted on row-level data behind an influence witne
 **What would change our mind.** A model family arrives whose sufficient statistics are not catalogued aggregates — non-gaussian with continuous predictors is the standing example. That case needs either a new aggregate that IS vettable, or the row-level route with a leverage witness, and the row-level route is deliberately kept alive in the design for it.
 
 [Read the record](decisions/D1-cells-first-models.md)
+
+## D10 — Authenticated release domains and deterministic accounting come before differential privacy
+
+*2026-08-19 · accepted*
+
+In an answer-level TRE, should cumulative disclosure be controlled primarily by a public-query-style differential-privacy budget, or by the fact that the service is a restricted research environment with strongly identified, authorised users and custodian-defined release domains?
+
+**What would change our mind.** Deterministic shared accounting has been implemented and attacked with the collusion corpus. Add a DP mechanism only where a measured residual cannot be bounded cleanly enough by deterministic release rules, identity-aware limits, memoisation and shared lineage, or where a quantitative privacy guarantee is itself the research objective.
+
+[Read the record](decisions/D10-authenticated-release-domains.md)
 
 ## D2 — Rule sets compose as a union, and the checker runs out of process
 
@@ -112,6 +124,16 @@ The next research phase moves the automated component from formatting one reques
 **What would change our mind.** Phase 3 of docs/inside-analyst.md — the data-sighted tier, where the analyst sees unvetted intermediates — needs its own clauses (a locked, audit-committed plan; adaptivity metered by the DP accountant), because there selection is a channel and P23 as written cannot hold. Revisit also if the question bank shows the vetted loop cannot reach the truths the NIGHTPLAY study plants through released aggregates alone, which would be the argument for that tier.
 
 [Read the record](decisions/D8-inside-analyst-vetted-loop.md)
+
+## D9 — A published result is a verifiable research record, not an AI narrative
+
+*2026-08-19 · accepted*
+
+If an automated analyst performs increasingly rich and adaptive work inside the TRE, what must a researcher be able to show a reviewer so that the scientific result is inspectable and reproducible without exposing protected data or trusting the model's prose?
+
+**What would change our mind.** The first implementation slice has produced a complete record and replay certificate for an end-to-end NIGHTPLAY question. At that point promote the stable parts into normative R/P clauses. Revisit earlier if public provenance itself proves disclosive, or if deterministic replay cannot be made stable enough for the registered procedure set.
+
+[Read the record](decisions/D9-verifiable-research-record.md)
 
 
 ## Adding a record

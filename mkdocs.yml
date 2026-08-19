@@ -60,6 +60,14 @@ nav:
       - Planner evaluation: planner-eval.md
       - The inside analyst (plan): inside-analyst.md
       - Roadmap: roadmap.md
+  - Verifiable research records:
+      - Next phase (start here): vrr-next.md
+      - Architecture: verifiable-research-record.md
+      - Build plan: verifiable-research-record-build-plan.md
+      - What is built: verifiable-research-record-implementation.md
+      - Critical review: vrr-critical-review.md
+      - From query access to answer access: answer-level-release.md
+      - Bestiary additions: bestiary-vrr-additions.md
   - Public demo:
       - Overview: public-demo.md
       - Demo in 5 minutes: demo-5-minutes.md
@@ -90,6 +98,8 @@ nav:
           - D6 Checker default: decisions/D6-checker-default.md
           - D7 Donor totals and band filters: decisions/D7-donor-totals-and-band-filters.md
           - D8 Inside analyst, vetted loop: decisions/D8-inside-analyst-vetted-loop.md
+          - D9 Verifiable research record: decisions/D9-verifiable-research-record.md
+          - D10 Authenticated release domains: decisions/D10-authenticated-release-domains.md
       - Bestiary of caged beasts: bestiary.md
       - Best-practice review: best-practice-review.md
       - ACRO comparison: acro-comparison.md
