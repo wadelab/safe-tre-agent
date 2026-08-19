@@ -32,6 +32,9 @@ dist/
 *.db.head
 *.db.lock
 *.db.head.*.tmp
+# DuckDB spills query scratch to ./.tmp when a cohort is larger than memory
+# (a big synthetic population does this); pure runtime, never source.
+.tmp/
 site/
 
 # `nohup uv run uvicorn ...` is the documented way to start the demo server
