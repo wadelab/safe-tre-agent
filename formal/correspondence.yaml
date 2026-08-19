@@ -127,3 +127,55 @@ selection_ledger.als:
     note: >-
       a within-budget session charges every probe and is never refused, so the
       bound does not over-deny the data-sighted move it is meant to meter.
+
+vrr_record.als:
+  someRecord:
+    kind: guard
+    note: >
+      a complete record exists — published evidence, a pre-commitment label and
+      an accepted certificate — so the five checks above are not vacuously true.
+  someRefusedStage:
+    kind: guard
+    note: >
+      the only interesting case is inhabited: the gateway refused something, the
+      record is published anyway, and a stage took a private branch. Without this
+      every check would be about records with nothing to hide.
+  BenignRecordPublishes:
+    kind: guard
+    note: >
+      a stage that released really does appear as a public node, so the boundary
+      does not achieve safety by publishing nothing.
+  F109PlanBodyPublished:
+    kind: attack
+    hardening: 109
+    twin: tests/test_vrr_provenance.py::test_publishing_the_plan_body_would_name_the_refused_stages
+    note: >
+      one clause dropped — the plan body is published beside the node list — and
+      the set difference names the stages the gateway refused.
+  F110NotAnswerablePublished:
+    kind: attack
+    hardening: 110
+    twin: tests/test_vrr_provenance.py::test_not_answerable_evidence_never_reaches_the_public_evidence_set
+    note: >
+      one clause dropped — published evidence may cite a stage that released
+      nothing — and the evidence list names the refused stages by source.
+  F108ReorderedChainBuysTheLabel:
+    kind: attack
+    hardening: 108
+    twin: tests/test_vrr_provenance.py::test_reordering_the_chain_does_not_buy_a_precommitment_label
+    note: >
+      the authenticity conjunct dropped: the rows say the commitment came first,
+      nothing checked that they are the rows that were written, and
+      TRE_PRECOMMITTED is issued anyway.
+  StaleCertificateAcceptedWithoutTheRule:
+    kind: attack
+    twin: tests/test_vrr_bundle.py::test_verification_fails_after_swapping_the_replay_certificate
+    note: >
+      a certificate accepted over an evidence set it never covered — the stale
+      and swapped certificate, with the verifier's equality rule dropped.
+  BranchVisibleWithoutTheRule:
+    kind: attack
+    twin: tests/test_vrr_provenance.py::test_a_node_exists_because_evidence_needs_explaining_not_because_a_stage_ran
+    note: >
+      the topology allowed to consult a private branch: a stage with no published
+      evidence appears as a node because of a decision taken privately.

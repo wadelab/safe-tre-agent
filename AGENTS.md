@@ -43,7 +43,14 @@ uv run pytest -q
 uv run bandit -q -r safetre safetre_web
 uv run pip-audit
 uv run python redteam/run_redteam.py
+uv run python redteam/run_vrr_redteam.py
 ```
+
+The three red-team corpora answer different questions and none subsumes another:
+`run_redteam.py` shapes queries and watches the gateway, `run_analyst_redteam.py`
+makes the model the adversary, and `run_vrr_redteam.py` takes a release that
+already passed and asks whether its *published record* discloses what the
+gateway withheld.
 
 For docs changes, also run:
 

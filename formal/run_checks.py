@@ -63,6 +63,25 @@ MODELS: dict[str, dict[str, set[str]]] = {
         "checks": {"ChannelBounded"},
         "runs": {"someLedger", "UnboundedWithoutLedger", "BenignSessionAllowed"},
     },
+    "vrr_record.als": {
+        "checks": {
+            "PublicRecordNamesOnlyReleasingStages",
+            "EvidenceHasAuthorisedLineage",
+            "PrecommitmentNeedsOrderAndAuthenticity",
+            "StaleCertificateCannotAuthenticate",
+            "PrivateBranchDoesNotEnterPublicTopology",
+        },
+        "runs": {
+            "someRecord",
+            "someRefusedStage",
+            "BenignRecordPublishes",
+            "F109PlanBodyPublished",
+            "F110NotAnswerablePublished",
+            "F108ReorderedChainBuysTheLabel",
+            "StaleCertificateAcceptedWithoutTheRule",
+            "BranchVisibleWithoutTheRule",
+        },
+    },
     "temporal_session.als": {
         "checks": {
             "P17_SpentMonotone",

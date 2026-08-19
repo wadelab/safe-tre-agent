@@ -131,7 +131,7 @@ The next research phase moves the automated component from formatting one reques
 
 If an automated analyst performs increasingly rich and adaptive work inside the TRE, what must a researcher be able to show a reviewer so that the scientific result is inspectable and reproducible without exposing protected data or trusting the model's prose?
 
-**What would change our mind.** The first implementation slice has produced a complete record and replay certificate for an end-to-end NIGHTPLAY question. At that point promote the stable parts into normative R/P clauses. Revisit earlier if public provenance itself proves disclosive, or if deterministic replay cannot be made stable enough for the registered procedure set.
+**What would change our mind.** Milestones 9-11 of the build plan are reachable: the Lean/Alloy slice over the settled Python types, the connection to the inside analyst, and DP or global accounting. The first implementation slice has produced a complete record and replay certificate for an end-to-end NIGHTPLAY question (done, 2026-08-19), so the open question is now whether to promote the stable parts into normative R/P clauses. Revisit earlier if public provenance itself proves disclosive, or if deterministic replay cannot be made stable enough for the registered procedure set.
 
 [Read the record](decisions/D9-verifiable-research-record.md)
 

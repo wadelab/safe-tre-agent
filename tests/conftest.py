@@ -96,3 +96,55 @@ class RecordingLog:
 @pytest.fixture
 def audit_spy() -> RecordingLog:
     return RecordingLog()
+
+
+# --------------------------------------------------------------------------- #
+# verifiable research records                                                 #
+# --------------------------------------------------------------------------- #
+#
+# Prefixed names, deliberately. A conftest fixture called `service` or `log`
+# would be in scope for every test module in the suite, and several of them
+# define their own; a shared harness must not decide what an unrelated module's
+# `service` means. The helpers these build on live in `tests/vrr_harness.py`.
+
+@pytest.fixture(scope="module")
+def vrr_study():
+    from studies.nightplay import generate as G
+    return G.generate(n_people=2500)
+
+
+@pytest.fixture
+def vrr_service(vrr_study):
+    import pathlib
+
+    from safetre import dataset as dataset_mod
+    from studies.nightplay import verify as V
+
+    packaged = pathlib.Path(dataset_mod.__file__).with_name("demo_dataset.yaml")
+    tables, _ = vrr_study
+    dataset_mod.activate(dataset_mod.load_dataset(V.DEFINITION))
+    try:
+        yield V.build_service(tables)
+    finally:
+        dataset_mod.activate(dataset_mod.load_dataset(packaged))
+
+
+@pytest.fixture
+def vrr_manifests(vrr_study, vrr_service):
+    from tests import vrr_harness
+
+    tables, _ = vrr_study
+    return vrr_harness.build_manifests(tables)
+
+
+@pytest.fixture
+def vrr_log(tmp_path):
+    from safetre.audit import AuditLog
+    return AuditLog(str(tmp_path / "vrr-audit.db"))
+
+
+@pytest.fixture
+def vrr_record(vrr_service, vrr_manifests, vrr_log):
+    from tests import vrr_harness
+    _, _, record = vrr_harness.build_record(vrr_service, vrr_manifests, vrr_log)
+    return record

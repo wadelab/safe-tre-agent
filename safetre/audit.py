@@ -391,6 +391,38 @@ class AuditLog:
                 continue                      # a corrupt row is `verify`'s problem
         return out
 
+    def rows_since(self, cutoff: float) -> list[dict]:
+        """`since`, plus each row's position and MAC — for a caller that needs
+        to REFER to a row rather than replay its contents.
+
+        A verifiable research record cites the audit row behind every released
+        number, and it needs two things `since` does not give: the chain order
+        (a pre-specification label is a statement about which row came first)
+        and a stable identifier for the row itself. The MAC is the natural one
+        — it is already unique per row, and quoting it discloses nothing, since
+        a MAC without the key is opaque to its holder.
+
+        Same caveats as `since`, and they are not weakened by the extra fields:
+        **this method authenticates nothing** (call `verify` for that), and the
+        `request` field of every row is untrusted content.
+        """
+        with self._lock:
+            rows = self.con.execute(
+                "SELECT id,ts,user,request,spec,status,findings,accounting,prev_mac,mac "
+                "FROM records WHERE ts >= ? ORDER BY id", (cutoff,)).fetchall()
+        out = []
+        for rid, ts, user, request, spec, status, findings, accounting, prev_mac, mac in rows:
+            try:
+                out.append({"id": rid, "ts": ts, "user": user, "request": request,
+                            "spec": json.loads(spec), "status": status,
+                            "findings": json.loads(findings),
+                            "accounting": (None if accounting is None
+                                           else json.loads(accounting)),
+                            "prev_mac": prev_mac, "mac": mac})
+            except (ValueError, TypeError):
+                continue                      # a corrupt row is `verify`'s problem
+        return out
+
     def head_is_reachable(self) -> str:
         """The current head, for an operator to record off-box.
 
