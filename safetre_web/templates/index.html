@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Run a safe aggregate query &ndash; Safe outputs gateway</title>
+  <title>Ask the safe-outputs mechanism &ndash; Safe outputs gateway</title>
   <link rel="stylesheet" href="/static/app.css">
 </head>
 <body{% if autorun_prefill %} data-autorun-prefill="1"{% endif %}>
@@ -26,52 +26,57 @@
     <span>This is a research prototype. {{ dataset_description }}</span>
   </div>
 
-  {% if chimp_enabled %}
-  <div class="chimp-banner" role="region" aria-label="Inside analyst">
-    <div class="chimp-banner__head">
-      <span class="chimp-badge" aria-hidden="true">&#129466;</span>
-      <div>
-        <h2 class="heading-s chimp-title">Chimp is running inside this environment</h2>
-        <p class="hint">An inside analyst set by the operator (not by you). Ask a whole
-          research question &mdash; Chimp plans and runs several analyses behind the same
-          gateway and hands back a dossier of vetted results. Its working notes and the raw
-          data never leave the environment.</p>
-      </div>
-    </div>
-    <form id="chimpform" autocomplete="off">
-      <div class="form-group">
-        <label class="label" for="cq">Research question</label>
-        <div id="cq-hint" class="hint">For example, &ldquo;Is late-night phone use linked to gambling?&rdquo;</div>
-        <textarea id="cq" name="q" class="textarea" rows="2" maxlength="500"
-                  aria-describedby="cq-hint" required></textarea>
-      </div>
-      <button id="chimpbtn" class="button button--chimp" type="submit">Ask Chimp</button>
-    </form>
-    <div id="dossier" class="result" role="status" aria-live="polite"></div>
-  </div>
-  {% endif %}
-
   <main id="main-content" class="main-wrapper" role="main">
     <div class="grid-row">
       <div class="col-two-thirds">
-        <h1 class="heading-xl">Run a safe aggregate query</h1>
-        <p class="lead">Describe the analysis you need. An automated planner
-          proposes a query, the safepod validates it against the allowlist,
-          runs it read-only, and checks every output before release.</p>
+        <h1 class="heading-xl">Ask the safe-outputs mechanism</h1>
+        <p class="lead">Put your question to the gateway. It validates every
+          computation against the allowlist, runs it read-only, and checks
+          each output before release &mdash; the protected data never leaves.</p>
 
         <form id="qform" autocomplete="off">
           <div class="form-group">
-            <label class="label" for="q">Research question</label>
+            <label class="label" for="q">Your question</label>
             <div id="q-hint" class="hint">{% if examples %}For example,
               &ldquo;{{ examples[0].query }}&rdquo;{% if examples | length > 2 %}
               or &ldquo;{{ examples[2].query }}&rdquo;{% endif %}.{% else %}
-              Describe the aggregate analysis you need.{% endif %}</div>
-            <textarea id="q" name="q" class="textarea" rows="3" maxlength="500"
-                      aria-describedby="q-hint q-info" required></textarea>
+              Describe the analysis you need.{% endif %}</div>
+            <div class="oracle-row">
+              <span class="oracle-mark" aria-hidden="true">
+                <svg viewBox="0 0 32 32" width="28" height="28" focusable="false">
+                  <circle cx="16" cy="16" r="13" fill="none" stroke="currentColor" stroke-width="1.4" opacity="0.5"/>
+                  <circle cx="16" cy="16" r="8" fill="none" stroke="currentColor" stroke-width="1.4" opacity="0.75"/>
+                  <circle cx="16" cy="16" r="3.2" fill="currentColor"/>
+                </svg>
+              </span>
+              <textarea id="q" name="q" class="textarea" rows="3" maxlength="500"
+                        aria-describedby="q-hint q-info" required></textarea>
+            </div>
             <div id="q-info" class="hint count-message" aria-live="polite">
               You have 500 characters remaining</div>
           </div>
-          <button id="runbtn" class="button" type="submit">Run query</button>
+
+          {% if chimp_enabled %}
+          <fieldset class="mode-toggle" id="mode">
+            <legend class="label">How should it be worked out?</legend>
+            <label class="mode-option">
+              <input type="radio" name="mode" value="outside" checked>
+              <span class="mode-option__title">Parse outside</span>
+              <span class="hint">One aggregate query, planned outside the wall.</span>
+            </label>
+            <label class="mode-option">
+              <input type="radio" name="mode" value="inside">
+              <span class="mode-option__title">Parse inside</span>
+              <span class="hint">A full multi-step analysis, run entirely inside the environment.</span>
+            </label>
+          </fieldset>
+          {% endif %}
+
+          <button id="runbtn" class="button" type="submit">Ask</button>
+          <div id="progress" class="progress" role="status" aria-live="polite" hidden>
+            <div class="progress__bar"><span class="progress__fill"></span></div>
+            <p class="progress__text hint"></p>
+          </div>
         </form>
 
         {% if examples %}

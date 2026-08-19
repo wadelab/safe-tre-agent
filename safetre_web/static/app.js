@@ -98,41 +98,103 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   };
 
-  /* --- submit ------------------------------------------------------------------ */
+  /* --- progress indicator ----------------------------------------------------
+     A whole inside analysis is many model turns behind one blocking POST, so it
+     must show it is alive rather than stalled. An indeterminate bar plus an
+     elapsed-seconds counter: honest about "still working" without faking
+     step-by-step progress we do not stream. */
+
+  const progress = document.getElementById("progress");
+  const progressText = progress ? progress.querySelector(".progress__text") : null;
+  let elapsedTimer = null;
+
+  const startProgress = (message) => {
+    if (!progress) return;
+    const t0 = performance.now();
+    progress.hidden = false;
+    const tick = () => {
+      const s = Math.round((performance.now() - t0) / 1000);
+      progressText.textContent = `${message} (${s}s)`;
+    };
+    tick();
+    elapsedTimer = window.setInterval(tick, 1000);
+  };
+
+  const stopProgress = () => {
+    if (!progress) return;
+    if (elapsedTimer) { window.clearInterval(elapsedTimer); elapsedTimer = null; }
+    progress.hidden = true;
+    progressText.textContent = "";
+  };
+
+  /* --- submit ------------------------------------------------------------------
+     One box, one toggle. "Parse outside" plans a single aggregate query outside
+     the wall and animates the gateway steps; "Parse inside" hands the whole
+     question to the inside mechanism, which runs many analyses through the same
+     gateway and returns a vetted dossier. The toggle is present only when the
+     operator enabled the inside path; with it absent, everything is outside. */
+
+  const currentMode = () => {
+    const picked = document.querySelector("input[name='mode']:checked");
+    return picked ? picked.value : "outside";
+  };
+
+  const runOutside = async (q, t0) => {
+    steps.forEach((s) => setStep(s, "checking"));
+    result.innerHTML = "<p class=\"hint\">Checking the request in the safepod.</p>";
+    const resp = await fetch("/api/query", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Accept": "text/html" },
+      body: JSON.stringify({ q }),
+    });
+    result.innerHTML = await resp.text();
+    const card = result.querySelector(".result-card");
+    if (card) {
+      finishSteps(card);
+      const latency = card.querySelector(".latency");
+      if (latency) {
+        latency.textContent = `Completed in ${Math.round(performance.now() - t0)}ms · `;
+      }
+      decorateTables(card);
+    } else {
+      resetSteps();
+    }
+  };
+
+  const runInside = async (q) => {
+    // The gateway-step strip is per single query; an inside run reports its own
+    // per-step gateway calls in the dossier, so leave the strip idle here.
+    resetSteps();
+    result.innerHTML = "<p class=\"hint\">Working inside the environment&hellip;</p>";
+    const resp = await fetch("/api/chimp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Accept": "text/html" },
+      body: JSON.stringify({ q }),
+    });
+    result.innerHTML = await resp.text();
+    decorateTables(result);
+  };
 
   const run = async () => {
     const q = input.value.trim();
     if (!q) return;
 
+    const mode = currentMode();
     button.disabled = true;
-    steps.forEach((s) => setStep(s, "checking"));
-    result.innerHTML = "<p class=\"hint\">Checking the request in the safepod.</p>";
     const t0 = performance.now();
+    startProgress(mode === "inside"
+      ? "Working inside the environment — several analyses through the gateway"
+      : "Checking in the safepod");
 
     try {
-      const resp = await fetch("/api/query", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Accept": "text/html" },
-        body: JSON.stringify({ q }),
-      });
-      result.innerHTML = await resp.text();
-      const card = result.querySelector(".result-card");
-      if (card) {
-        finishSteps(card);
-        const latency = card.querySelector(".latency");
-        if (latency) {
-          latency.textContent =
-            `Completed in ${Math.round(performance.now() - t0)}ms · `;
-        }
-        decorateTables(card);
-      } else {
-        resetSteps();
-      }
+      if (mode === "inside") await runInside(q);
+      else await runOutside(q, t0);
     } catch (err) {
       resetSteps();
       result.innerHTML =
         "<p class=\"hint\">The request failed. Try again or contact the TRE operator.</p>";
     } finally {
+      stopProgress();
       button.disabled = false;
     }
   };
@@ -184,38 +246,6 @@ document.addEventListener("DOMContentLoaded", () => {
     if (document.body.dataset.autorunPrefill === "1") {
       run();
     }
-  }
-
-  // The inside-analyst ("Chimp") form, present only when the operator enabled
-  // it. The browser is the intercom: a question goes out, a vetted dossier
-  // comes back. A whole analysis takes many model turns, so this can be slow.
-  const chimpForm = document.getElementById("chimpform");
-  if (chimpForm) {
-    const dossier = document.getElementById("dossier");
-    const cq = document.getElementById("cq");
-    const cbtn = document.getElementById("chimpbtn");
-    const askChimp = async () => {
-      const q = cq.value.trim();
-      if (!q) return;
-      cbtn.disabled = true;
-      dossier.innerHTML =
-        "<p class=\"hint\">Chimp is working inside the environment. It may run several " +
-        "analyses through the gateway, so this can take a little while&hellip;</p>";
-      try {
-        const resp = await fetch("/api/chimp", {
-          method: "POST",
-          headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({q}),
-        });
-        dossier.innerHTML = await resp.text();
-      } catch (err) {
-        dossier.innerHTML =
-          "<p class=\"hint\">Could not reach the inside analyst. Please try again.</p>";
-      } finally {
-        cbtn.disabled = false;
-      }
-    };
-    chimpForm.addEventListener("submit", (e) => { e.preventDefault(); askChimp(); });
   }
 
 });

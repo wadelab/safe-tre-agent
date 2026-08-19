@@ -674,3 +674,39 @@ table.agg td.suppressed { color: var(--secondary); }
 .chimp-step-head{display:flex;justify-content:space-between;gap:12px;align-items:baseline;margin:0 0 6px}
 .chimp-step-q{font-weight:600}
 .table-scroll{overflow-x:auto}
+
+/* --- unified ask box: neutral oracle mark --------------------------------- */
+.oracle-row { display: flex; align-items: flex-start; gap: 0.75rem; }
+.oracle-mark { flex: 0 0 auto; color: var(--blue); margin-top: 0.4rem; display: inline-flex; }
+.oracle-row .textarea { flex: 1 1 auto; margin: 0; }
+
+/* --- mode toggle: parse outside / parse inside ---------------------------- */
+.mode-toggle {
+  border: 1px solid var(--border); padding: 0.75rem 1rem 1rem;
+  margin: 0 0 1.25rem; display: grid; gap: 0.5rem;
+}
+.mode-toggle .label { margin-bottom: 0.25rem; }
+.mode-option {
+  display: grid; grid-template-columns: auto 1fr;
+  column-gap: 0.6rem; align-items: baseline; padding: 0.4rem 0.5rem; cursor: pointer;
+}
+.mode-option input { grid-row: span 2; align-self: center; width: 1.15rem; height: 1.15rem; }
+.mode-option__title { grid-column: 2; font-weight: 700; color: var(--ink); }
+.mode-option .hint { grid-column: 2; margin: 0; }
+.mode-option:hover { background: var(--panel); }
+
+/* --- still-working indicator (indeterminate; honest, not faked progress) --- */
+.progress { margin-top: 1rem; }
+.progress__bar {
+  height: 6px; background: var(--panel);
+  border: 1px solid var(--border); overflow: hidden;
+}
+.progress__fill {
+  display: block; height: 100%; width: 33%; background: var(--blue);
+  animation: progress-slide 1.4s ease-in-out infinite;
+}
+.progress__text { margin: 0.4rem 0 0; }
+@keyframes progress-slide { 0% { margin-left: -33%; } 100% { margin-left: 100%; } }
+@media (prefers-reduced-motion: reduce) {
+  .progress__fill { animation: none; width: 100%; opacity: 0.5; }
+}
