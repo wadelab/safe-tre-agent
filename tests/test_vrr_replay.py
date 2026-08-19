@@ -23,6 +23,7 @@ from __future__ import annotations
 import pytest
 
 from safetre.config import load_policy_config
+from safetre import recorder as R
 from safetre.replay import (
     NOT_REPRODUCED, REFUSED, REPRODUCED, SEMANTICS_MISMATCH, ReplayContext,
     certifies, replay,
@@ -170,6 +171,34 @@ def test_replay_fails_if_a_reported_value_was_edited(record, context):
         record.model_copy(update={"evidence": [edited, *record.evidence[1:]]}), context)
     assert certificate.outcome == NOT_REPRODUCED
     assert "does not match what the replay released" in certificate.detail
+
+
+def test_replay_really_recomputes_from_the_context_snapshot(record, context,
+                                                            vrr_study):
+    """The execution leg, isolated.
+
+    Every other failure test here is caught by the semantics comparison before a
+    query runs, which means none of them would notice a `replay` that compared
+    the record's recorded commitments against themselves. So: change the
+    snapshot AND forge the dataset manifest to match it, so the semantics agree
+    and the replay proceeds — then the only thing that can tell the difference
+    is actually re-running the analysis over the tables the context holds.
+    """
+    tables, _ = vrr_study
+    shrunk = dict(tables)
+    shrunk["person_month"] = shrunk["person_month"].iloc[:-500]
+
+    honest = R.dataset_manifest(shrunk, snapshot_id=SNAPSHOT, population=POPULATION,
+                               custodian=CUSTODIAN, key=KEY)
+    manifests = record.trace.manifests.model_copy(update={"dataset": honest})
+    trace = record.trace.model_copy(update={"manifests": manifests})
+    relabelled = record.model_copy(update={"trace": trace})
+
+    certificate = replay(relabelled, ReplayContext(**{**vars(context),
+                                                     "tables": shrunk}))
+    assert certificate.outcome == NOT_REPRODUCED, certificate.detail
+    assert any(not s["reproduced"] for s in certificate.stages), \
+        "the replay did not recompute anything from the context's tables"
 
 
 def test_replay_refuses_a_released_stage_that_is_not_exactly_replayable(record, context):

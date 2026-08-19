@@ -14,10 +14,26 @@ evidence:
   - docs/answer-level-release.md
   - docs/verifiable-research-record.md
   - docs/verifiable-research-record-build-plan.md
+  - docs/verifiable-research-record-implementation.md
   - docs/vrr-critical-review.md
+  - safetre/research_record.py
+  - safetre/recorder.py
+  - safetre/evidence.py
+  - safetre/provenance.py
+  - safetre/replay.py
+  - safetre/attestation.py
+  - safetre/vrr_bundle.py
+  - scripts/run_vrr_demo.py
+  - tests/test_vrr_record.py
+  - tests/test_vrr_provenance.py
+  - tests/test_vrr_replay.py
+  - tests/test_vrr_bundle.py
 revisit_when: >
-  The first implementation slice has produced a complete record and replay
-  certificate for an end-to-end NIGHTPLAY question. At that point promote the
+  Milestones 9-11 of the build plan are reachable: the Lean/Alloy slice over the
+  settled Python types, the connection to the inside analyst, and DP or global
+  accounting. The first implementation slice has produced a complete record and
+  replay certificate for an end-to-end NIGHTPLAY question (done, 2026-08-19), so
+  the open question is now whether to promote the
   stable parts into normative R/P clauses. Revisit earlier if public provenance
   itself proves disclosive, or if deterministic replay cannot be made stable
   enough for the registered procedure set.

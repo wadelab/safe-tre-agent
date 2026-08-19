@@ -32,6 +32,28 @@ critical review is explicit about it: event order inside one TRE execution says
 the recorded execution did not choose its plan after seeing its own protected
 intermediates. It says nothing about what the researcher had seen before the
 session opened.
+
+## The chain has to be authentic before its order means anything
+
+`TRE_PRECOMMITTED` is a claim about the ORDER of audit rows, so it is only as
+good as the chain's tamper-evidence — and tamper-evidence that nobody consults
+is decoration. `AuditLog.since` says so in as many words: any caller that
+rebuilds a control from those rows owes the same gate `SessionStore.rehydrate`
+pays (hardening #59).
+
+Measured, on the first version of this module, which took a list of rows and
+trusted it: run the laundering flow so the chain reads stage-rows-then-plan-row
+(correctly `EXPLORATORY_POSTHOC`), then reorder the rows in the database so the
+plan row comes first. The label became `TRE_PRECOMMITTED` while `verify()`
+returned False to nobody.
+
+So this module takes the LOG, not a list of rows, and verifies it. It cannot be
+handed rows whose provenance it has not checked, because there is no parameter
+for them. An unverified chain does not refuse to build a record — the evidence
+lineage and the replay stand on their own and are worth having — it refuses to
+issue the ONE claim that rests on chain order: every stage comes out
+`EXPLORATORY_POSTHOC`, and the trace records that the chain did not verify so
+the bundle says so out loud rather than quietly reading as exploratory work.
 """
 
 from __future__ import annotations
@@ -163,22 +185,31 @@ def _commit_position(rows: list[dict], plan_hash: str | None) -> int | None:
     return None
 
 
-def _stage_rows(rows: list[dict], sub_questions: list[str]) -> list[int | None]:
+def _stage_rows(rows: list[dict], stages: list[tuple[str, str]]) -> list[int | None]:
     """The chain position each stage wrote to, matched forward in order.
 
+    `stages` is (sub_question, status) per stage, and BOTH have to match. The
+    sub-question alone is not enough, because a request is untrusted content
+    (`AuditLog.append`): an analyst can submit an ordinary query whose text is
+    a plan stage's sub-question verbatim, and a decoy row sitting between the
+    commitment and the real stage would then be the row this record cites.
+    Requiring the outcome to agree too means a decoy has to reproduce the
+    gateway's verdict as well as the text, and a mismatch resolves to None —
+    unwitnessed, and therefore not pre-committed.
+
     Forward-with-a-cursor rather than by content: two stages of one plan may
-    carry the same sub-question, and the executor runs stages in order, so
-    position disambiguates where equality cannot. A stage that wrote nothing —
-    a guard skipped it — gets None, and gets no audit reference.
+    carry the same sub-question and the same outcome, and the executor runs
+    stages in order, so position disambiguates where equality cannot. A stage
+    that wrote nothing — a guard skipped it — gets None, and no audit reference.
     """
     out: list[int | None] = []
     cursor = 0
-    for question in sub_questions:
+    for question, status in stages:
         found = None
         for i in range(cursor, len(rows)):
             if rows[i].get("status") == "plan":
                 continue
-            if rows[i].get("request") == question:
+            if rows[i].get("request") == question and rows[i].get("status") == status:
                 found = i
                 cursor = i + 1
                 break
@@ -253,20 +284,29 @@ def _artifacts(stage_id: str, sr: Any, key: bytes) -> list[ArtifactRef]:
 
 
 def trace_from_plan_run(run: Any, plan: Any, *, record_id: str, manifests: Manifests,
-                        audit_rows: list[dict], key: bytes, user: str = "",
-                        release_domain: str = "unspecified",
-                        audit_head: str = "",
-                        committed: bool = True) -> PrivateExecutionTrace:
+                        audit_log: Any, key: bytes, user: str = "",
+                        release_domain: str = "unspecified") -> PrivateExecutionTrace:
     """One `PlanRun` plus the chain it wrote, as a private execution trace.
 
-    `committed=False` records a run whose plan was never committed to the chain
-    before execution — the post-hoc case and the laundering attack both land
-    there — and every stage of it is classified `EXPLORATORY_POSTHOC`
-    regardless of what the caller believes about its plan.
+    Takes the audit LOG rather than a list of rows, and verifies it: whether a
+    stage was pre-committed is a statement about chain order, and chain order
+    means nothing until the chain is known to be authentic (see the module
+    docstring for the measured attack). There is deliberately no parameter for
+    pre-read rows and no flag to assert the chain is fine.
+
+    Nothing here is told whether the plan was committed. It is read off the
+    chain, so a caller cannot assert it — which is the whole property.
     """
+    if not audit_log.verify():
+        return _unwitnessed_trace(run, plan, record_id=record_id, manifests=manifests,
+                                  key=key, user=user, release_domain=release_domain)
+
+    audit_rows = audit_log.rows_since(0)
     plan_hash = plan.canonical_hash()
-    commit_at = _commit_position(audit_rows, plan_hash if committed else None)
-    positions = _stage_rows(audit_rows, [s.sub_question for s in plan.stages])
+    commit_at = _commit_position(audit_rows, plan_hash)
+    positions = _stage_rows(audit_rows,
+                            [(s.sub_question, r.status)
+                             for s, r in zip(plan.stages, run.stages, strict=True)])
     by_id = {s.id: s for s in plan.stages}
 
     stages: list[StageRecord] = []
@@ -315,10 +355,57 @@ def trace_from_plan_run(run: Any, plan: Any, *, record_id: str, manifests: Manif
         manifests=manifests,
         stages=stages,
         evidence_refs=[],
-        audit_head=audit_head,
+        audit_head=audit_log.head(),
         user=user,
         release_domain=release_domain,
+        audit_chain_verified=True,
     )
+    trace.validate_lineage()
+    return trace
+
+
+def _unwitnessed_trace(run: Any, plan: Any, *, record_id: str, manifests: Manifests,
+                       key: bytes, user: str, release_domain: str
+                       ) -> PrivateExecutionTrace:
+    """The record a chain that does not verify can still support.
+
+    Everything that does not rest on chain order survives: the stages, their
+    public parameters, the commitments to what was released, the evidence
+    lineage and the replay all stand on the artifacts themselves. What does not
+    survive is the pre-specification claim and the audit references — a row
+    whose authenticity is unknown is not a citation — so the plan reference goes
+    too, since a `plan_ref` a reviewer would read as "committed in advance" is
+    the claim being withdrawn.
+    """
+    by_id = {s.id: s for s in plan.stages}
+    stages = [
+        StageRecord(
+            stage_id=sr.id,
+            stage_type=_stage_type(by_id[sr.id].spec),
+            procedure=_procedure(by_id[sr.id].spec),
+            public_parameters=_public_parameters(by_id[sr.id].spec),
+            input_refs=[],
+            output_refs=_artifacts(sr.id, sr, key),
+            replay_class=(ReplayClass.TRE_REPLAYABLE_EXACT
+                          if sr.status in ("released", "redacted")
+                          else ReplayClass.NOT_REPLAYABLE),
+            classification=AnalysisClassification.EXPLORATORY_POSTHOC,
+            audit_ref="",
+            status=StageStatus(sr.status),
+            executed_parameters=dict(sr.spec or {}),
+            findings=list(sr.findings or []),
+            message=sr.message or "",
+            selection_bits=int(sr.selection_bits or 0),
+            excluded_levels=[str(x) for x in (sr.excluded or [])],
+            private_detail={"released_frame_sha256": sr.output_sha256},
+        )
+        for sr in run.stages
+    ]
+    trace = PrivateExecutionTrace(
+        record_id=record_id, question=run.question, plan_ref=None,
+        committed_plan=None, manifests=manifests, stages=stages, evidence_refs=[],
+        audit_head="", user=user, release_domain=release_domain,
+        audit_chain_verified=False)
     trace.validate_lineage()
     return trace
 

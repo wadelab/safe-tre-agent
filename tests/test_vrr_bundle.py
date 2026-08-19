@@ -150,8 +150,7 @@ def test_the_report_is_regenerable_from_the_json_beside_it(signed):
     assert regenerated == _report(path)
 
 
-def test_the_bundle_is_byte_deterministic(vrr_study, vrr_service, vrr_manifests,
-                                          vrr_log, tmp_path, signed):
+def test_the_bundle_is_byte_deterministic(signed, tmp_path):
     record, first, _ = signed
     secret, public = A.generate_keypair(seed=SEED)
     second = str(tmp_path / "again")
@@ -174,17 +173,20 @@ def test_the_bundle_verifies_offline(signed):
 
 def test_no_private_string_is_anywhere_in_the_bundle(signed):
     record, path, _ = signed
-    excluded = [lv for st in record.trace.stages for lv in st.excluded_levels]
-    assert excluded, "the plan's contingency should have excluded a level"
+    private = [lv for st in record.trace.stages for lv in st.excluded_levels]
+    private += [st.message for st in record.trace.stages if st.message]
+    private += [str(f["detail"]) for st in record.trace.stages
+                for f in st.findings if f.get("detail")]
+    private.append(record.trace.user)
+    private = [s for s in private if s]
+    assert any(lv for st in record.trace.stages for lv in st.excluded_levels), \
+        "the plan's contingency should have excluded a level, or this test has " \
+        "nothing private to look for"
     for name in B.FILES:
         with open(os.path.join(path, name), encoding="utf-8") as fh:
             text = fh.read()
-        for level in excluded:
-            assert level not in text, f"{level!r} leaked into {name}"
-        assert record.trace.user not in text
-        for stage in record.trace.stages:
-            for finding in stage.findings:
-                assert str(finding.get("detail", "")) not in text or not finding
+        for secret in private:
+            assert secret not in text, f"{secret!r} leaked into {name}"
 
 
 def test_the_private_trace_is_not_in_the_bundle(signed):
@@ -243,13 +245,14 @@ def test_the_signed_payload_covers_the_parts_it_claims(signed):
     assert all(v is not None for v in payload.values())
 
 
-@pytest.mark.parametrize("what,mutate", [
-    ("a reported value", lambda d: d[0]["values"].update(
-        {k: 99.9 for k in list(d[0]["values"])[:1]})),
-])
-def test_verification_fails_after_changing_a_reported_value(signed, what, mutate):
+def test_verification_fails_after_changing_a_reported_value(signed):
     _, path, public = signed
-    _rewrite(path, "evidence.json", mutate)
+
+    def edit(items):
+        key = sorted(items[0]["values"])[0]
+        items[0]["values"][key] = 99.9
+
+    _rewrite(path, "evidence.json", edit)
     ok, findings = B.verify_bundle_dir(path, public_key=public)
     assert not ok
     assert any("attestation" in f or "digest" in f for f in findings)

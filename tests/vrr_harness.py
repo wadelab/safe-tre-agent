@@ -106,8 +106,7 @@ def build_record(service, manifests, log, spec=ADJUSTED, *, committed=True):
             plan, plan.canonical_hash())
     record_id = R.record_id_for(plan.question, plan.canonical_hash(), manifests)
     trace = R.trace_from_plan_run(run, plan, record_id=record_id, manifests=manifests,
-                                  audit_rows=log.rows_since(0), key=KEY,
-                                  user="vrr-test", audit_head=log.head())
+                                  audit_log=log, key=KEY, user="vrr-test")
     evidence = E.extract_run(trace.stages, released_of(run))
     trace = trace.model_copy(update={"evidence_refs": [e.evidence_id for e in evidence]})
     record = ResearchRecord(record_id=record_id, trace=trace, evidence=evidence,

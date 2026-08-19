@@ -265,6 +265,18 @@ def render_report_from_public(*, record_id: str, provenance: dict[str, Any],
     add("")
     add(_CLASSIFICATION_PROSE.get(provenance['classification'], ""))
     add("")
+    if provenance.get("audit_chain_verified"):
+        add("The audit chain this label was read from recomputes and matches its "
+            "high-water mark. The label is a statement about the order of rows in "
+            "that chain, so it is worth exactly as much as the chain's "
+            "tamper-evidence.")
+    else:
+        add("**The audit chain this record was read from does not verify.** No "
+            "pre-specification claim is made, and no audit row is cited: chain "
+            "order is the entire basis of that claim, and an unauthenticated "
+            "chain cannot support it. The released evidence and the replay result "
+            "below do not depend on the chain and stand on their own.")
+    add("")
 
     add("## 3. Data provenance")
     add("")

@@ -215,15 +215,18 @@ def main(argv: list[str] | None = None) -> int:
     _say(4, "released one adjusted model fit with its vetted design-cell table")
 
     # --- 5 ---------------------------------------------------------------- #
-    rows = log.rows_since(0)
     record_id = R.record_id_for(plan.question, plan.canonical_hash(), manifests)
     trace = R.trace_from_plan_run(
-        run, plan, record_id=record_id, manifests=manifests, audit_rows=rows,
-        key=key, user="vrr-demo", release_domain="nightplay/demo",
-        audit_head=log.head())
+        run, plan, record_id=record_id, manifests=manifests, audit_log=log,
+        key=key, user="vrr-demo", release_domain="nightplay/demo")
     private_only = sum(1 for st in trace.stages for a in st.output_refs if not a.is_public())
     _say(5, f"private execution trace: {len(trace.stages)} stage(s), "
             f"{private_only} private artifact commitment(s) that no reader will see")
+    if not trace.audit_chain_verified:
+        print("FAIL: the audit chain does not verify, so no pre-specification "
+              "claim can be made", file=sys.stderr)
+        return 1
+    _say(5, "audit chain verifies; the pre-specification label rests on its order")
 
     # --- 6 ---------------------------------------------------------------- #
     evidence = E.extract_run(trace.stages, _released(run))
@@ -285,8 +288,8 @@ def main(argv: list[str] | None = None) -> int:
                                           user="vrr-demo", cfg=cfg)
     posthoc_trace = R.trace_from_plan_run(
         posthoc_run, posthoc_plan, record_id=record_id + "-posthoc",
-        manifests=manifests, audit_rows=log.rows_since(0), key=key,
-        user="vrr-demo", release_domain="nightplay/demo", audit_head=log.head())
+        manifests=manifests, audit_log=log, key=key, user="vrr-demo",
+        release_domain="nightplay/demo")
     posthoc_evidence = E.extract_run(posthoc_trace.stages, _released(posthoc_run),
                                      include_not_answerable=True)
     posthoc_provenance = compile_public_provenance(posthoc_trace, posthoc_evidence)

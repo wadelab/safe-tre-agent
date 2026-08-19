@@ -81,6 +81,31 @@ first and commit the plan afterwards — the laundering attack — and it comes 
 fail-closed reading: a stage the audit history cannot see is not one it can
 vouch for.
 
+**The chain has to be authentic first, and the first version of this did not
+check.** `TRE_PRECOMMITTED` is a claim about the order of audit rows, and
+`recorder.trace_from_plan_run` originally took a list of rows and trusted it.
+Measured: run the laundering flow so the chain honestly reads
+`EXPLORATORY_POSTHOC`, then reorder the rows in the database so the plan
+commitment comes first, and the label became `TRE_PRECOMMITTED` while
+`verify()` returned `False` to nobody. That is hardening #59's shape one layer
+up, and `AuditLog.since` states the rule it broke: any caller that rebuilds a
+control from those rows owes the same gate `SessionStore.rehydrate` pays.
+
+The fix removes the footgun rather than documenting it. The recorder takes the
+audit *log*, not a list of rows, and verifies it — there is no parameter for
+pre-read rows and no flag to assert the chain is fine. An unverified chain does
+not refuse to build a record, because the evidence lineage and the replay stand
+on the released artifacts and are worth having; it refuses the one claim that
+rests on chain order. Every stage comes out `EXPLORATORY_POSTHOC`, the audit
+citations and the plan reference are dropped, and `audit_chain_verified: false`
+is published in the provenance and stated in the report, so the record says what
+happened instead of quietly reading as exploratory work.
+
+One related weakness went with it. A request is untrusted content, so an analyst
+can submit an ordinary query whose text is a plan stage's sub-question verbatim;
+correlating stages to rows on text alone would cite the decoy. Both the text and
+the gateway's verdict now have to agree, and a mismatch resolves to unwitnessed.
+
 The label is deliberately not called pre-registration.
 [D9](decisions/D9-verifiable-research-record.md) and the
 [critical review](vrr-critical-review.md) are explicit that event order inside
@@ -123,11 +148,11 @@ which backend signed it.
 | public provenance survives private-trace perturbation | met — six perturbations, plus all six at once |
 | every public number has evidence lineage | met — coefficients, design cells and the fit block |
 | plan-order classification is mechanically correct | met, including the laundering attack |
-| deterministic replay reproduces the result | met — `COMPUTATION_REPRODUCED` |
+| deterministic replay reproduces the result | met — `COMPUTATION_REPRODUCED`, and one test isolates the execution leg by perturbing the snapshot with a matching manifest, so a replay that only compared recorded commitments to themselves would fail it |
 | changing dataset/code/policy/result fails verification | met — six failure tests |
 | the bundle is externally signature-verifiable with a test key | met |
 | an exploratory follow-up is labelled as such | met — demo step 9 |
-| red-team cases for trace topology, weak commitments, plan laundering and stale certificates fail | met |
+| red-team cases for trace topology, weak commitments, plan laundering and stale certificates fail | met — plus chain reordering and a decoy audit row |
 | the existing query/disclosure red team passes unchanged | met — 29/29, unchanged |
 
 ## What is deliberately not done

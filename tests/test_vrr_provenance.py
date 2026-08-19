@@ -38,7 +38,8 @@ from safetre.research_record import (
     AnalysisClassification, Disclosure, RecordError, StageStatus, StageType,
 )
 from tests.vrr_harness import (
-    KEY, POSTHOC, build_record, released_of, run_plan,
+    ADJUSTED, KEY, POSTHOC, SwallowsThePlanCommit, build_record, released_of,
+    run_plan,
 )
 
 
@@ -229,10 +230,12 @@ def test_executing_first_and_committing_afterwards_is_post_hoc(vrr_service, vrr_
 
 
 def test_an_uncommitted_analysis_is_post_hoc(vrr_service, vrr_manifests, vrr_log):
-    plan, run = run_plan(vrr_service, POSTHOC, vrr_log)
+    # nothing asserts the label: the stages run, the chain records them, no
+    # commitment precedes them, and the classification falls out of the order
+    plan, run = run_plan(vrr_service, POSTHOC, SwallowsThePlanCommit(vrr_log))
     trace = R.trace_from_plan_run(
         run, plan, record_id="vrr-posthoc", manifests=vrr_manifests,
-        audit_rows=vrr_log.rows_since(0), key=KEY, committed=False)
+        audit_log=vrr_log, key=KEY)
     assert trace.plan_ref is None and trace.committed_plan is None
     evidence = E.extract_run(trace.stages, released_of(run))
     assert compile_public_provenance(trace, evidence).classification \
@@ -263,3 +266,87 @@ def test_a_stage_with_no_evidence_cannot_drag_the_label_down(pair):
         trace, classification=AnalysisClassification.EXPLORATORY_POSTHOC)
     assert compile_public_provenance(posthoc_only, evidence).classification \
         is AnalysisClassification.TRE_PRECOMMITTED
+
+
+# --------------------------------------------------------------------------- #
+# the chain has to be authentic before its order means anything               #
+# --------------------------------------------------------------------------- #
+#
+# Found by re-auditing this module's own first version, which took a list of
+# audit rows and trusted it. `AuditLog.since` states the rule these break —
+# "any future caller that rebuilds a control from these rows owes the same
+# gate" `SessionStore.rehydrate` pays (hardening #59) — and a record that
+# derives a PUBLISHED scientific claim from row order is exactly such a caller.
+
+def test_reordering_the_chain_does_not_buy_a_precommitment_label(
+        vrr_service, vrr_manifests, vrr_log):
+    """The measured attack. Run the laundering flow so the chain honestly reads
+    `EXPLORATORY_POSTHOC`, then reorder the rows in the database so the plan
+    commitment comes first. Before the fix this returned `TRE_PRECOMMITTED`
+    while `verify()` returned False to nobody."""
+    _, _, honest = build_record(vrr_service, vrr_manifests, vrr_log, committed=False)
+    assert honest.trace.stages[0].classification is \
+        AnalysisClassification.EXPLORATORY_POSTHOC
+    assert vrr_log.verify()
+
+    plan_row = next(r for r in vrr_log.rows_since(0) if r["status"] == "plan")
+    vrr_log.con.execute("UPDATE records SET id = -1 WHERE id = ?", (plan_row["id"],))
+    vrr_log.con.commit()
+    assert not vrr_log.verify(), "the tamper should break the chain"
+
+    _, _, after = build_record(vrr_service, vrr_manifests, vrr_log, committed=False)
+    assert all(st.classification is AnalysisClassification.EXPLORATORY_POSTHOC
+               for st in after.trace.stages)
+    assert not after.trace.audit_chain_verified
+
+
+def test_an_unverified_chain_keeps_the_evidence_and_drops_the_claim(
+        vrr_service, vrr_manifests, vrr_log):
+    """Fail closed on the claim, not on the record. The evidence lineage and the
+    replay rest on the released artifacts, not on chain order, so they survive;
+    the pre-specification label and the audit citations do not."""
+    _, run, _ = build_record(vrr_service, vrr_manifests, vrr_log)
+    vrr_log.con.execute("UPDATE records SET user = 'someone-else' WHERE id = 1")
+    vrr_log.con.commit()
+    assert not vrr_log.verify()
+
+    plan, rerun = run_plan(vrr_service, ADJUSTED, None)
+    trace = R.trace_from_plan_run(rerun, plan, record_id="vrr-unverified",
+                                  manifests=vrr_manifests, audit_log=vrr_log, key=KEY)
+    assert trace.audit_chain_verified is False
+    assert trace.plan_ref is None and trace.committed_plan is None
+    assert all(st.audit_ref == "" for st in trace.stages), \
+        "a row whose authenticity is unknown is not a citation"
+    # but the released artifacts are still all there, with their commitments
+    assert trace.stages[0].public_artifacts()
+    evidence = E.extract_run(trace.stages, released_of(rerun))
+    assert evidence and compile_public_provenance(trace, evidence).nodes
+
+
+def test_a_record_cannot_claim_precommitment_on_an_unverified_chain(vrr_record):
+    forged = vrr_record.trace.model_copy(update={"audit_chain_verified": False})
+    with pytest.raises(RecordError, match="does not verify"):
+        forged.validate_lineage()
+
+
+def test_the_public_provenance_publishes_whether_the_chain_verified(pair):
+    trace, evidence = pair
+    provenance = compile_public_provenance(trace, evidence)
+    assert provenance.audit_chain_verified is True
+    # and it is part of the canonical bytes, so it cannot be dropped quietly
+    assert "audit_chain_verified" in provenance.canonical()
+
+
+def test_a_decoy_row_impersonating_a_stage_is_not_cited(vrr_service, vrr_manifests,
+                                                        vrr_log):
+    """A request is untrusted content, so an analyst can submit an ordinary
+    query whose text is a plan stage's sub-question verbatim. Matching on the
+    text alone would cite the decoy; the outcome has to agree too."""
+    sub_question = ADJUSTED["stages"][0]["sub_question"]
+    decoy = vrr_log.append(user="attacker", request=sub_question,
+                           spec={"dataset": "panel"}, status="denied",
+                           findings=[], output_shape=None)
+    _, _, record = build_record(vrr_service, vrr_manifests, vrr_log)
+    assert record.trace.stages[0].audit_ref != decoy
+    assert record.trace.stages[0].classification is \
+        AnalysisClassification.TRE_PRECOMMITTED

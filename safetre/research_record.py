@@ -577,6 +577,7 @@ class PrivateExecutionTrace(_VrrModel):
         "audit_head": Disclosure.OPAQUE_ATTESTATION,
         "user": Disclosure.PRIVATE_ONLY,
         "release_domain": Disclosure.PUBLIC,
+        "audit_chain_verified": Disclosure.PUBLIC,
     }
 
     record_id: str
@@ -602,6 +603,13 @@ class PrivateExecutionTrace(_VrrModel):
     """The custodian-defined domain this release was accounted against (D10). A
     placeholder in v0: cross-user safety keys off this, and recording the name
     now means the field exists before the machinery that enforces it."""
+    audit_chain_verified: bool = False
+    """Whether the audit chain this trace was read from recomputed and matched
+    its high-water mark. PUBLIC, and defaults to False, because the
+    pre-specification label is a statement about chain ORDER and a reviewer
+    cannot weigh it without knowing whether the chain was authentic. A record
+    built from an unverified chain keeps its evidence and its replay and loses
+    this claim (`recorder._unwitnessed_trace`)."""
 
     def stage(self, stage_id: str) -> StageRecord | None:
         for st in self.stages:
@@ -633,6 +641,13 @@ class PrivateExecutionTrace(_VrrModel):
                 for st in self.stages):
             raise RecordError(
                 "a stage claims TRE_PRECOMMITTED but the trace commits no plan")
+        if not self.audit_chain_verified and any(
+                st.classification is AnalysisClassification.TRE_PRECOMMITTED
+                for st in self.stages):
+            raise RecordError(
+                "a stage claims TRE_PRECOMMITTED but the audit chain this trace "
+                "was read from does not verify; chain ORDER is the whole basis "
+                "of that label, so an unauthenticated chain cannot support it")
 
 
 class PublicProvenance(_VrrModel):
@@ -650,6 +665,7 @@ class PublicProvenance(_VrrModel):
         "evidence_ids": Disclosure.PUBLIC,
         "release_domain": Disclosure.PUBLIC,
         "policy_version": Disclosure.PUBLIC,
+        "audit_chain_verified": Disclosure.PUBLIC,
     }
 
     record_id: str
@@ -664,6 +680,10 @@ class PublicProvenance(_VrrModel):
     evidence_ids: list[str] = []
     release_domain: str = "unspecified"
     policy_version: str = ""
+    audit_chain_verified: bool = False
+    """Published, because `classification` is unreadable without it: a reviewer
+    weighing `TRE_PRECOMMITTED` is weighing a fact about audit-row order, and
+    needs to know the chain those rows came from was authentic."""
 
     def canonical(self) -> str:
         """Byte-equality of this string is the noninterference property: two

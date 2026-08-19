@@ -127,6 +127,7 @@ def compile_public_provenance(trace: PrivateExecutionTrace,
         evidence_ids=sorted(e.evidence_id for e in cited),
         release_domain=trace.release_domain,
         policy_version=trace.manifests.disclosure.policy_digest,
+        audit_chain_verified=trace.audit_chain_verified,
     )
 
 
