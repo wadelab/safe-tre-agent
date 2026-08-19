@@ -176,9 +176,13 @@ accountant) arrives, this token jar is exactly what it becomes.
 And you can now talk to the assistant **through a web page**. The operator of
 the environment decides whether an assistant lives inside at all &mdash; you
 can&rsquo;t switch it on from the browser any more than you can move the
-library&rsquo;s walls. When it is switched on, the page is just an intercom:
-you type a research question, it travels inside, the assistant does its work
-behind the same librarian, and only the checked answer comes back out. We ran
+library&rsquo;s walls. When it is switched on, your one question box gets a
+little switch &mdash; **ask outside** or **ask inside**. &ldquo;Outside&rdquo;
+asks the plain gateway one tidy question; &ldquo;inside&rdquo; hands your whole
+question to the assistant, which does its work behind the same librarian, and
+only the checked answer comes back out. (For now that switch is yours to flip on
+the page; in the end the operator will set it, the same way they already decide
+whether an inside assistant is there at all.) We ran
 it for real: asked "is late-night phone use linked to gambling?", the
 assistant ran nine analyses inside, got four of them refused by the librarian
 (and said so, plainly), and handed back a proper answer built from the five it

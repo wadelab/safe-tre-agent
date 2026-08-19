@@ -133,6 +133,7 @@ All configuration is via environment variables.
 | `SAFETRE_CHANNEL_ALLOW_NETS` | `127.0.0.1/32,::1/128` | comma-separated CIDRs allowed to reach the app |
 | `SAFETRE_AUDIT_DB` | `audit.db` | path to the hash-chained audit log |
 | `SAFETRE_AUDIT_KEY` | generated dev key | HMAC key; provide from an off-box secret in production |
+| `SAFETRE_DATA_DIR` | `data` | directory holding one base-table CSV per table for the active dataset; point it elsewhere to serve a larger synthetic population from its own folder without a same-named, differently-shaped table clobbering `data/` |
 | `SAFETRE_ANALYST` | `off` | `off` (single-query gateway) or `chimp` (an inside analyst runs in this environment, at `/api/chimp`). An OPERATOR decision fixed at deploy time; the browser cannot change it. Any other value is a startup error |
 | `SAFETRE_CHIMP_MAX_STEPS` | `6` | when `SAFETRE_ANALYST=chimp`, the most analysis steps one research question may take |
 | `PORT` | `8800` | used by `scripts/run_web.sh` |
@@ -145,11 +146,16 @@ endpoint. See `.env.example` and [Model runtime](model-runtime.md).
 ## The inside analyst ("Chimp")
 
 Whether an inside analyst runs in a given environment is an operator decision,
-set once here with `SAFETRE_ANALYST=chimp`, and it is deliberately not
-reachable from the browser: a page visitor can no more turn Chimp on than move
-the gateway. With it on, the home page shows a research-question box that posts
-to `/api/chimp`; Chimp plans and runs the whole analysis server-side behind
-the same safe-outputs gateway and returns only a dossier of vetted releases
+set once here with `SAFETRE_ANALYST=chimp`, and whether an inside analyst
+*exists* is deliberately not reachable from the browser: a page visitor can no
+more turn Chimp on than move the gateway. With it on, the single ask box gains a
+small **parse outside / parse inside** toggle — `outside` routes a question to
+the single-query gateway (`/api/query`), `inside` hands the whole question to
+Chimp (`/api/chimp`), which plans and runs the whole analysis server-side behind
+the same safe-outputs gateway and returns only a dossier of vetted releases.
+The per-question toggle is a demo stopgap: the operator still gates whether an
+inside analyst exists at all, and the routing choice is intended to become an
+operator/server setting rather than a browser control
 and the narrative written from them &mdash; its working notes and the raw data
 never cross to the browser. The endpoint runs a whole multi-step analysis and
 is exempt from the per-query response-time deadline, a proof-of-concept

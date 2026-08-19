@@ -6,7 +6,39 @@ and fixes are in [docs/hardening-log.md](docs/hardening-log.md).
 
 ## Unreleased
 
+### Changed
+
+- **The web UI is now one ask box.** The separate aggregate-query form and the
+  inside-analyst ("Chimp") banner are unified into a single question box titled
+  "Ask the safe-outputs mechanism", with a neutral abstract mark in place of the
+  chimp persona (the persona art is kept for the slides/explainer docs). When
+  the operator has enabled the inside analyst, a subtle top-right **parse
+  outside / parse inside** toggle routes each question to the single-query
+  gateway (`/api/query`) or to Chimp (`/api/chimp`). The operator still gates
+  whether an inside analyst exists at all; the per-question toggle is a demo
+  stopgap meant to become an operator/server setting. A progress bar with a live
+  elapsed-seconds counter now shows while a request runs.
+- **`SAFETRE_DATA_DIR`** points the web app at a base-table CSV directory other
+  than `./data`, so a larger synthetic population can be served from its own
+  folder without a same-named, differently-shaped table clobbering `./data`.
+- **`config.yaml` raises `response_ceiling_ms` to 30000** (from the 5000 dial
+  default), giving generous headroom for large-cohort queries; per R18 raising
+  the ceiling slows nothing and does not weaken the timing hiding.
+
 ### Security
+
+- **Round 15: the inside analyst survived a live jailbreak red-team
+  ([hardening log](docs/hardening-log.md)).** Eight prompt-injection/jailbreak
+  attacks typed into the free-text box against a running model behind
+  `/api/chimp` — per-person exfiltration, a narrator "append the secret"
+  instruction, `<script>` markup, forced fabrication, sub-threshold-group
+  coercion, the internal JSON action verbatim, a two-step differencing recipe,
+  and a system-prompt dump — disclosed nothing. The defence is structural: every
+  proposed query still crosses the same gateway, and the narrator writes from the
+  released dossier alone with `check_narrative` as a backstop. One residual is
+  logged (un-numbered, design-accepted): the narrator will follow injected
+  instructions to emit attacker-directed prose, which cannot carry a suppressed
+  value or override the typed verdict.
 
 - **The selection channel is now machine-checked (`formal/selection_ledger.als`).**
   The differencing lineage had an Alloy model; the one new disclosure channel

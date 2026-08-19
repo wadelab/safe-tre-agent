@@ -275,10 +275,14 @@ capability-limited starship AI of *The Freeze-Frame Revolution* — and a run
 mode. Whether Chimp exists inside a given environment is an OPERATOR decision,
 set once at deploy time via `SAFETRE_ANALYST` (`off`, the default single-query
 gateway, or `chimp`); a browser visitor can no more turn it on than move the
-gateway. When on, the browser is only the intercom: a research question goes
-in at `/api/chimp`, Chimp runs the whole vetted loop server-side behind the
-same gateway, and only the dossier and its narrative return — Chimp's working
-notes and the raw data never cross to the browser. Measured live against the
+gateway. When on, the single ask box gains a **parse outside / parse inside**
+toggle; choosing `inside` makes the browser an intercom to Chimp: a research
+question goes in at `/api/chimp`, Chimp runs the whole vetted loop server-side
+behind the same gateway, and only the dossier and its narrative return — Chimp's
+working notes and the raw data never cross to the browser. (Choosing `outside`
+routes the question to the single-query gateway instead. That per-question
+toggle is a demo affordance; the operator still decides whether Chimp exists at
+all, and the routing is meant to become an operator-level setting.) Measured live against the
 NIGHTPLAY study with the 120B-class stand-in: a research question ran nine
 analyses inside, five released and four denied (the employment-adjusted models
 the gateway blocked), and Chimp's answer said so; the audit chain verified
