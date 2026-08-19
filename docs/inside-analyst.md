@@ -282,7 +282,11 @@ behind the same gateway, and only the dossier and its narrative return — Chimp
 working notes and the raw data never cross to the browser. (Choosing `outside`
 routes the question to the single-query gateway instead. That per-question
 toggle is a demo affordance; the operator still decides whether Chimp exists at
-all, and the routing is meant to become an operator-level setting.) Measured live against the
+all, and the routing is meant to become an operator-level setting.)
+
+![The ask box with the inside analyst enabled: a subtle "parse outside / parse inside" toggle sits top-right](figures/demo-inside-toggle.png)
+
+Measured live against the
 NIGHTPLAY study with the 120B-class stand-in: a research question ran nine
 analyses inside, five released and four denied (the employment-adjusted models
 the gateway blocked), and Chimp's answer said so; the audit chain verified

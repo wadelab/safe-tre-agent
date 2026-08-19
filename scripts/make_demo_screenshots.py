@@ -49,6 +49,15 @@ SHOTS = {
     "demo-mobile": ("/", MOBILE),
 }
 
+# One extra capture with the inside analyst enabled, so the subtle top-right
+# parse-outside/parse-inside toggle is in frame. The home page is enough — the
+# toggle is what this shot documents; an actual dossier needs a live model and
+# so is deliberately not part of this deterministic, mock-planner set.
+PORT_INSIDE = 8802
+SHOTS_INSIDE = {
+    "demo-inside-toggle": ("/", DESKTOP),
+}
+
 
 def find_chrome() -> str:
     for path in ("/usr/bin/google-chrome", "/usr/bin/chromium", "/usr/bin/chromium-browser"):
@@ -57,15 +66,28 @@ def find_chrome() -> str:
     sys.exit("no chrome/chromium found; install one to capture screenshots")
 
 
-def wait_healthy(timeout_s: float = 30.0) -> None:
+def wait_healthy(base: str, timeout_s: float = 30.0) -> None:
     deadline = time.monotonic() + timeout_s
     while time.monotonic() < deadline:
         try:
-            urllib.request.urlopen(BASE + "/healthz", timeout=2)
+            urllib.request.urlopen(base + "/healthz", timeout=2)
             return
         except Exception:
             time.sleep(0.5)
-    sys.exit(f"throwaway server did not become healthy at {BASE}")
+    sys.exit(f"throwaway server did not become healthy at {base}")
+
+
+def capture(chrome: str, base: str, shots: dict) -> None:
+    os.makedirs(FIGURES, exist_ok=True)
+    for name, (path, window) in shots.items():
+        out = os.path.join(FIGURES, name + ".png")
+        subprocess.run(
+            [chrome, "--headless=new", "--disable-gpu", "--hide-scrollbars",
+             f"--window-size={window}", "--run-all-compositor-stages-before-draw",
+             "--virtual-time-budget=9000",
+             f"--screenshot={out}", base + path],
+            check=True, stderr=subprocess.DEVNULL)
+        print(f"captured {name} -> {os.path.relpath(out, ROOT)}")
 
 
 def main() -> None:
@@ -83,6 +105,8 @@ def main() -> None:
         # (hardening #50) and this process is thrown away afterwards.
         env["SAFETRE_ALLOW_PREFILL_AUTORUN"] = "1"
         env["SAFETRE_AUDIT_DB"] = os.path.join(tmp, "audit.db")
+
+        # Phase 1: the public gateway tour (no inside analyst).
         server = subprocess.Popen(
             ["uv", "run", "uvicorn", "safetre_web.app:app",
              "--host", "127.0.0.1", "--port", str(PORT)],
@@ -90,20 +114,28 @@ def main() -> None:
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         )
         try:
-            wait_healthy()
-            os.makedirs(FIGURES, exist_ok=True)
-            for name, (path, window) in SHOTS.items():
-                out = os.path.join(FIGURES, name + ".png")
-                subprocess.run(
-                    [chrome, "--headless=new", "--disable-gpu", "--hide-scrollbars",
-                     f"--window-size={window}", "--run-all-compositor-stages-before-draw",
-                     "--virtual-time-budget=9000",
-                     f"--screenshot={out}", BASE + path],
-                    check=True, stderr=subprocess.DEVNULL)
-                print(f"captured {name} -> {os.path.relpath(out, ROOT)}")
+            wait_healthy(BASE)
+            capture(chrome, BASE, SHOTS)
         finally:
             server.terminate()
             server.wait(timeout=10)
+
+        # Phase 2: one shot with the inside analyst enabled, so the toggle shows.
+        env_inside = dict(env, SAFETRE_ANALYST="chimp",
+                          SAFETRE_AUDIT_DB=os.path.join(tmp, "audit-inside.db"))
+        base_inside = f"http://127.0.0.1:{PORT_INSIDE}"
+        server_inside = subprocess.Popen(
+            ["uv", "run", "uvicorn", "safetre_web.app:app",
+             "--host", "127.0.0.1", "--port", str(PORT_INSIDE)],
+            cwd=ROOT, env=env_inside,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+        try:
+            wait_healthy(base_inside)
+            capture(chrome, base_inside, SHOTS_INSIDE)
+        finally:
+            server_inside.terminate()
+            server_inside.wait(timeout=10)
 
 
 if __name__ == "__main__":
