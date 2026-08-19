@@ -17,7 +17,10 @@ disclosure:
   # is deliberately generous — padding runs to the next quantum, never to the
   # ceiling, so raising it slows nothing.
   response_quantum_ms: 50
-  response_ceiling_ms: 5000
+  response_ceiling_ms: 30000  # generous headroom for large-cohort queries (e.g. a
+                              # leave-one-out correlation over a big population); raising
+                              # it refuses fewer legitimate slow queries and, per R18,
+                              # slows nothing and does not weaken the timing hiding
 session:
   query_budget: 20         # max released aggregates per session before review
   differencing_delta: 10   # flag same-measure totals / cohorts differing by < this
