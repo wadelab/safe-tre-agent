@@ -41,6 +41,7 @@ exclude_docs: |
   bestiary_artifact/
   framework_artifact/
   chimp_artifact/
+  figures/bestiary/prompts/
   figures/framework/prompts/
 
 nav:
