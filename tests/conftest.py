@@ -21,12 +21,27 @@ import os
 import tempfile
 
 os.environ.setdefault("SAFETRE_ALLOW_TEST_CLIENT", "1")
-os.environ.setdefault("SAFETRE_AUDIT_DB",
-                      os.path.join(tempfile.mkdtemp(prefix="safetre-audit-"), "audit.db"))
+
+# The audit database is one-process-per-DB by construction: the HMAC chain's
+# head-read and insert must be atomic, and the session budget and differencing
+# lineage live in that process's memory (safetre/audit.py). Under `pytest-xdist`
+# each worker is its own process but inherits the controller's environment, so a
+# single `SAFETRE_AUDIT_DB` would be opened by every worker at once — the very
+# collision the engine refuses (AuditDatabaseInUse). Give each xdist worker its
+# own database. Pair this with `--dist loadfile` (see pyproject `addopts`) so a
+# test file's process-global state — the web app's import-time audit log, the
+# active dataset — never straddles two workers.
+_worker = os.environ.get("PYTEST_XDIST_WORKER")
+if _worker:
+    os.environ["SAFETRE_AUDIT_DB"] = os.path.join(
+        tempfile.mkdtemp(prefix=f"safetre-audit-{_worker}-"), "audit.db")
+else:
+    os.environ.setdefault("SAFETRE_AUDIT_DB",
+                          os.path.join(tempfile.mkdtemp(prefix="safetre-audit-"), "audit.db"))
 os.environ.setdefault("SAFETRE_AUDIT_KEY", "test-session-key")
 
 
-import pytest
+import pytest  # noqa: E402 - after the pre-import environment pin above
 
 # How big the default suite actually is, measured from this session's own
 # collection. `docs/elif.md` quotes the number, so something has to check it.

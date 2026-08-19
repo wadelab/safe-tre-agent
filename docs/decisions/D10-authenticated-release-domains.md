@@ -8,7 +8,7 @@ question: >
   by a public-query-style differential-privacy budget, or by the fact that the
   service is a restricted research environment with strongly identified,
   authorised users and custodian-defined release domains?
-clauses: []
+clauses: [R6, R10, P11, P13, P24]
 evidence:
   - docs/specification.md
   - docs/answer-level-release.md

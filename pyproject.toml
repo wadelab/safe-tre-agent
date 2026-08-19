@@ -65,6 +65,7 @@ dev = [
     "pip-audit>=2.7",   # dependency vulnerability audit
     "statsmodels>=0.14",  # oracle for the stdlib-only IRLS in safetre.stats (dev-only: the runtime install surface is unchanged)
     "ruff>=0.6",
+    "pytest-xdist>=3.8.0",
 ]
 docs = [
     "mkdocs-material>=9.5",   # optional: `uv run --group docs mkdocs serve`
@@ -100,7 +101,12 @@ pythonpath = ["."]
 testpaths = ["tests"]
 # `slow` marks the exhaustive full-skeleton passes (run with: pytest -m slow)
 markers = ["slow: exhaustive whole-skeleton runs, excluded from the default run"]
-addopts = "-m 'not slow'"
+# `--dist loadfile` keeps every test in a file on one xdist worker, so a file's
+# process-global state (the web app's import-time audit log, the active dataset,
+# the one-process-per-DB audit chain) never straddles workers. It is inert
+# without `-n`, so a plain serial run is unaffected; a parallel run is just
+# `pytest -n auto` (~4x faster here) and stays result-identical to serial.
+addopts = "-m 'not slow' --dist loadfile"
 
 [tool.ruff]
 line-length = 100

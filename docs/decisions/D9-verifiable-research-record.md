@@ -8,7 +8,7 @@ question: >
   the TRE, what must a researcher be able to show a reviewer so that the
   scientific result is inspectable and reproducible without exposing protected
   data or trusting the model's prose?
-clauses: []
+clauses: [R6, R8, R11, R19, R20]
 evidence:
   - docs/inside-analyst.md
   - docs/answer-level-release.md
