@@ -35,7 +35,8 @@ from safetre.provenance import (
     analysis_classification, audit_public_leakage, compile_public_provenance,
 )
 from safetre.research_record import (
-    AnalysisClassification, Disclosure, RecordError, StageStatus, StageType,
+    AnalysisClassification, Disclosure, RecordError, ResearchRecord, StageStatus,
+    StageType,
 )
 from tests.vrr_harness import (
     ADJUSTED, KEY, POSTHOC, SwallowsThePlanCommit, build_record, released_of,
@@ -350,3 +351,71 @@ def test_a_decoy_row_impersonating_a_stage_is_not_cited(vrr_service, vrr_manifes
     assert record.trace.stages[0].audit_ref != decoy
     assert record.trace.stages[0].classification is \
         AnalysisClassification.TRE_PRECOMMITTED
+
+
+# --------------------------------------------------------------------------- #
+# executable twins for formal/vrr_record.als                                  #
+# --------------------------------------------------------------------------- #
+#
+# Each attack run in the Alloy model drops one clause of the compiler and shows
+# a disclosure. `formal/correspondence.yaml` requires a twin for every one of
+# them: if the model exhibits an attack and nothing executes it, the model is the
+# only thing claiming the attack is real.
+
+def test_publishing_the_plan_body_would_name_the_refused_stages(pair):
+    """Twin of `vrr_record.als::F109PlanBodyPublished`.
+
+    Runs the disclosure rather than asserting its absence: reconstruct what the
+    bundle used to publish, take the set difference the way a reader would, and
+    show it names the stage the gateway refused. Then show the shipped provenance
+    has no field to do it with.
+    """
+    trace, evidence = pair
+    head = trace.stages[0]
+    refused = head.model_copy(update={"stage_id": "refused_stage",
+                                      "status": StageStatus.DENIED,
+                                      "output_refs": []})
+    with_refusal = trace.model_copy(update={"stages": [head, refused]})
+    provenance = compile_public_provenance(with_refusal, evidence)
+
+    declared = {st.stage_id for st in with_refusal.stages}
+    published = {n["stage_id"] for n in provenance.nodes}
+    assert declared - published == {"refused_stage"}, \
+        "the set difference is the gateway's verdict, so the plan body and the " \
+        "node list must not both be published"
+
+    # and the shipped public provenance carries no plan body to difference against
+    assert "committed_plan" not in provenance.model_dump()
+    assert "committed_plan" not in provenance.canonical()
+    assert "refused_stage" not in provenance.canonical()
+
+
+def test_not_answerable_evidence_never_reaches_the_public_evidence_set(pair):
+    """Twin of `vrr_record.als::F110NotAnswerablePublished`.
+
+    An evidence item citing a stage that released nothing names that stage. The
+    kind is legitimate internally — it is how a record says "nothing came back
+    for this sub-question" — so the control is that the PUBLIC set excludes it,
+    not that it cannot exist.
+    """
+    trace, evidence = pair
+    head = trace.stages[0]
+    refused = head.model_copy(update={"stage_id": "refused_stage",
+                                      "status": StageStatus.DENIED,
+                                      "output_refs": []})
+    with_refusal = trace.model_copy(update={"stages": [head, refused]})
+    unanswerable = E.not_answerable(refused)
+    assert unanswerable.source_stage == "refused_stage", \
+        "the item names the refused stage, which is why it cannot be published"
+
+    provenance = compile_public_provenance(with_refusal, [*evidence, unanswerable])
+    record = ResearchRecord(record_id=with_refusal.record_id, trace=with_refusal,
+                            evidence=[*evidence, unanswerable],
+                            provenance=provenance)
+    record.validate_record()
+
+    public = {e.evidence_id for e in record.public_evidence()}
+    assert unanswerable.evidence_id not in public
+    assert unanswerable.evidence_id in {e.evidence_id for e in record.evidence}, \
+        "the item still exists in the private record; only publication is refused"
+    assert "refused_stage" not in provenance.canonical()

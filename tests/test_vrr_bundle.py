@@ -93,9 +93,26 @@ def test_the_bundle_holds_the_files_it_claims(signed):
 
 def test_a_reviewer_can_see_what_was_asked(signed):
     record, path, _ = signed
-    assert record.trace.question in _report(path)
+    report = _report(path)
+    assert record.trace.question in report
+    # The plan's HASH, not its body (#109). This test used to assert that every
+    # declared sub-question appeared in the report, which is the leak: a reader
+    # holding the plan takes its stage set minus the published nodes and has the
+    # gateway's verdict on each stage of the cohort.
+    assert record.trace.plan_ref in report
     for stage in record.trace.committed_plan["stages"]:
-        assert stage["sub_question"] in _report(path)
+        assert stage["sub_question"] not in report
+        assert stage["id"] not in report or stage["id"] in {
+            n["stage_id"] for n in _load(path, "provenance.json")["nodes"]}
+
+
+def test_the_report_says_why_the_plan_body_is_absent(signed):
+    """An omission a reader cannot distinguish from an oversight will be read as
+    an oversight, and the next person will helpfully "fix" it."""
+    _, path, _ = signed
+    report = _report(path)
+    assert "The plan's **hash** is published; its body is not" in report
+    assert "finding #109" in report
 
 
 def test_a_reviewer_can_see_what_public_method_ran(signed):
@@ -383,17 +400,18 @@ def test_a_level_the_committed_plan_itself_names_can_be_waived(signed):
     "that one was ours", and it is explicit so nothing is waived silently.
     """
     record, path, _ = signed
-    level = record.trace.stages[0].excluded_levels[0]
-    plan = dict(record.trace.committed_plan)
-    stages = [dict(s) for s in plan["stages"]]
-    stages[0] = dict(stages[0], spec=dict(
-        stages[0]["spec"],
-        filters=[{"column": "employment", "op": "!=", "value": level}]))
-    trace = record.trace.model_copy(update={"committed_plan": dict(plan, stages=stages)})
-    forged = record.model_copy(update={
-        "trace": trace,
-        "provenance": record.provenance.model_copy(
-            update={"committed_plan": dict(plan, stages=stages)})})
+    stage = record.trace.stages[0]
+    level = stage.excluded_levels[0]
+    # A committed filter naming the level: request-decided, so it is legitimately
+    # among the stage's PUBLIC parameters, and the sweep is right to stop on it
+    # because the same string is also what the contingency excluded.
+    declared = stage.model_copy(update={"public_parameters": dict(
+        stage.public_parameters,
+        filters=[{"column": "employment", "op": "!=", "value": level}])})
+    trace = record.trace.model_copy(update={"stages": [declared]})
+    forged = record.model_copy(update={"trace": trace})
+    forged = forged.model_copy(update={
+        "provenance": compile_public_provenance(trace, forged.evidence)})
 
     with pytest.raises(RecordError, match="private trace content"):
         B.export_bundle(forged, path + "-declared")

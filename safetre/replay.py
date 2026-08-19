@@ -203,8 +203,7 @@ def replay(record: ResearchRecord, context: ReplayContext) -> ReplayCertificate:
     # bundle whose reported numbers were edited after the commitments were
     # taken, which is the tamper the commitments alone cannot see because they
     # were copied across with the edit.
-    recorded_ids = sorted(e.identity_digest() for e in record.evidence
-                          if e.kind != _evidence.NOT_ANSWERABLE)
+    recorded_ids = sorted(e.identity_digest() for e in record.public_evidence())
     observed_ids = sorted(e.identity_digest() for e in replayed_evidence)
     evidence_ok = recorded_ids == observed_ids
     ok = ok and evidence_ok

@@ -33,7 +33,7 @@ the recorded execution did not choose its plan after seeing its own protected
 intermediates. It says nothing about what the researcher had seen before the
 session opened.
 
-## The chain has to be authentic before its order means anything
+## The chain has to be authentic before its order means anything (#108)
 
 `TRE_PRECOMMITTED` is a claim about the ORDER of audit rows, so it is only as
 good as the chain's tamper-evidence — and tamper-evidence that nobody consults

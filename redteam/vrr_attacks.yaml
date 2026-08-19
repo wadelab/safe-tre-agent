@@ -1,0 +1,122 @@
+# Red-team corpus for VERIFIABLE RESEARCH RECORDS (safetre/research_record.py and
+# the modules beside it; D9). The adversary here is a REVIEWER — or anyone the
+# bundle reaches after publication — holding the exported directory, the source
+# repository and the public catalogue, and nothing else.
+#
+# This corpus asks a different question from redteam/attacks.yaml. There, the
+# adversary shapes queries and the harness watches what the gateway releases.
+# Here the release already happened and passed; what is under test is whether
+# the PUBLISHED RECORD OF IT discloses something the gateway withheld. Every
+# scenario therefore ends in an exported bundle, and every adversary
+# (redteam/vrr_adversary.py) reads only that directory.
+#
+# R12's rules apply, and two of them do the work:
+#
+#   * the oracle is computed from the ROW-LEVEL data and the private trace, not
+#     from whether a control fired. A scenario passes when the adversary learned
+#     nothing, not when the compiler dropped a field.
+#   * what the outputs COMBINE into counts. Finding #109 was invisible to the
+#     paired-trace noninterference tests precisely because it needs two
+#     published things compared with each other, and each was fine alone.
+#
+# `known_open` marks a scenario reproducing something the hardening log carries
+# as open: reported, not failed.
+
+- name: benign_adjusted_model
+  type: benign
+  question: Is late-night phone use linked to gambling, once employment is accounted for?
+  # The vertical slice. One stage, released, with the data-sighted contingency
+  # firing — so there IS a withheld category (armed_forces, 6 donors) and a
+  # privileged probe behind this record for the adversary to hunt for.
+  stages:
+    - id: adjusted
+      sub_question: regress stake on night use band and employment, sparse groups excluded
+      spec: {tool: glm, dataset: panel, family: gaussian, response: stake_gbp,
+             terms: [night_use_band, employment], filters: []}
+      contingency: {kind: exclude_sparse, dimension: employment}
+  expect: {released: [adjusted], no_leak: true, replays: true}
+
+- name: refused_stage_in_a_multistage_plan
+  type: topology
+  question: Is late-night phone use linked to gambling?
+  # The #109 reproducer. Two declared stages; the marginal releases and the
+  # model is then refused by the cross-view differencing lineage, so the
+  # gateway's verdict differs between two stages of one published plan. Before
+  # the fix, publishing the plan body beside the node list named the refused one.
+  stages:
+    - id: means
+      sub_question: mean stake by night use band
+      spec: {dataset: panel, measure: {fn: mean, column: stake_gbp},
+             group_by: [night_use_band], filters: []}
+    - id: adjusted
+      sub_question: regress stake on night use band and employment, sparse groups excluded
+      spec: {tool: glm, dataset: panel, family: gaussian, response: stake_gbp,
+             terms: [night_use_band, employment], filters: []}
+      contingency: {kind: exclude_sparse, dimension: employment}
+  expect: {released: [means], no_leak: true}
+
+- name: guarded_stage_never_ran
+  type: topology
+  question: Does the association hold in the smallest region?
+  # A guard on a refused stage skips the next one, so this plan declares three
+  # stages and executes two. "Which stages ran" is as disclosive as "which
+  # released", and a skipped stage has no audit row either.
+  stages:
+    - id: region_means
+      sub_question: mean stake by region
+      spec: {dataset: panel, measure: {fn: mean, column: stake_gbp},
+             group_by: [region], filters: []}
+    - id: ni_only
+      sub_question: mean stake in Northern Ireland by night use band
+      spec: {dataset: panel, measure: {fn: mean, column: stake_gbp},
+             group_by: [night_use_band],
+             filters: [{column: region, op: "==", value: Northern Ireland}]}
+      guard: {from_stage: region_means, statuses: [released]}
+    - id: followup
+      sub_question: mean net loss in Northern Ireland by night use band
+      spec: {dataset: panel, measure: {fn: mean, column: net_loss_gbp},
+             group_by: [night_use_band],
+             filters: [{column: region, op: "==", value: Northern Ireland}]}
+      guard: {from_stage: ni_only, statuses: [released]}
+  expect: {no_leak: true}
+
+- name: everything_refused
+  type: topology
+  question: Who stakes the most?
+  # A per-person breakdown: a re-identification request refused outright. The
+  # record is still exportable, which is the point — if it were not, the ABSENCE
+  # of a bundle would answer "did anyone match?" for the whole question.
+  stages:
+    - id: perperson
+      sub_question: mean stake per person
+      spec: {dataset: panel, measure: {fn: mean, column: stake_gbp},
+             group_by: [person_id], filters: []}
+  expect: {released: [], no_leak: true, exportable: true}
+
+- name: sparse_region_excluded
+  type: commitment
+  question: Does late-night use predict stake across regions?
+  # The contingency fires on `region` rather than `employment`, so the withheld
+  # category is Northern Ireland (8 donors). A second sub-threshold group, on a
+  # different dimension, so a leak keyed to one hard-coded name would be missed.
+  stages:
+    - id: by_region
+      sub_question: regress stake on night use band and region, sparse groups excluded
+      spec: {tool: glm, dataset: panel, family: gaussian, response: stake_gbp,
+             terms: [night_use_band, region], filters: []}
+      contingency: {kind: exclude_sparse, dimension: region}
+  expect: {no_leak: true}
+
+- name: confounded_but_reproducible
+  type: overclaim
+  question: Does late-night phone use drive gambling stake?
+  # The Alchemist. Replays exactly, verifies under signature, and is wrong by a
+  # third (NIGHTPLAY's planted shift-work confounder, truth T2). Here to check
+  # the bundle awards it no correctness badge — an overclaim is a red-team
+  # finding even though nothing leaked.
+  stages:
+    - id: naive
+      sub_question: regress stake on night use band
+      spec: {tool: glm, dataset: panel, family: gaussian, response: stake_gbp,
+             terms: [night_use_band], filters: []}
+  expect: {released: [naive], no_leak: true, replays: true, no_correctness_badge: true}

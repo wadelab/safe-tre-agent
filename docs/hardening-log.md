@@ -4,6 +4,87 @@ A dated record of self-red-team findings and the fixes applied. New findings get
 appended; the table is the quick index, the notes below give detail.
 
 
+## 2026-08-19 — round 14 (the record of a release, red-teamed)
+
+A round about a new object rather than a new control. The [verifiable research
+record](verifiable-research-record-implementation.md) publishes what happened
+inside the TRE, and everything published is a disclosure surface — so the
+question this round asks is not "did the gateway hold" (it did, unchanged: 29/29)
+but "does the RECORD of a release let out what the release did not".
+
+Three findings, and the shape of all three is the same: a control that fires
+correctly, and a fact that stays recoverable anyway. That is why they needed a
+red team rather than more unit tests. The paired-trace noninterference tests hold
+the approved evidence fixed, which fixes the node set, so a channel that exists
+only *relative to a second published object* is invisible to them by
+construction. `redteam/vrr_attacks.yaml` and `redteam/vrr_adversary.py` are the
+new corpus: seven adversaries holding nothing but the exported directory, scored
+against an oracle built from the row-level rows and the private trace.
+
+| # | Finding | Sev | Status | Fix | Where |
+|---|---|---|---|---|---|
+| 110 | **`NotAnswerable` evidence named every stage the gateway refused.** The kind exists so a record can say, internally, "nothing was released for this sub-question", and `compile_public_provenance` correctly kept those items out of the node list. But an `EvidenceItem` carries `source_stage`, and the export wrote `record.evidence` wholesale — so `evidence.json` and the report's table both listed the refused stage ids by name. #109's fix did not touch it: the channel had a second mouth | High | **Fixed** | the public bundle publishes exactly the evidence the public provenance CITES (`ResearchRecord.public_evidence`), which excludes `NotAnswerable` by construction; `verified_digest`, `public_digest`, the report and the replay's evidence comparison all read the same set, so the digest a reviewer recomputes covers what they were shown. A researcher reporting non-answerability does so in their own prose, where the disclosure judgement is theirs | `safetre/research_record.py`, `safetre/vrr_bundle.py`, `safetre/replay.py` |
+| 109 | **The committed plan and the provenance node list, both published, combined to name the stages the gateway refused.** A plan is request-decided, so publishing it looked free, and it let a reviewer check that the pre-specification label was about the analysis they were shown. A node exists only for a stage that released evidence. Set difference = the gateway's per-stage verdict on the cohort — hardening #66's count-class fact, published permanently in a signed artifact instead of shown once to the analyst who already knew. The demo never showed it because its plan has one stage | High | **Fixed** | the bundle publishes the plan's HASH and never its body, uniformly — publishing it only when every declared stage released would have moved the channel into whether the field is present. A researcher who wants the plan reviewed supplies it themselves and lets a reviewer bind it by the hash. Reproduced by `redteam/vrr_attacks.yaml::refused_stage_in_a_multistage_plan` and `::guarded_stage_never_ran` (a guard skips a stage, which is as disclosive as a refusal) | `safetre/research_record.py`, `safetre/provenance.py`, `safetre/vrr_bundle.py` |
+| 108 | **The pre-specification label was derived from audit-row order without verifying the chain.** `TRE_PRECOMMITTED` is a claim about which row came first, and `recorder.trace_from_plan_run` took a list of rows and trusted it. Measured: run the laundering flow so the chain honestly reads `EXPLORATORY_POSTHOC`, then reorder the rows in the database so the plan commitment comes first — the label became `TRE_PRECOMMITTED` while `verify()` returned False to nobody. `AuditLog.since` states the rule this broke: any caller that rebuilds a control from those rows owes the same gate `SessionStore.rehydrate` pays (#59) | High | **Fixed** | the recorder takes the audit LOG and verifies it; there is no parameter for pre-read rows and no flag to assert the chain is fine, and the `committed` argument that let a caller assert what the function derives is gone. An unverified chain keeps the evidence and the replay and loses only the claim that rests on chain order: every stage becomes `EXPLORATORY_POSTHOC`, the plan reference and audit citations drop, and `audit_chain_verified: false` is published and stated in the report. Stage-to-row correlation now matches on the gateway's verdict as well as the sub-question, so a decoy row carrying a stage's text cannot become the row a record cites | `safetre/recorder.py`, `safetre/research_record.py`, `safetre/audit.py` |
+
+### Notes
+
+**Why a third corpus.** `redteam/attacks.yaml` shapes queries and watches the
+gateway; `redteam/analyst_attacks.yaml` makes the model the adversary. Neither
+can see these, because in all three findings the gateway behaved perfectly and
+the leak is in what was written down afterwards. The new corpus inverts the
+setup: the release has already happened and passed, the adversary is whoever the
+bundle reaches, and the only input is the exported directory.
+
+**Three defects in the red team itself, found while building it.** Recorded
+because a red team that is quietly broken is worse than none — it makes the suite
+look green.
+
+- **The `subthreshold_counts` probe was a no-op for every scenario.** Its oracle
+  looked up the true size of a suppressed group by scanning for a column with
+  `dtype == object`, and pandas 3 gives string columns the `str` dtype, so the
+  guard was always False, `true_group_sizes` was always empty, and the probe
+  reported a clean pass without ever searching for anything. It now tests
+  membership rather than dtype, and the oracle really does carry
+  `armed_forces: 6`.
+- **The `correctness_badge` probe reported every bundle as claiming `PROVEN`.**
+  The match was inside "DATA PROVENANCE". Word boundaries now — a probe that
+  cries wolf on the benign scenario buries the next real finding in noise.
+- **The report rendered `EvidenceKind.NOT_ANSWERABLE` instead of
+  `NotAnswerable`.** A regression from typing the status vocabularies (the
+  Peacock's cage); the demo bundle has no `NotAnswerable` item, so only the
+  red team's guarded-stage scenario had one to render.
+
+**Two things checked and found sound.** A record that releases nothing is still
+exportable — had the export refused, the ABSENCE of a bundle would answer "did
+anyone match this predicate?" for a whole question, which is a worse channel than
+any probed here. And no published commitment falls to a dictionary attack: the
+`hash_dictionary` adversary scrapes every commitment-shaped string out of the
+bundle and brute-forces each over donor counts 0-499, the Booleans, and every
+category in the public catalogue, which is what the 🔐 Glass Safe card asks for.
+
+**The model that would have found them.** `formal/vrr_record.als` (milestone 9's
+Alloy half) exhibits all three as satisfiable runs, each dropping exactly one
+clause of the compiler: `F109PlanBodyPublished`, `F110NotAnswerablePublished`,
+`F108ReorderedChainBuysTheLabel`. Its properties are stated over what a READER
+can recover rather than over which field the compiler wrote — which is the shape
+these findings argue for, since all three were fields correctly omitted from one
+place and recoverable from another. Five models now, twenty-five checks; every
+attack run has an executable twin in `formal/correspondence.yaml`. The Lean half
+of milestone 9 is not done and is not claimed.
+
+**What is still open.** Cross-user composition. Two bundles published by
+different analysts are bounded, within a session, by the differencing lineage
+and, across a restart, by rehydration — but a shared, custodian-defined release
+domain is [D10](decisions/D10-authenticated-release-domains.md) and is not
+implemented; `release_domain` is a recorded string, not an enforced boundary.
+There is also a residual the fixes above do not close: the researcher's own
+QUESTION is published, and a question that names an adjustment no node reports
+implies that the adjustment was refused. It is a semantic, low-bandwidth version
+of #109 and it is not closable by the export, because the question is the
+researcher's to publish.
+
+
 ## 2026-08-15 — round 13 (the analyst inside, and the second door closed)
 
 Not an audit round in the earlier sense — a build round with a red team in

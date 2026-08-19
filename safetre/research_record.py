@@ -634,7 +634,7 @@ class PrivateExecutionTrace(_VrrModel):
         "record_id": Disclosure.PUBLIC,
         "question": Disclosure.PUBLIC,
         "plan_ref": Disclosure.PUBLIC,
-        "committed_plan": Disclosure.PUBLIC,
+        "committed_plan": Disclosure.PRIVATE_ONLY,
         "manifests": Disclosure.PUBLIC,
         "stages": Disclosure.PRIVATE_ONLY,
         "evidence_refs": Disclosure.PUBLIC,
@@ -650,9 +650,22 @@ class PrivateExecutionTrace(_VrrModel):
     """The committed plan's hash, or None when nothing was committed — which is
     itself the proof that every stage here is post-hoc."""
     committed_plan: dict[str, Any] | None = None
-    """The plan itself. Request-decided and therefore publishable: a reviewer
-    who can read the plan can check that the pre-specification label is about
-    the analysis they were shown."""
+    """The plan itself. `PRIVATE_ONLY`, and not because of what it contains —
+    a plan is request-decided, and the researcher who wrote it holds it.
+
+    It is private because of what it COMBINES with (finding #109). The public
+    provenance carries a node per stage that released evidence and no node for
+    the rest, so a reader holding the plan takes the set difference and has the
+    gateway's per-stage verdict on the cohort — "these two were refused" —
+    which is the count-class fact `service.WITHHELD_MESSAGE` exists to refuse,
+    published permanently in a signed artifact rather than shown once to the
+    analyst who already knew.
+
+    `plan_ref` stays public: a hash is a commitment, and a researcher who wants
+    a reviewer to see the plan can supply it themselves and let the reviewer
+    bind it to this record by that hash. The disclosure judgement is then
+    theirs to make, which is where it belongs, rather than the custodian's
+    export making it silently on their behalf."""
     manifests: Manifests
     stages: list[StageRecord] = []
     """PRIVATE_ONLY as a LIST, even though a stage classifies its own fields.
@@ -722,7 +735,6 @@ class PublicProvenance(_VrrModel):
         "record_id": Disclosure.PUBLIC,
         "question": Disclosure.PUBLIC,
         "plan_ref": Disclosure.PUBLIC,
-        "committed_plan": Disclosure.PUBLIC,
         "classification": Disclosure.PUBLIC,
         "replay_semantics": Disclosure.PUBLIC,
         "nodes": Disclosure.PUBLIC,
@@ -735,7 +747,10 @@ class PublicProvenance(_VrrModel):
     record_id: str
     question: str
     plan_ref: str | None = None
-    committed_plan: dict[str, Any] | None = None
+    """The committed plan's hash, and deliberately NOT its body (#109). Present
+    or absent uniformly — a bundle that published the plan when every declared
+    stage released and withheld it otherwise would have moved the channel into
+    whether the field is there."""
     classification: AnalysisClassification
     replay_semantics: dict[str, str]
     nodes: list[dict[str, Any]] = []
@@ -840,6 +855,27 @@ class ResearchRecord(_VrrModel):
             if ref not in by_id:
                 raise RecordError(f"trace references missing evidence {ref!r}")
 
+    def public_evidence(self) -> list[EvidenceItem]:
+        """The evidence the public provenance cites, and only that (#110).
+
+        `NotAnswerable` is the item this excludes, and excluding it is the whole
+        point. It is a legitimate internal claim — "the gateway released nothing
+        for this sub-question" — and `compile_public_provenance` already keeps it
+        out of the node list. But the item carries `source_stage`, so publishing
+        the evidence list wholesale named every refused stage in `evidence.json`
+        and in the report's table: the same disclosure as #109, by a second
+        route, and this one survived that fix.
+
+        A researcher who wants to report that a question could not be answered
+        says so in their own prose, where the disclosure judgement is theirs.
+        The export does not make it for them.
+        """
+        if self.provenance is None:
+            return [e for e in self.evidence
+                    if e.kind is not EvidenceKind.NOT_ANSWERABLE]
+        cited = set(self.provenance.evidence_ids)
+        return [e for e in self.evidence if e.evidence_id in cited]
+
     def verified_digest(self) -> str:
         """What a replay certificate binds to: the public provenance and the
         evidence, and NOT the certificate itself.
@@ -857,7 +893,7 @@ class ResearchRecord(_VrrModel):
             "provenance": None if self.provenance is None
             else json.loads(self.provenance.canonical()),
             "evidence": [json.loads(canonical_json(e.model_dump(mode="json")))
-                         for e in self.evidence],
+                         for e in self.public_evidence()],
         }
         return sha256_hex(canonical_json(payload))
 
@@ -871,7 +907,7 @@ class ResearchRecord(_VrrModel):
             "provenance": None if self.provenance is None
             else json.loads(self.provenance.canonical()),
             "evidence": [json.loads(canonical_json(e.model_dump(mode="json")))
-                         for e in self.evidence],
+                         for e in self.public_evidence()],
             "certificate": None if self.certificate is None
             else json.loads(canonical_json(self.certificate.model_dump(mode="json"))),
         }

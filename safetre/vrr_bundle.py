@@ -14,7 +14,7 @@ regenerate, no model anywhere near it.*
 Every file is produced from `PublicProvenance`, from `EvidenceItem`s, from the
 `ReplayCertificate`, or from a manifest's `public_fields()`. The private trace
 has no path into this module: `export_bundle` reads `record.provenance`,
-`record.evidence` and `record.certificate`, and touches `record.trace` only for
+`record.public_evidence()` and `record.certificate`, and touches `record.trace` only for
 the manifests, through `public_fields()`, which drops `PRIVATE_ONLY` whole. A
 belt-and-braces sweep (`_scan_for_private`) then re-reads what was written and
 fails the export if a private string from the trace appears in it — the check
@@ -178,7 +178,7 @@ def export_bundle(record: ResearchRecord, out_dir: str,
         "provenance.json": _json_bytes(json.loads(record.provenance.canonical())),
         "evidence.json": _json_bytes(
             [json.loads(canonical_json(e.model_dump(mode="json")))
-             for e in record.evidence]),
+             for e in record.public_evidence()]),
         "replay_certificate.json": _json_bytes(
             None if record.certificate is None
             else json.loads(canonical_json(record.certificate.model_dump(mode="json")))),
@@ -232,7 +232,7 @@ def _evidence_table(rows: list[dict[str, Any]]) -> list[str]:
         item = EvidenceItem(**row)
         about = ", ".join(f"{k}={v}" for k, v in sorted(item.keys.items())) or "—"
         lines.append(
-            f"| `{item.evidence_id}` | {item.kind} | {about} | "
+            f"| `{item.evidence_id}` | {item.kind.value} | {about} | "
             f"{_evidence.render(item)} | `{item.source_stage}` | "
             f"{item.manuscript_ref or '—'} |")
     return lines
@@ -309,7 +309,7 @@ def render_report(record: ResearchRecord) -> str:
         record_id=record.record_id,
         provenance=json.loads(record.provenance.canonical()),   # type: ignore[union-attr]
         evidence=[json.loads(canonical_json(e.model_dump(mode="json")))
-                  for e in record.evidence],
+                  for e in record.public_evidence()],
         certificate=(None if record.certificate is None else
                      json.loads(canonical_json(record.certificate.model_dump(mode="json")))),
         software=manifests.software.public_fields(),
@@ -351,9 +351,15 @@ def render_report_from_public(*, record_id: str, provenance: dict[str, Any],
     if provenance.get("plan_ref"):
         add(f"Committed analysis plan: `{provenance['plan_ref']}`")
         add("")
-        plan = provenance.get("committed_plan") or {}
-        for stage in plan.get("stages", []):
-            add(f"- `{stage['id']}` — {stage['sub_question']}")
+        add("The plan's **hash** is published; its body is not, and this is not "
+            "an omission a fuller bundle would fix. Section 5 shows a node for "
+            "each stage that released evidence and none for the rest, so a "
+            "reader holding the plan could take the set difference and read off "
+            "the gateway's verdict on each stage of the cohort — which is the "
+            "one thing this record must not disclose (finding #109). A "
+            "researcher who wants the plan reviewed can supply it and let a "
+            "reviewer bind it to this record by the hash above; that judgement "
+            "is theirs, not the export's.")
         add("")
 
     add("## 2. Analysis status")
@@ -559,10 +565,14 @@ def verify_bundle_dir(path: str, public_key: bytes | None = None) -> tuple[bool,
             findings.append(
                 "the replay certificate binds to a different record than the "
                 "one in this bundle (stale or swapped certificate)")
-        if certificate.get("outcome") != _replay.REPRODUCED:
+        if evidence and certificate.get("outcome") != _replay.REPRODUCED.value:
             findings.append(
                 f"the replay outcome is {certificate.get('outcome')!r}, not "
-                f"{_replay.REPRODUCED}")
+                f"{_replay.REPRODUCED.value}")
+        elif not evidence and certificate.get("outcome") == _replay.REPRODUCED.value:
+            findings.append(
+                "the replay claims to have reproduced a record that publishes "
+                "no evidence")
     else:
         findings.append("no replay certificate in this bundle")
 

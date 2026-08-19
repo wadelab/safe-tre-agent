@@ -197,10 +197,47 @@ next to the green ticks rather than in a caveat further down.
 | red-team cases for trace topology, weak commitments, plan laundering and stale certificates fail | met — plus chain reordering and a decoy audit row |
 | the existing query/disclosure red team passes unchanged | met — 29/29, unchanged |
 
+## Milestone 9: the Alloy slice
+
+`formal/vrr_record.als`, wired into `formal/run_checks.py` and
+`formal/correspondence.yaml`, five solver-checked properties and eight runs.
+Five Alloy models now, twenty-five checks.
+
+The other models are about a release; this one is about the RECORD of one. Its
+value is not the five checks — a compiler entails its own properties — but the
+five satisfiable runs, each dropping exactly one clause of the compiler and
+exhibiting a real disclosure:
+
+| Run | One clause dropped | What a reader recovers |
+|---|---|---|
+| `F109PlanBodyPublished` | the plan body is published beside the node list | the refused stages, by set difference |
+| `F110NotAnswerablePublished` | published evidence may cite a stage that released nothing | the refused stages, by `source_stage` |
+| `F108ReorderedChainBuysTheLabel` | the chain's authenticity is not checked | `TRE_PRECOMMITTED` on a reordered chain |
+| `StaleCertificateAcceptedWithoutTheRule` | the verifier's equality rule | a certificate over evidence it never covered |
+| `BranchVisibleWithoutTheRule` | the topology is a function of evidence alone | a node that exists because of a private decision |
+
+Every one has an executable twin in `formal/correspondence.yaml`, which the
+correspondence test enforces in both directions: an attack run with no twin is
+a model claiming an attack nobody has reproduced, and a renamed twin breaks the
+build rather than orphaning the instance. Three guard runs keep the checks
+non-vacuous, and one of them — `someRefusedStage` — is the one that matters:
+without it every check would be about records with nothing to hide.
+
+The properties are stated over what a READER can recover, not over which field
+the compiler wrote. That framing is the lesson of round 14: #109 and #110 were
+both fields correctly omitted from one place and recoverable from another, and a
+model asserting "the compiler dropped it" would have held throughout.
+
+**Milestone 9's Lean half is not done.** The four Lean targets need the Lean
+toolchain, which this work could not run; writing proofs that have never been
+compiled and calling the milestone finished would be the overclaim the 🦚 Peacock
+card is about. The Alloy half stands on its own — it is solver-checked in CI —
+and the Lean targets remain open.
+
 ## What is deliberately not done
 
-Milestones 9, 10 and 11: the Lean and Alloy slice, the connection to the inside
-analyst, and DP/global accounting. The
+Milestone 9's Lean targets, and milestones 10 and 11: the connection to the
+inside analyst, and DP/global accounting. The
 [`AccessContext`/`ReleaseDomain`](decisions/D10-authenticated-release-domains.md)
 implementation is also outstanding — `release_domain` is recorded as a string
 placeholder so the field exists before the machinery that enforces it.
