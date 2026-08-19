@@ -29,6 +29,13 @@
   <main id="main-content" class="main-wrapper" role="main">
     <div class="grid-row">
       <div class="col-two-thirds">
+        {% if chimp_enabled %}
+        <div class="mode-switch" id="mode" role="radiogroup" aria-label="How the question is parsed">
+          <span class="mode-switch__label">parse</span>
+          <label class="mode-switch__opt"><input type="radio" name="mode" value="outside" checked><span>outside</span></label>
+          <label class="mode-switch__opt"><input type="radio" name="mode" value="inside"><span>inside</span></label>
+        </div>
+        {% endif %}
         <h1 class="heading-xl">Ask the safe-outputs mechanism</h1>
         <p class="lead">Put your question to the gateway. It validates every
           computation against the allowlist, runs it read-only, and checks
@@ -55,22 +62,6 @@
             <div id="q-info" class="hint count-message" aria-live="polite">
               You have 500 characters remaining</div>
           </div>
-
-          {% if chimp_enabled %}
-          <fieldset class="mode-toggle" id="mode">
-            <legend class="label">How should it be worked out?</legend>
-            <label class="mode-option">
-              <input type="radio" name="mode" value="outside" checked>
-              <span class="mode-option__title">Parse outside</span>
-              <span class="hint">One aggregate query, planned outside the wall.</span>
-            </label>
-            <label class="mode-option">
-              <input type="radio" name="mode" value="inside">
-              <span class="mode-option__title">Parse inside</span>
-              <span class="hint">A full multi-step analysis, run entirely inside the environment.</span>
-            </label>
-          </fieldset>
-          {% endif %}
 
           <button id="runbtn" class="button" type="submit">Ask</button>
           <div id="progress" class="progress" role="status" aria-live="polite" hidden>

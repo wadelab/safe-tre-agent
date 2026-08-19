@@ -66,8 +66,13 @@ _definition = dataset_mod.active()
 # One authoritative disclosure policy: defaults < config.yaml < env. This is what
 # makes the thresholds in config.yaml / SAFETRE_MIN_CELL actually take effect.
 _cfg = load_policy_config()
-if synth.csvs_present(names=_definition.table_names()):
-    _tables = synth.load_csvs(names=_definition.table_names())
+# The base-table CSVs live in ./data by default; SAFETRE_DATA_DIR points at a
+# different directory when the operator keeps them elsewhere (for example a
+# larger synthetic population generated into its own folder, so it cannot
+# clobber a differently-shaped table of the same name in ./data).
+_data_dir = os.environ.get("SAFETRE_DATA_DIR", "data")
+if synth.csvs_present(names=_definition.table_names(), out_dir=_data_dir):
+    _tables = synth.load_csvs(names=_definition.table_names(), out_dir=_data_dir)
 elif dataset_mod.is_packaged_demo():
     _tables = synth.generate()
 else:
