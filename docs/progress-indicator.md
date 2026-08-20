@@ -86,6 +86,12 @@ request, but its progress is now observable rather than opaque.
   dossier. If the eventual D5 async design needs to close per-step timing, it
   does so there; this PoC slice inherits the existing exemption and says so.
 
+This was red-teamed (hardening log, round 16): the stream was measured to be a
+strict subset of the dossier the same run returns, with no numeric leak, no XSS
+(step fields render through `textContent`), no SSE-framing injection (a jailbroken
+sub-question carrying forged `event:`/`data:` lines stayed one escaped JSON
+string), and no timing bit beyond the status already shown.
+
 ## Accessibility and reduced-motion
 
 No animation is introduced. Boxes change state discretely; `prefers-reduced-motion`
