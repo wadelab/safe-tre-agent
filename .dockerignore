@@ -1,0 +1,21 @@
+# Keep the build context small and the image clean. The synthetic dataset is
+# regenerated inside the image, so the local (gitignored) data/ is not copied.
+.git
+.github
+.venv
+**/__pycache__
+*.pyc
+*.pyo
+data/
+.tmp/
+*.db
+*.db-*
+*.db.head*
+lan_audit.db
+run_lan_demo.sh
+site/
+.pytest_cache
+.ruff_cache
+scratchpad
+docs/figures/bestiaryImaging/
+formal/lean/.lake
