@@ -150,3 +150,46 @@ def test_irls_refuses_bad_inputs():
         irls_cells([[1.0]], [1.0], [1.0], "gamma")               # unknown family
     with pytest.raises(ValueError):
         irls_cells([[1.0, 2.0], [2.0, 4.0]], [1.0, 2.0], [1.0, 1.0], "gaussian")
+
+
+# --- assumption-test numerics (Bartlett tail) and multiplicity (Benjamini-Hochberg)
+
+from safetre.stats import benjamini_hochberg, chi2_sf  # noqa: E402
+
+
+@pytest.mark.parametrize("df", [1, 2, 3, 5, 10, 30])
+@pytest.mark.parametrize("x", [0.001, 0.5, 1.0, 4.2, 12.0, 30.0])
+def test_chi2_sf_matches_scipy(x, df):
+    # Bartlett's p-value is this chi-square upper tail with df = k-1.
+    assert chi2_sf(x, df) == pytest.approx(
+        float(scipy_stats.chi2.sf(x, df)), rel=1e-9, abs=1e-12)
+
+
+def test_chi2_sf_degenerate():
+    assert chi2_sf(0.0, 3) == 1.0                    # a zero statistic never rejects
+    assert math.isnan(chi2_sf(float("nan"), 3))      # degenerate statistic -> nan
+    assert math.isnan(chi2_sf(1.0, 0))               # no degrees of freedom
+
+
+@pytest.mark.parametrize("pv", [
+    [0.001, 0.008, 0.039, 0.041, 0.9],
+    [0.2, 0.02, 0.002],
+    [0.5],
+    [0.01, 0.01, 0.01, 0.01],
+])
+def test_benjamini_hochberg_matches_scipy(pv):
+    ref = scipy_stats.false_discovery_control(pv, method="bh")
+    got = benjamini_hochberg(pv)
+    for g, r in zip(got, ref):
+        assert g == pytest.approx(float(r), abs=1e-9)
+
+
+def test_benjamini_hochberg_carries_nan_and_stays_in_range():
+    pv = [0.04, float("nan"), 0.01, 0.5]
+    adj = benjamini_hochberg(pv)
+    assert math.isnan(adj[1])                        # a not-answerable test stays nan
+    for i in (0, 2, 3):
+        assert pv[i] - 1e-12 <= adj[i] <= 1.0        # never smaller than raw, never > 1
+    # an all-nan (or empty) family corrects to all nan, never raising
+    assert all(math.isnan(x) for x in benjamini_hochberg([float("nan"), float("nan")]))
+    assert benjamini_hochberg([]) == []

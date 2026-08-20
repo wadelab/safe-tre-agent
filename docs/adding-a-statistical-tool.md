@@ -173,3 +173,39 @@ manifest pins; the formal artifacts regenerated. `tests/test_series.py` adds
 the tool's own bar — contract, reproducibility, fail-closed on a suppressed
 window, request-decided and finalized-table refusals, an exhaustive pass over
 the NIGHTPLAY series skeleton, and the numerics against numpy.
+
+## A third example: assumption tests and multiplicity, below the skeleton
+
+The `anova` and `series` tools each added a request to the finite skeleton. The
+next round added two things that are safe *without touching the skeleton at all*,
+because they are functions of quantities the pipeline had already vetted or
+released — the strongest form of "inherited, not re-argued".
+
+- **Bartlett's homogeneity-of-variance test**, reported alongside the ANOVA
+  table (`safetre/anova.py`). ANOVA already computes the per-group variances and
+  the pooled variance (`ms_within`) from the finalized `mean`/`sum_sq` cells, so
+  Bartlett's χ² and its p-value are *more arithmetic on the same finalized
+  cells*: no new `QuerySpec`, no new catalogue atom, and `formal/skeleton.json`
+  regenerates byte-identical. The output contract classifies the three new
+  columns (`bartlett_chi2`/`bartlett_df` as `statistic`, `bartlett_p` as
+  `p_value`), and `refit_from_artifact` reproduces them from the released cells,
+  so P21 holds unchanged. (It is Bartlett, not Levene: Levene needs a row-level
+  `|x − mean|` transform, which would be a new vetted aggregate; Bartlett is the
+  moment-native homogeneity test that rides the cells ANOVA already vetted. A
+  moment-based normality test, Jarque–Bera, would need the 3rd/4th moments the
+  measure allowlist stops short of, and so is a heavier, separate round.)
+- **Benjamini–Hochberg multiplicity correction** (`safetre/stats.benjamini_hochberg`,
+  applied by the safe analysis engine in `Dossier.correct_multiplicity`). It is a
+  pure function of *already-released* p-values — it touches no data, no cell and
+  no gateway — so it is safe wherever those p-values were safe to release. It
+  controls the false-discovery rate across the multiple tests one research
+  question ran, and it excludes assumption diagnostics like `bartlett_p` from the
+  family, because those are not the hypotheses under test.
+
+Both stay inside the stdlib-only `safetre/stats.py` boundary (the chi-square tail
+is `regularized_gamma_q(df/2, x/2)`, already present), cross-validated against
+`scipy.stats.bartlett`, `scipy.stats.chi2.sf` and
+`scipy.stats.false_discovery_control`. The formal layer needed no change: the
+skeleton is byte-identical and `formal/` is untouched, so the existing Lean and
+Alloy proofs cover the round unchanged — the addition is genuinely below the
+surface they check.

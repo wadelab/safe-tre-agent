@@ -204,3 +204,58 @@ def test_within_ss_floored_when_second_moment_rounds_below_mean_square():
     # fit is exercised directly to confirm the numerics degrade safely to nan.
     table, _ = AnovaProcedure().fit({"mean": mean, "sum_sq": ss}, spec)
     assert math.isnan(table.iloc[0]["statistic"])
+
+
+# --- Bartlett homogeneity-of-variance assumption test (rides the same cells) ----
+
+def test_bartlett_matches_scipy_and_reproduces_from_cells():
+    np = pytest.importorskip("numpy")
+    scipy_stats = pytest.importorskip("scipy.stats")
+    rng = np.random.default_rng(7)
+
+    labels, sizes, sds = ["A", "B", "C"], [40, 45, 38], [2.0, 3.0, 2.2]
+    groups, factor_col, y_col = [], [], []
+    for lab, n, sd in zip(labels, sizes, sds):
+        y = rng.normal(10.0, sd, n)
+        groups.append(y)
+        factor_col += [lab] * n
+        y_col += list(y)
+
+    df = pd.DataFrame({"region": factor_col, "y": y_col})
+    g = df.groupby("region")["y"]
+    mean = pd.DataFrame({"region": g.mean().index, "value": g.mean().to_numpy(),
+                         "n": g.size().to_numpy()})
+    ss = pd.DataFrame({"region": g.apply(lambda s: float((s ** 2).sum())).index,
+                       "value": g.apply(lambda s: float((s ** 2).sum())).to_numpy(),
+                       "n": g.size().to_numpy()})
+
+    spec = AnovaSpec(dataset="wellbeing", response="wemwbs_score", factor="region")
+    _, artifacts = AnovaProcedure().fit({"mean": mean, "sum_sq": ss}, spec)
+    model = artifacts["model"].iloc[0]
+
+    t_ref, p_ref = scipy_stats.bartlett(*groups)
+    assert model["bartlett_df"] == len(labels) - 1
+    assert model["bartlett_chi2"] == pytest.approx(float(t_ref), rel=1e-3)
+    assert model["bartlett_p"] == pytest.approx(float(p_ref), abs=1e-3)
+
+    # P21: the assumption test reproduces from the released cell table alone.
+    _, refit = refit_from_artifact(artifacts["cells"], spec)
+    assert refit["model"].iloc[0]["bartlett_chi2"] == model["bartlett_chi2"]
+    assert refit["model"].iloc[0]["bartlett_p"] == model["bartlett_p"]
+
+
+def test_bartlett_degrades_to_nan_on_a_zero_variance_group():
+    # group C has sum_sq == n*mean^2 exactly -> zero within-variance; Bartlett's
+    # log is undefined there, so it degrades to nan rather than crashing.
+    spec = AnovaSpec(dataset="wellbeing", response="wemwbs_score", factor="region")
+    mean = pd.DataFrame({"region": ["A", "B", "C"], "value": [10.0, 12.0, 11.0],
+                         "n": [20, 20, 20]})
+    ss = pd.DataFrame({"region": ["A", "B", "C"],
+                       "value": [20 * 10.0 ** 2 + 300.0, 20 * 12.0 ** 2 + 400.0,
+                                 20 * 11.0 ** 2],
+                       "n": [20, 20, 20]})
+    _, artifacts = AnovaProcedure().fit({"mean": mean, "sum_sq": ss}, spec)
+    model = artifacts["model"].iloc[0]
+    assert math.isnan(model["bartlett_chi2"]) and math.isnan(model["bartlett_p"])
+    # the ANOVA F itself is unaffected — the assumption test failing is not the model failing
+    assert not math.isnan(model["grand_mean"])

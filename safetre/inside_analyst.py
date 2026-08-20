@@ -48,6 +48,7 @@ import pandas as pd
 
 from . import disclosure as D
 from .planner import _extract_json, planner_system
+from .stats import benjamini_hochberg
 
 VERDICTS = ("supported", "not_supported", "null", "not_answerable")
 DEFAULT_MAX_STEPS = 12
@@ -105,9 +106,38 @@ class Dossier:
     stopped_because: str = ""
     narrative: str = ""
     unsupported_figures: list[str] = field(default_factory=list)
+    # Benjamini-Hochberg FDR correction across the session's released test
+    # p-values; empty unless the engine ran two or more hypothesis tests.
+    multiplicity: list[dict] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return asdict(self)
+
+    def correct_multiplicity(self) -> None:
+        """Benjamini-Hochberg across every hypothesis-test p-value the session
+        released (a ``p_value`` column in any released frame).
+
+        A pure function of already-released p-values (``benjamini_hochberg``),
+        so it adds no disclosure surface — it only controls the false-discovery
+        rate across the multiple tests the engine ran. Assumption diagnostics
+        (e.g. Bartlett's ``bartlett_p``) are deliberately excluded: they are not
+        the family of hypotheses under test. Runs only with two or more tests,
+        because a correction over one test is the test.
+        """
+        collected: list[tuple[int, float]] = []
+        for s in self.steps:
+            for rows in ([s.output or []] + list((s.artifacts or {}).values())):
+                for row in rows:
+                    p = row.get("p_value")
+                    if isinstance(p, (int, float)) and not (
+                            isinstance(p, float) and math.isnan(p)):
+                        collected.append((s.id, float(p)))
+        if len(collected) < 2:
+            return
+        adjusted = benjamini_hochberg([p for _, p in collected])
+        self.multiplicity = [
+            {"step": sid, "p_value": p, "p_adjusted": round(a, 4)}
+            for (sid, p), a in zip(collected, adjusted)]
 
     def to_json(self, **kw) -> str:
         return json.dumps(self.to_dict(), indent=2, default=str, **kw)
@@ -131,6 +161,12 @@ class Dossier:
                                     out.add(float(tok))
                                 except ValueError:
                                     pass
+        # BH-adjusted p-values are a deterministic function of released p-values,
+        # so a narrator may cite them; treat them as released too.
+        for row in self.multiplicity:
+            a = row.get("p_adjusted")
+            if isinstance(a, (int, float)) and not (isinstance(a, float) and math.isnan(a)):
+                out.add(float(a))
         return out
 
     def check_narrative(self, text: str) -> list[str]:
@@ -342,6 +378,7 @@ class AnalystLoop:
             dossier.verdict = "not_answerable"
         dossier.steps = steps
         dossier.budget_spent = self.auditor.spent
+        dossier.correct_multiplicity()
         yield ("done", dossier)
 
     def run(self, question: str) -> Dossier:
@@ -612,6 +649,11 @@ def render_dossier_markdown(dossier: Dossier) -> str:
         lines.append(f"- [{c.verdict}] {c.text}{ev}{why}")
     if dossier.notes:
         lines += ["", f"*{dossier.notes}*"]
+    if dossier.multiplicity:
+        lines += ["", "**Multiple-comparison correction (Benjamini–Hochberg).**"]
+        for m in dossier.multiplicity:
+            lines.append(f"- step {m['step']}: p = {m['p_value']:.4g} "
+                         f"→ adjusted p = {m['p_adjusted']:.4g}")
     lines += ["", f"{len(dossier.steps)} steps; {dossier.budget_spent}/{dossier.budget} "
               f"budget units; stopped because: {dossier.stopped_because}."]
     return "\n".join(lines)

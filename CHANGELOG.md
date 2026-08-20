@@ -6,6 +6,23 @@ and fixes are in [docs/hardening-log.md](docs/hardening-log.md).
 
 ## Unreleased
 
+### Added
+
+- **Assumption checks and multiplicity correction.** One-way ANOVA now reports
+  **Bartlett's test of homogeneity of variance** (`bartlett_chi2`/`bartlett_df`/
+  `bartlett_p`) alongside the F table. It is a function of the same finalized
+  `mean`/`sum_sq` cells ANOVA already vets — no new `QuerySpec`, no new catalogue
+  atom, `formal/skeleton.json` byte-identical — so it inherits the disclosure
+  proof and reproduces from the released cells (P21). The safe analysis engine
+  applies **Benjamini–Hochberg** false-discovery correction across the multiple
+  tests one research question releases (`Dossier.correct_multiplicity`), reported
+  as adjusted p-values in the dossier; it is a pure function of already-released
+  p-values, so it adds no disclosure surface. New stdlib-only numerics
+  `stats.chi2_sf` and `stats.benjamini_hochberg`, cross-validated against
+  `scipy.stats.bartlett`/`chi2.sf`/`false_discovery_control`. (Levene and
+  moment-based normality need a new vetted aggregate — the row-level `|x−mean|`
+  transform and the 3rd/4th moments respectively — and are a separate round.)
+
 ### Changed
 
 - **The inside analyst is now the "safe analysis engine".** Every user-facing

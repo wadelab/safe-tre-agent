@@ -394,3 +394,34 @@ def test_a_conclusion_without_an_overall_verdict_takes_its_first_substantive_cla
     c2 = parse_action(json.dumps({"action": "conclude",
                                   "claims": [{"text": "x", "verdict": "not_answerable", "evidence": []}]}))
     assert c2.verdict == "not_answerable"
+
+
+# --- Benjamini-Hochberg multiplicity correction across released tests ------------
+
+def test_multiplicity_correction_across_released_test_pvalues():
+    d = Dossier(question="q", dataset="x")
+    d.steps = [
+        Step(id=1, sub_question="anova", spec={}, status="released",
+             output=[{"source": "band", "p_value": 0.001},
+                     {"source": "Residual", "p_value": float("nan")}]),
+        Step(id=2, sub_question="corr", spec={}, status="released",
+             output=[{"value": 0.5, "p_value": 0.04}]),
+        Step(id=3, sub_question="denied", spec={}, status="denied", output=None),
+    ]
+    d.correct_multiplicity()
+    # collected the two non-nan released p-values, in step order
+    assert [m["step"] for m in d.multiplicity] == [1, 2]
+    assert [m["p_value"] for m in d.multiplicity] == [0.001, 0.04]
+    # BH of [0.001, 0.04] with m=2 -> [0.002, 0.04]
+    assert d.multiplicity[0]["p_adjusted"] == pytest.approx(0.002, abs=1e-6)
+    assert d.multiplicity[1]["p_adjusted"] == pytest.approx(0.04, abs=1e-6)
+    # the adjusted values are citable (a narrator may write them; not flagged)
+    assert 0.002 in d.released_numbers()
+
+
+def test_multiplicity_needs_at_least_two_tests():
+    d = Dossier(question="q", dataset="x")
+    d.steps = [Step(id=1, sub_question="one", spec={}, status="released",
+                    output=[{"p_value": 0.01}])]
+    d.correct_multiplicity()
+    assert d.multiplicity == []          # a correction over one test is the test

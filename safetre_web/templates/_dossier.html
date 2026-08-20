@@ -52,6 +52,23 @@
     {% endfor %}
   </ol>
 
+  {% if d.multiplicity %}
+  <h3 class="heading-s">Multiple-comparison correction (Benjamini&ndash;Hochberg)</h3>
+  <p class="hint">The false-discovery rate is controlled across the
+    {{ d.multiplicity | length }} hypothesis test{{ '' if d.multiplicity | length == 1 else 's' }}
+    this analysis released.</p>
+  <table class="agg">
+    <thead><tr><th>step</th><th class="num">p</th><th class="num">adjusted p</th></tr></thead>
+    <tbody>
+      {% for m in d.multiplicity %}
+      <tr><td>{{ m.step }}</td>
+        <td class="num">{{ '%.4g' % m.p_value }}</td>
+        <td class="num">{{ '%.4g' % m.p_adjusted }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
   <div class="phase-banner">
     <strong class="tag tag--blue">Inside the environment</strong>
     <span>The safe analysis engine ran {{ d.steps | length }} analysis step{{ '' if d.steps | length == 1 else 's' }},

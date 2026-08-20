@@ -173,6 +173,44 @@ def regularized_gamma_q(a: float, x: float) -> float:
     return max(0.0, min(1.0, math.exp(log_prefactor) * h))
 
 
+def chi2_sf(x: float, df: float) -> float:
+    """Chi-square upper tail P(chi2_df > x) = Q(df/2, x/2).
+
+    The p-value for Bartlett's homogeneity-of-variance statistic (df = k-1).
+    Reuses the regularized upper incomplete gamma already in this module, so no
+    new special function and the stdlib-only boundary is preserved. NaN in
+    (a degenerate statistic) carries through to NaN.
+    """
+    if not math.isfinite(x) or df <= 0:
+        return float("nan")
+    if x <= 0.0:
+        return 1.0
+    return regularized_gamma_q(df / 2.0, x / 2.0)
+
+
+def benjamini_hochberg(pvalues: list[float]) -> list[float]:
+    """Benjamini-Hochberg FDR-adjusted p-values, in the input order.
+
+    A pure function of already-released p-values: it touches no data, no cell,
+    and no gateway, so it is safe wherever the p-values it is given were safe to
+    release. NaN entries (a not-answerable test) are carried through as NaN and
+    excluded from both the family size and the ranking, so an unanswerable test
+    neither is corrected nor shifts the correction of the answerable ones.
+    """
+    live = [i for i, p in enumerate(pvalues) if isinstance(p, float) and p == p]
+    m = len(live)
+    adjusted = [float("nan")] * len(pvalues)
+    if m == 0:
+        return adjusted
+    order = sorted(live, key=lambda i: pvalues[i])          # ascending by p
+    running = 1.0                                           # enforce monotonicity
+    for rank in range(m, 0, -1):                            # largest rank down
+        i = order[rank - 1]
+        running = min(running, pvalues[i] * m / rank)
+        adjusted[i] = min(1.0, max(0.0, running))
+    return adjusted
+
+
 # --- small dense linear algebra (pure python; p <= a few dozen) -----------------
 
 Matrix = list[list[float]]

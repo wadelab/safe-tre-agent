@@ -33,6 +33,7 @@ finalized tables alone and name the factor, never a quantity (P22).
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 import pandas as pd
@@ -40,7 +41,7 @@ import pandas as pd
 from .glm import _term_levels
 from .procedures import MODEL_REGISTRY, DisclosureClass, ModelProcedure
 from .query import AnovaSpec, QuerySpec
-from .stats import f_sf
+from .stats import chi2_sf, f_sf
 
 
 class AnovaProcedure(ModelProcedure):
@@ -121,6 +122,27 @@ class AnovaProcedure(ModelProcedure):
         p_value = f_sf(f_stat, df_between, df_within)
         eta_squared = ss_between / ss_total if ss_total > 0 else float("nan")
 
+        # Bartlett's test of homogeneity of variance — the equal-variance
+        # assumption a one-way ANOVA rests on. It is a function of the SAME
+        # finalized cells: the per-group variances and the pooled variance
+        # (which is exactly ms_within), so it inherits the gateway's disclosure
+        # claim and reproduces from the released cells (P21). NaN where a group
+        # variance is not positive after rounding, so it degrades to "not
+        # computable" rather than crashing. (Bartlett, not Levene: Levene needs a
+        # row-level |x-mean| transform; Bartlett is the moment-native test that
+        # rides the cells ANOVA already vetted.)
+        var_g = [max(0.0, si - ni * mi * mi) / (ni - 1.0) if ni > 1 else float("nan")
+                 for si, ni, mi in zip(sum_sq, n, mean)]
+        bartlett_chi2 = float("nan")
+        bartlett_p = float("nan")
+        if df_within > 0 and ms_within > 0 and all(v == v and v > 0 for v in var_g):
+            num = df_within * math.log(ms_within) - sum(
+                (ni - 1.0) * math.log(v) for ni, v in zip(n, var_g))
+            correction = 1.0 + (sum(1.0 / (ni - 1.0) for ni in n) - 1.0 / df_within
+                                ) / (3.0 * (k - 1))
+            bartlett_chi2 = num / correction
+            bartlett_p = chi2_sf(bartlett_chi2, k - 1)
+
         table = pd.DataFrame([
             {"source": spec.factor, "df": df_between,
              "sum_sq": round(ss_between, 4), "mean_sq": round(ms_between, 4),
@@ -138,6 +160,9 @@ class AnovaProcedure(ModelProcedure):
             "eta_squared": round(eta_squared, 4),
             "df_between": df_between,
             "df_within": df_within,
+            "bartlett_chi2": round(bartlett_chi2, 4),
+            "bartlett_df": k - 1,
+            "bartlett_p": round(bartlett_p, 3),
         }])
         return table, {"cells": cells, "model": model}
 
@@ -161,7 +186,9 @@ class AnovaProcedure(ModelProcedure):
             "model": {"response": "cell_key", "factor": "cell_key",
                       "n": "count", "n_groups": "count",
                       "grand_mean": "magnitude", "eta_squared": "statistic",
-                      "df_between": "statistic", "df_within": "statistic"},
+                      "df_between": "statistic", "df_within": "statistic",
+                      "bartlett_chi2": "statistic", "bartlett_df": "statistic",
+                      "bartlett_p": "p_value"},
         }
 
     def model_key(self, spec: AnovaSpec) -> str:
