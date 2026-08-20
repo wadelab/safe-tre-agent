@@ -1,0 +1,29 @@
+# Continuous deployment to Cloud Run.
+#
+# A Cloud Build trigger (watching main of this repo) runs this on every push:
+# build the image from the committed Dockerfile and roll it onto the existing
+# `safetre-demo` service. Deliberately model-neutral and secret-free — the LLM
+# endpoint/model/key and the public-access (allUsers invoker) policy already
+# live on the service, and a `gcloud run deploy` with no env flags KEEPS them,
+# so nothing provider-specific or secret ever appears here.
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', '${_IMAGE}', '.']
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', '${_IMAGE}']
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - safetre-demo
+      - --image=${_IMAGE}
+      - --region=${_REGION}
+      - --quiet
+images:
+  - '${_IMAGE}'
+substitutions:
+  _REGION: 'europe-west2'
+  _IMAGE: 'europe-west2-docker.pkg.dev/${PROJECT_ID}/cloud-run-source-deploy/safetre-demo:${SHORT_SHA}'
+options:
+  logging: CLOUD_LOGGING_ONLY
