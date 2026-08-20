@@ -132,7 +132,7 @@ the new "declare every released column" contract exists to make impossible.
 |---|---|
 | Requirement / prohibition clauses in the spec | R1–R18, P1–P22 |
 | Model shapes, all machine-checked | 767 (718 GLM + 49 ANOVA) |
-| Tests collected in the default suite | 1261 (plus an exhaustive `-m slow` pass) |
+| Tests collected in the default suite | 1292 (plus an exhaustive `-m slow` pass) |
 | Red-team scenarios, every attack blocked by a named control | 34 (29 attacks, 5 benign) |
 | Solver-checked properties (Alloy, in CI) | 25, across five models |
 | Coefficient agreement with reference implementations | ~1e-14 (exact maths), 1e-8 (tested bound) |
