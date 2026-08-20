@@ -69,8 +69,12 @@ From the design system palette and type scale:
   gradients, no glass, no rounded-corner language (GOV.UK is square).
 - **Focus** — the yellow-and-black double indicator from the focus-state
   spec, on every interactive element.
-- **Motion** — none. The aurora, gridlines, radar beacon, scanner sweep, glow
-  pulses, and entry animations all go. State changes are instant.
+- **Motion** — no *decorative* motion. The aurora, gridlines, radar beacon,
+  scanner sweep, glow pulses, and entry animations all go, and state changes are
+  instant. The one carve-out is *functional* progress feedback that is still
+  discrete state, not animation: the inside analyst reports each step as a box
+  that settles to released/denied, so a minute-long run reads as working rather
+  than stalled (see [progress-indicator.md](progress-indicator.md)).
 
 ## Component mapping
 
