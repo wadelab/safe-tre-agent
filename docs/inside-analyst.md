@@ -268,20 +268,19 @@ nothing, and that the counts never leak. This is the interim the DP accountant
 release — and is not yet wired to the LLM loop; the loop today is the phase-1
 vetted analyst, and a model authoring plans is the next step.
 
-## Chimp, in the browser (proof of concept)
+## The safe analysis engine, in the browser (proof of concept)
 
-The whole inside analyst has a name — **Chimp**, after the deliberately
-capability-limited starship AI of *The Freeze-Frame Revolution* — and a run
-mode. Whether Chimp exists inside a given environment is an OPERATOR decision,
+The whole inside analyst is the **safe analysis engine**, with a run
+mode. Whether the safe analysis engine exists inside a given environment is an OPERATOR decision,
 set once at deploy time via `SAFETRE_ANALYST` (`off`, the default single-query
 gateway, or `chimp`); a browser visitor can no more turn it on than move the
 gateway. When on, the single ask box gains a **parse outside / parse inside**
-toggle; choosing `inside` makes the browser an intercom to Chimp: a research
-question goes in at `/api/chimp`, Chimp runs the whole vetted loop server-side
-behind the same gateway, and only the dossier and its narrative return — Chimp's
+toggle; choosing `inside` makes the browser an intercom to the safe analysis engine: a research
+question goes in at `/api/chimp`, the safe analysis engine runs the whole vetted loop server-side
+behind the same gateway, and only the dossier and its narrative return — the safe analysis engine's
 working notes and the raw data never cross to the browser. (Choosing `outside`
 routes the question to the single-query gateway instead. That per-question
-toggle is a demo affordance; the operator still decides whether Chimp exists at
+toggle is a demo affordance; the operator still decides whether the safe analysis engine exists at
 all, and the routing is meant to become an operator-level setting.)
 
 ![The ask box with the inside analyst enabled: a subtle "parse outside / parse inside" toggle sits top-right](figures/demo-inside-toggle.png)
@@ -289,7 +288,7 @@ all, and the routing is meant to become an operator-level setting.)
 Measured live against the
 NIGHTPLAY study with the 120B-class stand-in: a research question ran nine
 analyses inside, five released and four denied (the employment-adjusted models
-the gateway blocked), and Chimp's answer said so; the audit chain verified
+the gateway blocked), and the safe analysis engine's answer said so; the audit chain verified
 intact through the session. The synchronous endpoint exceeds the per-query
 response-time ceiling and is exempt from that deadline, a stated PoC
 limitation whose principled answer is asynchronous submit-and-collect (D5).

@@ -104,6 +104,13 @@
             <strong class="tag tag--grey step-status">Not run</strong></li>
         </ol>
 
+        <div id="gateway-live" hidden>
+          <p class="gateway-note hint">In this mode the safe analysis engine sends
+            each step through the whole gateway above. Each box below is one step
+            and the gateway&rsquo;s verdict on it.</p>
+          <ol class="steps engine-live" id="engine-live" aria-live="polite"></ol>
+        </div>
+
         <h2 class="heading-m">Result</h2>
         <div id="result" class="result" role="status" aria-live="polite">
           <p class="hint">Results appear here after the gateway releases them.</p>

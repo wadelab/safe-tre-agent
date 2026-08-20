@@ -143,15 +143,15 @@ as fallbacks, but new deployments should use the `SAFETRE_LLM_*` names. The
 model never sees secrets and never needs network beyond the local model
 endpoint. See `.env.example` and [Model runtime](model-runtime.md).
 
-## The inside analyst ("Chimp")
+## The inside analyst ("safe analysis engine")
 
 Whether an inside analyst runs in a given environment is an operator decision,
 set once here with `SAFETRE_ANALYST=chimp`, and whether an inside analyst
 *exists* is deliberately not reachable from the browser: a page visitor can no
-more turn Chimp on than move the gateway. With it on, the single ask box gains a
+more turn the safe analysis engine on than move the gateway. With it on, the single ask box gains a
 small **parse outside / parse inside** toggle — `outside` routes a question to
 the single-query gateway (`/api/query`), `inside` hands the whole question to
-Chimp (`/api/chimp`), which plans and runs the whole analysis server-side behind
+the safe analysis engine (`/api/chimp`), which plans and runs the whole analysis server-side behind
 the same safe-outputs gateway and returns only a dossier of vetted releases.
 The per-question toggle is a demo stopgap: the operator still gates whether an
 inside analyst exists at all, and the routing choice is intended to become an

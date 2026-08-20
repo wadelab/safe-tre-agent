@@ -249,7 +249,7 @@ live over the question bank. Phase 2, the `series` tool, followed the same day, 
 bank's marks are executable. Phase 3's locked-plan core is delivered (spec R20/P24, `safetre/plan.py`):
 a plan committed to the audit chain before it runs, executed deterministically,
 with the one data-sighted move (`exclude_sparse`) metered in bits against a
-session selection budget. Chimp is now runnable in the web interface behind an
+session selection budget. The safe analysis engine is now runnable in the web interface behind an
 operator-set `SAFETRE_ANALYST` switch. What remains on the research core is the
 differential-privacy accountant (item 3), which replaces the interim bit
 ledger, and wiring a model to author plans; alongside, the F0

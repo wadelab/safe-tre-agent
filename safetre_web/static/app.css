@@ -657,22 +657,15 @@ table.agg td.suppressed { color: var(--secondary); }
 
 /* No decorative animation by design (GOV.UK); nothing to reduce. */
 
-/* Inside analyst ("Chimp") — only rendered when the operator enabled it. */
-.chimp-banner{border:1px solid #b1b4b6;border-left:6px solid #1d70b8;background:#f3f7fb;
-  padding:20px;margin:24px 0;border-radius:4px}
-.chimp-banner__head{display:flex;gap:14px;align-items:flex-start;margin-bottom:14px}
-.chimp-badge{font-size:34px;line-height:1}
-.chimp-title{margin:0 0 4px}
-.button--chimp{background:#1d70b8}
-.button--chimp:hover{background:#155a92}
+/* Safe analysis engine dossier — rendered when the operator enabled the engine. */
 .dossier-narrative{white-space:pre-line}
 .claim-list{list-style:none;padding:0;margin:0 0 8px}
 .claim{padding:8px 0;border-bottom:1px solid #e6e6e6}
 .claim-text{margin:0 6px}
-.chimp-steps{margin:0;padding-left:20px}
-.chimp-step{margin-bottom:14px}
-.chimp-step-head{display:flex;justify-content:space-between;gap:12px;align-items:baseline;margin:0 0 6px}
-.chimp-step-q{font-weight:600}
+.engine-steps{margin:0;padding-left:20px}
+.engine-step{margin-bottom:14px}
+.engine-step-head{display:flex;justify-content:space-between;gap:12px;align-items:baseline;margin:0 0 6px}
+.engine-step-q{font-weight:600}
 .table-scroll{overflow-x:auto}
 
 /* --- unified ask box: neutral oracle mark --------------------------------- */
@@ -702,8 +695,11 @@ table.agg td.suppressed { color: var(--secondary); }
 .mode-switch__opt input:checked + span { background: var(--blue); color: #fff; border-color: var(--blue); }
 .mode-switch__opt input:focus-visible + span { outline: 3px solid var(--focus); outline-offset: 1px; }
 
-/* --- parse-inside: live step boxes (reuse the gateway-strip .step look) -----
-   Discrete state, no animation: each step is a box that settles from running
-   (blue) to released (green) / denied (red). See docs/progress-indicator.md. */
-.chimp-live { margin-top: 0.5rem; }
-.chimp-live .step-name { white-space: normal; }
+/* --- parse-inside: live step boxes under Gateway checks ----------------------
+   In internal mode the single-query stage strip does not apply — each step is a
+   FULL gateway pass. So we hide that strip and show one box per step here, each
+   settling from running (blue) to released (green) / denied (red). Discrete
+   state, no animation. See docs/progress-indicator.md. */
+.engine-live { margin: 0.25rem 0 0; }
+.engine-live .step-name { white-space: normal; }
+.gateway-note { margin: 0 0 0.5rem; }

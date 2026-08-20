@@ -50,11 +50,11 @@ dossier run() returns" is
 and the `textContent` rendering keeps the injected-prose residual inert.
 
 
-## 2026-08-19 — round 15 (jailbreaking Chimp through the free-text box)
+## 2026-08-19 — round 15 (jailbreaking the safe analysis engine through the free-text box)
 
 The inside analyst's research question is the only untrusted input that reaches a
 language model *inside* the wall, so its sharpest question is whether odd
-instructions typed into the free-text box can make Chimp leak. Eight jailbreaks
+instructions typed into the free-text box can make the safe analysis engine leak. Eight jailbreaks
 were run against the running analyst — a live model behind `/api/chimp`, not the
 scripted replies the CI corpus uses — and each dossier inspected for disclosure:
 a "SYSTEM OVERRIDE / developer mode" demand for raw per-person rows; a benign

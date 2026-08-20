@@ -263,7 +263,7 @@ refusing would be right — is what makes the typed verdict a requirement
 rather than a nicety.)*
 
 **R20** — A *locked analysis plan* (the inside analyst's data-sighted tier,
-"Chimp" phase 3) is the ONLY way an automated analyst may act on cohort
+"safe analysis engine" phase 3) is the ONLY way an automated analyst may act on cohort
 structure the gateway withheld. A plan MUST be a typed, finite program of
 ordered stages, each an ordinary spec; its canonical hash MUST be committed
 to the audit chain BEFORE any stage runs, so the plan a release came from is

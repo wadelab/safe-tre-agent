@@ -453,7 +453,7 @@ Every Alloy attack run gets an executable twin and correspondence entry.
 
 ## Milestone 10 — connect the inside analyst
 
-**Goal:** let Chimp produce VRRs without making Chimp part of the trust claim.
+**Goal:** let the safe analysis engine produce VRRs without making the safe analysis engine part of the trust claim.
 
 Only after Milestones 1--9 work on scripted analyses:
 

@@ -575,7 +575,7 @@ authenticated synthetic project context
   -> deterministic reviewer report
 ```
 
-Then attack that before adding Chimp.
+Then attack that before adding the safe analysis engine.
 
 ## Remaining genuinely open questions
 

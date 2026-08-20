@@ -89,7 +89,7 @@ Once the deterministic vertical slice is working and red-teamed:
 - Lean proofs of the public/private type boundary;
 - Alloy checks for plan order, evidence lineage, release-domain persistence and
   provenance noninterference;
-- integration with Chimp / adaptive inside analysis;
+- integration with the safe analysis engine / adaptive inside analysis;
 - private-data-driven evidence selection only when its utility is demonstrated
   and its channel is controlled;
 - DP only for measured residuals or modes that genuinely benefit from a

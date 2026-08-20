@@ -8,7 +8,7 @@ describes what shipped rather than what is planned; the bar has been removed.
 
 A **parse outside** query answers in milliseconds: the seven-box gateway-check
 strip flips `Not run` → `Checking` → `Completed`/`Stopped` and the result lands.
-A **parse inside** run is different — Chimp issues several sub-questions through
+A **parse inside** run is different — the safe analysis engine issues several sub-questions through
 the gateway and a whole run takes tens of seconds to a minute. It is one blocking
 `POST /api/chimp` that returns the finished dossier at the end, so during the run
 the page has nothing to show but "working…". The stopgap was an indeterminate
@@ -72,7 +72,7 @@ request, but its progress is now observable rather than opaque.
 - **Only vetted results cross.** A `step` event carries the sub-question text and
   the gateway's verdict (`released`/`redacted`/`denied`) — both already present
   in the dossier `/api/chimp` returns. It never carries a suppressed value,
-  Chimp's working notes, or any per-observation data. The final `done` payload is
+  the safe analysis engine's working notes, or any per-observation data. The final `done` payload is
   the same vetted dossier HTML as today.
 - **The gateway is unmoved.** Every sub-question still goes through
   `service.handle` with the session auditor, differencing lineage and selection

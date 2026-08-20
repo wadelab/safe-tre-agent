@@ -8,6 +8,16 @@ document.addEventListener("DOMContentLoaded", () => {
   const button = document.getElementById("runbtn");
   const countMsg = document.getElementById("q-info");
   const steps = [...document.querySelectorAll("#pipeline .step")];
+  // The single-query stage strip (#pipeline) applies to parse-outside. In
+  // parse-inside each analysis step is a WHOLE gateway pass, so we hide that
+  // strip and show one box per step in #gateway-live instead.
+  const pipeline = document.getElementById("pipeline");
+  const gatewayLive = document.getElementById("gateway-live");
+  const engineList = document.getElementById("engine-live");
+  const gatewayMode = (inside) => {
+    if (pipeline) pipeline.hidden = inside;
+    if (gatewayLive) gatewayLive.hidden = !inside;
+  };
 
   /* --- character count (GOV.UK character-count behaviour) ------------------- */
 
@@ -112,6 +122,7 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   const runOutside = async (q, t0) => {
+    gatewayMode(false);                       // single-query mode: show the stage strip
     steps.forEach((s) => setStep(s, "checking"));
     result.innerHTML = "<p class=\"hint\">Checking the request in the safepod.</p>";
     const resp = await fetch("/api/query", {
@@ -135,7 +146,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   /* --- parse inside: one box per step, streamed as each settles -------------- */
 
-  const CHIMP_TAG = {
+  const ENGINE_TAG = {
     running:  { label: "running",  cls: "tag--blue" },
     released: { label: "released", cls: "tag--green" },
     redacted: { label: "redacted", cls: "tag--yellow" },
@@ -158,7 +169,7 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   const settleBox = (li, status) => {
-    const s = CHIMP_TAG[status] || CHIMP_TAG.skipped;
+    const s = ENGINE_TAG[status] || ENGINE_TAG.skipped;
     const tag = li.querySelector(".step-status");
     tag.textContent = s.label;
     tag.className = `tag step-status ${s.cls}`;
@@ -176,6 +187,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const runInside = async (q) => {
     resetSteps();
+    gatewayMode(true);                        // internal mode: per-step boxes ARE the gateway view
+    engineList.innerHTML = "";
+    result.innerHTML =
+      "<p class=\"hint\">The safe analysis engine is working inside the environment&hellip;</p>";
     let resp = null;
     try {
       resp = await fetch("/api/chimp/stream", {
@@ -185,12 +200,10 @@ document.addEventListener("DOMContentLoaded", () => {
       });
     } catch (e) { resp = null; }
     if (!resp || !resp.ok || !resp.body || !window.ReadableStream) {
-      return runInsideBlocking(q);          // no streaming available — fall back
+      gatewayMode(false);                     // no live view; the dossier still lists the steps
+      return runInsideBlocking(q);
     }
-    result.innerHTML =
-      "<h3 class=\"heading-s\">Working inside the environment</h3>" +
-      "<ol class=\"steps chimp-live\" id=\"chimp-live\" aria-live=\"polite\"></ol>";
-    const list = document.getElementById("chimp-live");
+    const list = engineList;
     const boxes = {};
     const reader = resp.body.getReader();
     const decoder = new TextDecoder();

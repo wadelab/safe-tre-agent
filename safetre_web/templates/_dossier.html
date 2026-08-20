@@ -3,7 +3,7 @@
 
   <div class="notification-banner{% if d.verdict == 'supported' %} notification-banner--success{% endif %}">
     <div class="notification-banner__header">
-      <h2 class="notification-banner__title">Chimp&rsquo;s answer</h2>
+      <h2 class="notification-banner__title">Safe analysis engine&rsquo;s answer</h2>
     </div>
     <div class="notification-banner__content">
       <p class="notification-banner__heading">
@@ -34,13 +34,13 @@
     {% endfor %}
   </ul>
 
-  <h3 class="heading-s">What Chimp asked the gateway ({{ d.steps | length }} step{{ '' if d.steps | length == 1 else 's' }})</h3>
-  <ol class="chimp-steps">
+  <h3 class="heading-s">What the safe analysis engine asked the gateway ({{ d.steps | length }} step{{ '' if d.steps | length == 1 else 's' }})</h3>
+  <ol class="engine-steps">
     {% for s in d.steps %}
     {% set stag = {'released': 'green', 'redacted': 'yellow', 'review': 'yellow', 'denied': 'red'} %}
-    <li class="chimp-step">
-      <p class="chimp-step-head">
-        <span class="chimp-step-q">{{ s.sub_question }}</span>
+    <li class="engine-step">
+      <p class="engine-step-head">
+        <span class="engine-step-q">{{ s.sub_question }}</span>
         <strong class="tag tag--{{ stag.get(s.status, 'grey') }}">{{ s.status }}</strong>
       </p>
       {% if s.id in tables %}
@@ -54,7 +54,7 @@
 
   <div class="phase-banner">
     <strong class="tag tag--blue">Inside the environment</strong>
-    <span>Chimp ran {{ d.steps | length }} analysis step{{ '' if d.steps | length == 1 else 's' }},
+    <span>The safe analysis engine ran {{ d.steps | length }} analysis step{{ '' if d.steps | length == 1 else 's' }},
       spending {{ d.budget_spent }} of {{ d.budget }} session budget.
       Its working notes never left this environment &mdash; only the vetted tables above,
       and the answer written from them, crossed to your browser.</span>

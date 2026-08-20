@@ -8,13 +8,24 @@ and fixes are in [docs/hardening-log.md](docs/hardening-log.md).
 
 ### Changed
 
+- **The inside analyst is now the "safe analysis engine".** Every user-facing
+  surface and doc calls it that — the dossier reads "Safe analysis engine's
+  answer" / "what the safe analysis engine asked the gateway" — and the old
+  "Chimp" nickname is gone. Internal contract identifiers are unchanged
+  (`/api/chimp`, `SAFETRE_ANALYST=chimp`) so operator config and the API are
+  stable.
+- **The Gateway-checks section reflects internal mode.** In parse-inside the
+  single-query stage strip (vetting → … → human review) does not apply — each
+  analysis step is a *whole* gateway pass — so that strip is hidden and the
+  section shows one box per step, settling released/denied, with a note that each
+  box is a full gateway pass. Parse-outside keeps the stage strip it always had.
 - **The web UI is now one ask box.** The separate aggregate-query form and the
-  inside-analyst ("Chimp") banner are unified into a single question box titled
+  inside-analyst ("safe analysis engine") banner are unified into a single question box titled
   "Ask the safe-outputs mechanism", with a neutral abstract mark in place of the
-  chimp persona (the persona art is kept for the slides/explainer docs). When
+  old persona (the persona art is kept for the slides/explainer docs). When
   the operator has enabled the inside analyst, a subtle top-right **parse
   outside / parse inside** toggle routes each question to the single-query
-  gateway (`/api/query`) or to Chimp (`/api/chimp`). The operator still gates
+  gateway (`/api/query`) or to the safe analysis engine (`/api/chimp`). The operator still gates
   whether an inside analyst exists at all; the per-question toggle is a demo
   stopgap meant to become an operator/server setting.
 - **The inside analyst streams its progress.** A parse-inside run now shows one
@@ -249,7 +260,7 @@ and fixes are in [docs/hardening-log.md](docs/hardening-log.md).
   increment rather than part of the v1.0 safety claim.
 
 
-- **The inside analyst's data-sighted tier ("Chimp" phase 3): locked plans
+- **The inside analyst's data-sighted tier ("safe analysis engine" phase 3): locked plans
   and a metered selection channel (`safetre/plan.py`; spec R20, P24;
   [design note](docs/inside-analyst.md)).** The only safe way an automated
   analyst may act on cohort structure the gateway withheld. A `Plan` is a
@@ -267,12 +278,12 @@ and fixes are in [docs/hardening-log.md](docs/hardening-log.md).
   digests replay across a restart (#58's lesson, extended). An interim the
   differential-privacy accountant (roadmap item 3) replaces.
 
-- **Chimp in the web interface, operator-gated (`SAFETRE_ANALYST`).** Whether
+- **The safe analysis engine in the web interface, operator-gated (`SAFETRE_ANALYST`).** Whether
   an inside analyst runs in an environment is an operator decision set at
   deploy time (`off`, the default single-query gateway, or `chimp`); the
   browser cannot enable it. When on, a `/api/chimp` route takes a research
   question, runs the vetted loop server-side behind the same gateway, and
-  returns only the dossier and its narrative &mdash; Chimp's working notes and
+  returns only the dossier and its narrative &mdash; the safe analysis engine's working notes and
   the raw data never cross to the browser. The route is exempt from the
   per-query response-time deadline (a multi-step analysis cannot fit it), a
   stated PoC limit whose answer is asynchronous submit-and-collect (D5). Run
