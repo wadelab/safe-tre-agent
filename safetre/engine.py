@@ -156,12 +156,19 @@ def compile_dominance_query(spec: QuerySpec) -> SQLPlan:
     """Compile the internal donor-level dominance query for donor-additive
     measures (sum/mean on the raw scale; sum_sq on the squared scale, so the
     p%-rule bounds the largest contributor's share of the released total)."""
-    if spec.measure.fn not in ("mean", "sum", "sum_sq"):
+    if spec.measure.fn not in ("mean", "sum", "sum_sq", "sum_cube", "sum_quad"):
         raise ValueError("dominance is only defined for donor-additive measures")
 
     where, params = _where(spec)
     col = _ident(spec.measure.column)
-    contribution = f"{col} * {col}" if spec.measure.fn == "sum_sq" else col
+    # higher moments contribute on the higher-power scale, so the witness bounds
+    # a donor's share of the SAME quantity that is released (sum_cube is signed —
+    # the GREATEST(...) witness below is built to bound that correctly)
+    contribution = {
+        "sum_sq": f"{col} * {col}",
+        "sum_cube": f"{col} * {col} * {col}",
+        "sum_quad": f"{col} * {col} * {col} * {col}",
+    }.get(spec.measure.fn, col)
     unit = _ident(f"_{spec.dataset}_u")
     gsel = ", ".join(_ident(g) for g in spec.group_by)
     gpre = (gsel + ", ") if spec.group_by else ""

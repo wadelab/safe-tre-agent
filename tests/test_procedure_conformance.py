@@ -43,6 +43,8 @@ PROCEDURES = {
     "mean":   {"reads_individual_values": True,  "influence_control": "dominance"},
     "sum":    {"reads_individual_values": True,  "influence_control": "dominance"},
     "sum_sq": {"reads_individual_values": True,  "influence_control": "dominance"},
+    "sum_cube": {"reads_individual_values": True, "influence_control": "dominance"},
+    "sum_quad": {"reads_individual_values": True, "influence_control": "dominance"},
     "corr":   {"reads_individual_values": True,  "influence_control": "influence"},
 }
 
@@ -103,6 +105,8 @@ MODEL_PROCEDURES = {
               "denies_on_suppression": True},
     "series": {"multi_query": True, "fits_on_finalized_only": True,
                "denies_on_suppression": True},
+    "normality": {"multi_query": True, "fits_on_finalized_only": True,
+                  "denies_on_suppression": True},
 }
 
 
@@ -142,16 +146,20 @@ def test_procedure_declares_a_complete_output_contract(fn):
     contract = proc.output_contract(spec.measure)
     for column in proc.payload_columns(spec.measure):
         assert column in contract, f"{fn}: payload column {column!r} unclassified"
-    assert all(v in {"cell_key", "count", "magnitude", "moment2", "statistic",
-                     "p_value"}
+    assert all(v in {"cell_key", "count", "magnitude", "moment2", "moment3",
+                     "moment4", "statistic", "p_value"}
                for v in contract.values())
     # frequency payloads must be declared as counts so rounding covers them
     if fn == "count":
         assert contract["n"] == "count"
-    # a second moment is not a magnitude: the same nominal dominance bound is
-    # a far tighter rule on the squared scale, and the class is what selects it
+    # a higher moment is not a magnitude: the same nominal dominance bound is a
+    # far tighter rule on the powered scale, and the class is what selects it
     if fn == "sum_sq":
         assert contract["value"] == "moment2"
+    if fn == "sum_cube":
+        assert contract["value"] == "moment3"
+    if fn == "sum_quad":
+        assert contract["value"] == "moment4"
 
 
 @pytest.mark.parametrize("fn", sorted(PROCEDURES))

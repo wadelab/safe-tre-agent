@@ -193,3 +193,29 @@ def test_benjamini_hochberg_carries_nan_and_stays_in_range():
     # an all-nan (or empty) family corrects to all nan, never raising
     assert all(math.isnan(x) for x in benjamini_hochberg([float("nan"), float("nan")]))
     assert benjamini_hochberg([]) == []
+
+
+# --- normality numerics (Jarque-Bera) -------------------------------------------
+
+from safetre.stats import jarque_bera  # noqa: E402
+
+
+@pytest.mark.parametrize("seed", [0, 1, 2, 7])
+def test_jarque_bera_matches_scipy(seed):
+    import numpy as np
+    rng = np.random.default_rng(seed)
+    arr = np.concatenate([rng.normal(0, 1, 300), rng.gamma(2, 1, 200)])
+    n = float(len(arr))
+    g1 = float(scipy_stats.skew(arr))
+    g2 = float(scipy_stats.kurtosis(arr))          # excess kurtosis
+    jb, p = jarque_bera(n, g1, g2)
+    jb_ref, p_ref = scipy_stats.jarque_bera(arr)
+    assert jb == pytest.approx(float(jb_ref), rel=1e-9)
+    assert p == pytest.approx(float(p_ref), abs=1e-9)
+
+
+def test_jarque_bera_degenerate():
+    assert all(math.isnan(x) for x in jarque_bera(float("nan"), 0.0, 0.0))
+    assert all(math.isnan(x) for x in jarque_bera(0.0, 0.0, 0.0))
+    jb, p = jarque_bera(1000.0, 0.0, 0.0)          # perfectly normal shape
+    assert jb == pytest.approx(0.0) and p == pytest.approx(1.0)

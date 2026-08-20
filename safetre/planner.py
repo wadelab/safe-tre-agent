@@ -97,6 +97,14 @@ def planner_system(policy=None) -> str:
         "ANOVA takes exactly one categorical factor and a gaussian (interval-scale) "
         "response. If the request names more than one factor, use the glm tool "
         "instead.\n"
+        "For a normality request ('is Y normally distributed', 'test normality of Y "
+        "by A', 'skewness and kurtosis of Y', 'Jarque-Bera test of Y across A'), "
+        "output a NormalitySpec JSON of the form:\n"
+        '{"tool":"normality","dataset":...,"response":<allowed gaussian response>,'
+        '"factor":<one allowlisted dimension>,"filters":[...]}\n'
+        "It tests, per level of the factor, whether the response is normal "
+        "(skewness, kurtosis and the Jarque-Bera statistic) from vetted moment "
+        "cells. Same shape as ANOVA: one categorical factor, a gaussian response.\n"
         "For a time-series request ('monthly series of stake', 'trend in X over "
         "the year', 'is there seasonality in Y', 'autocorrelation of Z by month'), "
         "output a SeriesSpec JSON of the form:\n"
@@ -304,6 +312,14 @@ class MockPlanner:
         return {"tool": "anova", "dataset": dataset, "response": response,
                 "factor": factor, "filters": filters}
 
+    def _plan_normality(self, request: str, u: str) -> dict:
+        """Deterministic NormalitySpec for normality-test requests. The same
+        response-within-groups shape as ANOVA (same dataset/response/factor
+        inference), but testing the distribution rather than the means."""
+        spec = self._plan_anova(request, u)
+        spec["tool"] = "normality"
+        return spec
+
     def _plan_series(self, request: str, u: str) -> dict:
         """Deterministic SeriesSpec for time-series requests: the first
         declared time axis of the inferred dataset, mean unless the request
@@ -331,6 +347,10 @@ class MockPlanner:
                                   "over time", "seasonal", "autocorrelation",
                                   "periodogram", "trend in", "trend of")):
             return self._plan_series(request, u)
+
+        if ("normality" in u or "jarque" in u or "skewness" in u
+                or "kurtosis" in u or ("normal" in u and "distribut" in u)):
+            return self._plan_normality(request, u)
 
         if "anova" in u or "analysis of variance" in u:
             return self._plan_anova(request, u)

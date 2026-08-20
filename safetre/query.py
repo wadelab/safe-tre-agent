@@ -70,7 +70,7 @@ MAX_MODEL_TERMS = MAX_GROUP_BY
 
 class Measure(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    fn: Literal["count", "mean", "sum", "sum_sq", "corr"]
+    fn: Literal["count", "mean", "sum", "sum_sq", "sum_cube", "sum_quad", "corr"]
     column: str | None = None
     x: str | None = None
     y: str | None = None
@@ -447,6 +447,53 @@ class AnovaSpec(BaseModel):
 
     def model_key(self) -> str:
         return f"{self.dataset}:anova:{self.response}~{self.factor}"
+
+    def normalized_filters(self) -> tuple:
+        return _normalized_filters(self.filters)
+
+
+class NormalitySpec(BaseModel):
+    """A test of whether a gaussian response is normally distributed within each
+    level of a factor (spec R15). Like ANOVA, it is a function of the per-group
+    moments — but the first FOUR (n, mean, sum of squares, cubes, fourth
+    powers), from which skewness, kurtosis and the Jarque-Bera statistic follow.
+    Each moment is an ordinary vetted `QuerySpec`, so the disclosure claim is
+    inherited; the third/fourth-moment cells carry their own (tighter, signed-
+    aware) dominance witness. It exposes a one-element `terms` view like ANOVA,
+    so `service._handle_model` drives it unchanged.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    tool: Literal["normality"] = "normality"
+    dataset: str
+    response: str
+    factor: str
+    filters: list[Filter] = []
+
+    @field_validator("dataset")
+    @classmethod
+    def _dataset_known(cls, v):
+        return _known_dataset(v)
+
+    @field_validator("filters")
+    @classmethod
+    def _limit_filters(cls, v):
+        if len(v) > MAX_FILTERS:
+            raise ValueError(f"at most {MAX_FILTERS} filters")
+        return v
+
+    @model_validator(mode="after")
+    def _check_allowlist(self):
+        check_model_allowlist(self.dataset, self.response, "gaussian",
+                              self.terms, self.filters, "factor")
+        return self
+
+    @property
+    def terms(self) -> list[str]:
+        return [self.factor]
+
+    def model_key(self) -> str:
+        return f"{self.dataset}:normality:{self.response}~{self.factor}"
 
     def normalized_filters(self) -> tuple:
         return _normalized_filters(self.filters)

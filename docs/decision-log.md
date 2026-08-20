@@ -26,6 +26,7 @@ alongside the reasoning that replaced it.
 |---|---|---|---|
 | D1 | [Models fit from vetted cells, not from rows](decisions/D1-cells-first-models.md) | accepted | R14, R15, P19, P21 |
 | D10 | [Authenticated release domains and deterministic accounting come before differential privacy](decisions/D10-authenticated-release-domains.md) | accepted | R6, R10, P11, P13, P24 |
+| D11 | [Third and fourth moment cells reuse the signed dominance witness, and tighten by the power](decisions/D11-higher-moment-cells.md) | accepted | R5, R15, P19 |
 | D2 | [Rule sets compose as a union, and the checker runs out of process](decisions/D2-acro-composition.md) | accepted | R5 |
 | D3 | [Second-moment cells get their own bound, and their own failure mode](decisions/D3-second-moment-parameters.md) | accepted | R5, R15, P19 |
 | D4 | [Inference from a dispersion that cannot be released](decisions/D4-robust-dispersion.md) | **parked** | R15, P21 |
@@ -54,6 +55,16 @@ In an answer-level TRE, should cumulative disclosure be controlled primarily by 
 **What would change our mind.** Deterministic shared accounting has been implemented and attacked with the collusion corpus. Add a DP mechanism only where a measured residual cannot be bounded cleanly enough by deterministic release rules, identity-aware limits, memoisation and shared lineage, or where a quantitative privacy guarantee is itself the research objective.
 
 [Read the record](decisions/D10-authenticated-release-domains.md)
+
+## D11 — Third and fourth moment cells reuse the signed dominance witness, and tighten by the power
+
+*2026-08-20 · accepted*
+
+A normality test (Jarque-Bera) is a function of the first four moments, so it needs third (sum of cubes) and fourth (sum of fourth powers) moment cells. The third moment is SIGNED, where the p%-rule's magnitude share does not apply; the fourth is more concentrated than the second, where one outlier holds a larger share still. What disclosure control governs these new cells, and does either need a new mechanism?
+
+**What would change our mind.** Someone sets a `moment4_dom_threshold` (or a third-moment one) in anger — the default deliberately changes nothing, so the evidence for a defensible relaxation on real rather than synthetic concentration does not exist yet. Also revisit if a mean-centred two-pass moment lands (it removes the raw-power-sum cancellation the current one-pass computation carries), which would change the numerics but not this disclosure argument.
+
+[Read the record](decisions/D11-higher-moment-cells.md)
 
 ## D2 — Rule sets compose as a union, and the checker runs out of process
 

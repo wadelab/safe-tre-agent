@@ -74,6 +74,7 @@ ANALYSIS_CUES = [
     "regress", "regression", "model", "predict", "glm", "logistic", "poisson",
     "as a function of", "controlling for", "adjusted for", "adjusting for",
     "effect of", "odds", "anova", "analysis of variance", "differ across",
+    "normality", "normally distributed", "jarque", "skewness", "kurtosis",
     "differ between",
     # time-series requests (R15, the `series` tool)
     "time series", "time-series", "series of", "over time", "trend",

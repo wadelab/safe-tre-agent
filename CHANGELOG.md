@@ -8,6 +8,21 @@ and fixes are in [docs/hardening-log.md](docs/hardening-log.md).
 
 ### Added
 
+- **Normality testing (Jarque-Bera), from vetted moment cells.** A `normality`
+  tool tests, per level of a factor, whether a gaussian response is normally
+  distributed — reporting skewness, kurtosis and the Jarque-Bera statistic. It
+  needs the third and fourth moments, so the measure allowlist gains `sum_cube`
+  and `sum_quad`: new donor-additive aggregates whose cells carry the tighter
+  dominance witness (`moment3`/`moment4` disclosure classes). The third moment is
+  signed and reuses the existing signed-aware witness; the fourth is more
+  concentrated, so the same bound suppresses more — a whale-dominated response is
+  denied, not leaked ([decision D11](docs/decisions/D11-higher-moment-cells.md)).
+  Like ANOVA it fits from ordinary vetted `QuerySpec`s and reproduces from the
+  released cells (P21); numerics cross-validated against `scipy.stats.jarque_bera`
+  /`skew`/`kurtosis`. New primitive `stats.jarque_bera`. The measure vocabulary
+  grew, so `formal/skeleton.json` and the Lean case pins regenerated; the Alloy
+  catalogue atoms were unchanged, so the solver correspondence holds. (Normality
+  of GLM/ANOVA *residuals* stays out — residuals are row-level.)
 - **Assumption checks and multiplicity correction.** One-way ANOVA now reports
   **Bartlett's test of homogeneity of variance** (`bartlett_chi2`/`bartlett_df`/
   `bartlett_p`) alongside the F table. It is a function of the same finalized

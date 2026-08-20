@@ -209,3 +209,35 @@ is `regularized_gamma_q(df/2, x/2)`, already present), cross-validated against
 skeleton is byte-identical and `formal/` is untouched, so the existing Lean and
 Alloy proofs cover the round unchanged — the addition is genuinely below the
 surface they check.
+
+## A fourth example: `normality`, the first tool that grows the measure vocabulary
+
+ANOVA, `series` and the Bartlett/BH round all rode the measures the gateway
+already had. `normality` (Jarque-Bera, 2026-08-20) is the first that does not:
+it needs the third and fourth moments, so it adds two donor-additive measures —
+`sum_cube` and `sum_quad` — at the same registry seam as `sum_sq`. What that
+touches, and what it does not:
+
+- **The trusted core, minimally.** `query.py` gains two `fn` literals;
+  `procedures.py` gains two `_ColumnAggregate` subclasses (the powered
+  `select_exprs`/`contribution_expr`, classed `moment3`/`moment4`); `engine.py`'s
+  dominance query gains the two powered contributions. No new control: the third
+  moment is signed and reuses the signed-aware witness, the fourth tightens by
+  its own power ([decision D11](decisions/D11-higher-moment-cells.md)).
+- **The procedure**, `safetre/normality.py`, is ANOVA's shape with two more
+  moment cells: it plans `sum`/`sum_sq`/`sum_cube`/`sum_quad` grouped by the
+  factor, and computes per-group skewness, kurtosis and Jarque-Bera from the
+  finalized sums, reproducing from the released `cells` (P21).
+- **The formal layer moved where it should.** Because the measure vocabulary
+  grew, `formal/skeleton.json` and the Lean case pins (`gen_lean_catalogue.py`)
+  regenerated — unlike Bartlett, which was byte-identical. The Alloy *catalogue*
+  atoms (datasets, dimensions, responses) did not change, so the solver-checked
+  correspondence held unchanged; `test_skeleton_sync` and `test_formal_lean_sync`
+  are what caught the staleness and forced the regeneration.
+
+The bar was the same: `test_normality.py` pins the release contract,
+reproducibility, fail-closed denial on a suppressed moment cell, a
+**whale-dominated response being denied by the fourth-moment witness**, and the
+numerics against `scipy.stats.jarque_bera`. The conformance/skeleton/manifest
+meta-tests each demanded the two new measures and the new tool declare their
+obligation before the suite would go green.

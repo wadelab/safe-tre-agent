@@ -48,10 +48,16 @@ if TYPE_CHECKING:  # types only — the engine imports this module at runtime
 #   moment2   - a donor-additive SECOND moment (sum of squares): dominance-
 #               checked on the squared scale, where the same nominal bound is
 #               a much tighter rule (see VettingParameters.dominance_for)
+#   moment3   - a donor-additive THIRD moment (sum of cubes): dominance-checked
+#               on the SIGNED cubed scale (the witness is magnitude-and-released-
+#               total aware, so it bounds a signed contribution correctly)
+#   moment4   - a donor-additive FOURTH moment (sum of fourth powers): dominance-
+#               checked on the fourth-power scale, where a single outlier's share
+#               is higher still, so the same bound suppresses more concentration
 #   statistic - a bounded derived statistic (e.g. r): influence-checked
 #   p_value   - a significance level derived from a released statistic
 DisclosureClass = Literal["cell_key", "count", "magnitude", "moment2",
-                          "statistic", "p_value"]
+                          "moment3", "moment4", "statistic", "p_value"]
 
 
 @dataclass(frozen=True)
@@ -288,6 +294,54 @@ class SumSq(_ColumnAggregate):
         return {"value": "moment2", "n": "count"}
 
 
+class SumCube(_ColumnAggregate):
+    """Sum of cubes — the third-moment cell aggregate, for skewness.
+
+    The per-donor contribution is `x³`, which is SIGNED: the dominance witness
+    (engine.compile_dominance_query) is the magnitude-and-released-total aware
+    `GREATEST(MAX|c|/SUM|c|, MAX|c|/|SUM c|)` built for exactly this (hardening
+    #41, #93), so it bounds a donor's share of a signed third moment correctly.
+    Exists so skewness — and with `sum_quad`, the Jarque-Bera normality test —
+    is computable from ordinary vetted aggregates (safetre/normality.py).
+    """
+
+    fn = "sum_cube"
+
+    def select_exprs(self, m: Measure) -> tuple[list[str], tuple[str, ...]]:
+        col = _ident(m.column)
+        return [f"SUM({col} * {col} * {col}) AS value"], (f"{col} IS NOT NULL",)
+
+    def contribution_expr(self, m: Measure) -> str | None:
+        col = _ident(m.column)
+        return f"SUM({col} * {col} * {col})"
+
+    def output_contract(self, m: Measure) -> dict[str, DisclosureClass]:
+        return {"value": "moment3", "n": "count"}
+
+
+class SumQuad(_ColumnAggregate):
+    """Sum of fourth powers — the fourth-moment cell aggregate, for kurtosis.
+
+    The per-donor contribution is `x⁴`, non-negative and even more concentrated
+    than the square: a single outlier holds a larger share of a fourth moment
+    than of a second, so the same dominance bound suppresses more outlier-driven
+    cells — the protection tightens with the power, by construction.
+    """
+
+    fn = "sum_quad"
+
+    def select_exprs(self, m: Measure) -> tuple[list[str], tuple[str, ...]]:
+        col = _ident(m.column)
+        return [f"SUM({col} * {col} * {col} * {col}) AS value"], (f"{col} IS NOT NULL",)
+
+    def contribution_expr(self, m: Measure) -> str | None:
+        col = _ident(m.column)
+        return f"SUM({col} * {col} * {col} * {col})"
+
+    def output_contract(self, m: Measure) -> dict[str, DisclosureClass]:
+        return {"value": "moment4", "n": "count"}
+
+
 class Corr(AggregateProcedure):
     fn = "corr"
     reads_individual_values = True
@@ -343,7 +397,7 @@ class Corr(AggregateProcedure):
 
 
 REGISTRY: dict[str, AggregateProcedure] = {
-    p.fn: p for p in (Count(), Mean(), Sum(), SumSq(), Corr())
+    p.fn: p for p in (Count(), Mean(), Sum(), SumSq(), SumCube(), SumQuad(), Corr())
 }
 
 
@@ -435,7 +489,7 @@ def model_registry() -> dict[str, ModelProcedure]:
     through this function rather than touching `MODEL_REGISTRY` directly, so
     there is no way to observe it half-populated.
     """
-    from . import anova, glm, series  # noqa: F401  (self-register on import)
+    from . import anova, glm, normality, series  # noqa: F401  (self-register on import)
 
     return MODEL_REGISTRY
 

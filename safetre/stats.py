@@ -188,6 +188,22 @@ def chi2_sf(x: float, df: float) -> float:
     return regularized_gamma_q(df / 2.0, x / 2.0)
 
 
+def jarque_bera(n: float, skewness: float, kurtosis_excess: float) -> tuple[float, float]:
+    """The Jarque-Bera normality statistic and its p-value.
+
+    ``JB = n/6 (S² + K²/4)`` with S the sample skewness and K the EXCESS
+    kurtosis (both 0 for a normal). Under normality JB is chi-square with 2
+    degrees of freedom, so the p-value is ``chi2_sf(JB, 2)``. A pure function of
+    the sample size and the two shape statistics — themselves functions of the
+    vetted moment cells — so it inherits the disclosure claim. NaN in -> NaN out.
+    """
+    if not (math.isfinite(n) and math.isfinite(skewness)
+            and math.isfinite(kurtosis_excess)) or n <= 0:
+        return float("nan"), float("nan")
+    jb = n / 6.0 * (skewness ** 2 + (kurtosis_excess ** 2) / 4.0)
+    return jb, chi2_sf(jb, 2.0)
+
+
 def benjamini_hochberg(pvalues: list[float]) -> list[float]:
     """Benjamini-Hochberg FDR-adjusted p-values, in the input order.
 
