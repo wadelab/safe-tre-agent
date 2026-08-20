@@ -12,6 +12,7 @@ Security posture:
 
 from __future__ import annotations
 
+import json
 import logging
 import math
 import os
@@ -21,7 +22,7 @@ import pandas as pd
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field, field_validator
@@ -480,6 +481,54 @@ def chimp(request: Request, body: QueryRequest):
         "d": dossier, "tables": _dossier_tables(dossier),
         "budget_left": max(0, sess.auditor.budget - spent),
     })
+
+
+@app.post("/api/chimp/stream")
+def chimp_stream(request: Request, body: QueryRequest):
+    """Server-Sent Events sibling of `/api/chimp`: relays one `step` event as
+    each sub-question settles at the gateway, then a final `done` event carrying
+    the rendered dossier. Same gateway, auditor and session lock as `/api/chimp`;
+    a `step` event carries only the sub-question text and the gateway verdict,
+    both already in the dossier, never a suppressed value or working notes (see
+    docs/progress-indicator.md). Exempt from the response-time boundary in
+    timing.py so the stream is not buffered."""
+    if not CHIMP_ENABLED:
+        raise HTTPException(404, "no inside analyst runs in this environment")
+    user, allowed = current_user(request)
+    if not allowed:
+        raise HTTPException(403, "not on the Safe People allowlist")
+
+    sess = sessions.get(user)
+    client = LLMClient()
+
+    def events():
+        with sess.lock:
+            loop = AnalystLoop(service, LLMAnalystPolicy(client, _cfg),
+                               auditor=sess.auditor, audit_log=audit_log, user=user,
+                               max_steps=CHIMP_MAX_STEPS)
+            dossier = None
+            for kind, payload in loop.iter_run(body.q):
+                if kind == "step_start":
+                    yield f"event: step_start\ndata: {json.dumps(payload)}\n\n"
+                elif kind == "step":
+                    data = json.dumps({"id": payload.id,
+                                       "sub_question": payload.sub_question,
+                                       "status": payload.status})
+                    yield f"event: step\ndata: {data}\n\n"
+                else:
+                    dossier = payload
+            try:
+                LLMNarrator(client).render(dossier)
+            except Exception:                     # noqa: BLE001
+                _log.warning("narrator failed; returning the dossier without prose")
+            sess.history.append((body.q, dossier.verdict))
+            spent = sess.auditor.spent
+            html = templates.get_template("_dossier.html").render(
+                d=dossier, tables=_dossier_tables(dossier),
+                budget_left=max(0, sess.auditor.budget - spent))
+            yield f"event: done\ndata: {json.dumps({'html': html})}\n\n"
+
+    return StreamingResponse(events(), media_type="text/event-stream")
 
 
 @app.get("/healthz")

@@ -1,9 +1,8 @@
 # The inside-analyst progress indicator (planning)
 
-**Status: planned — 2026-08-20.** Supersedes the indeterminate progress bar
-added ad hoc alongside the unified ask box. This doc records the design before it
-is built; when built, the "Implementation" section becomes a description rather
-than a plan.
+**Status: implemented — 2026-08-20.** Supersedes the indeterminate progress bar
+added ad hoc alongside the unified ask box. The "Mechanism" section below now
+describes what shipped rather than what is planned; the bar has been removed.
 
 ## The problem
 

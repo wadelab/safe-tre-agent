@@ -93,6 +93,28 @@ def test_scripted_loop_runs_steps_and_concludes(service):
     assert "[supported] stake rises with night use (steps 1)" in text
 
 
+def test_iter_run_streams_step_events_then_the_final_dossier(service):
+    """iter_run announces each step (start, then settled) and ends with the
+    same dossier run() returns — run() is just iter_run consumed. The step
+    events carry only the sub-question and the gateway verdict, never a value."""
+    def fresh():
+        return ScriptedPolicy(
+            [("mean stake by night use band", MEAN_BY_BAND)],
+            _conclude(Claim("stake rises with night use", "supported", [1])))
+
+    events = list(AnalystLoop(service, fresh()).iter_run("q"))
+    assert [k for k, _ in events] == ["step_start", "step", "done"]
+    assert events[0][1] == {"id": 1, "sub_question": "mean stake by night use band"}
+    assert isinstance(events[1][1], Step) and events[1][1].status == "released"
+
+    streamed = events[-1][1]
+    run_dossier = AnalystLoop(service, fresh()).run("q")
+    assert isinstance(streamed, Dossier)
+    assert streamed.verdict == run_dossier.verdict == "supported"
+    assert ([s.status for s in streamed.steps]
+            == [s.status for s in run_dossier.steps] == ["released"])
+
+
 def test_steps_share_one_session_so_the_lineage_binds_across_them(service):
     """The marginal by band, then the same breakdown excluding a sub-threshold
     group, is a differencing pair by the published-marginal bound (P11), and

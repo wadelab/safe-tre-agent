@@ -292,7 +292,16 @@ class AnalystLoop:
                          budget_remaining=max(0, self.auditor.budget - self.auditor.spent),
                          steps_remaining=self.max_steps - len(steps))
 
-    def run(self, question: str) -> Dossier:
+    def iter_run(self, question: str):
+        """Run the vetted loop, yielding ``("step", Step)`` as each step
+        settles at the gateway and a final ``("done", Dossier)``.
+
+        `run` consumes this and returns only the dossier, so every existing
+        caller is unchanged; the streaming web endpoint relays the intermediate
+        `step` events so a long run's progress is observable (see
+        docs/progress-indicator.md). The dossier is identical either way — the
+        events carry only what the finished dossier already holds.
+        """
         from . import dataset as dataset_mod
         dossier = Dossier(question=question, dataset=dataset_mod.active().name,
                           budget=self.auditor.budget)
@@ -317,7 +326,13 @@ class AnalystLoop:
                 dossier.notes = action.notes
                 dossier.stopped_because = "concluded"
                 break
-            steps.append(self._step(len(steps) + 1, action))
+            step_id = len(steps) + 1
+            # announce the step before it runs so a live view can show it
+            # working (amber) and then settle it; `run` ignores this event
+            yield ("step_start", {"id": step_id, "sub_question": action.sub_question})
+            step = self._step(step_id, action)
+            steps.append(step)
+            yield ("step", step)
         if not dossier.claims:
             # a loop that ran out of budget or steps without concluding has
             # answered nothing; say so in the closed vocabulary rather than
@@ -327,6 +342,14 @@ class AnalystLoop:
             dossier.verdict = "not_answerable"
         dossier.steps = steps
         dossier.budget_spent = self.auditor.spent
+        yield ("done", dossier)
+
+    def run(self, question: str) -> Dossier:
+        dossier: Dossier | None = None
+        for kind, payload in self.iter_run(question):
+            if kind == "done":
+                dossier = payload
+        assert dossier is not None       # iter_run always ends with ("done", …)
         return dossier
 
     def _step(self, step_id: int, action: Query) -> Step:

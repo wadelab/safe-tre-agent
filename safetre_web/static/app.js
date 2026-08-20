@@ -98,41 +98,13 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   };
 
-  /* --- progress indicator ----------------------------------------------------
-     A whole inside analysis is many model turns behind one blocking POST, so it
-     must show it is alive rather than stalled. An indeterminate bar plus an
-     elapsed-seconds counter: honest about "still working" without faking
-     step-by-step progress we do not stream. */
-
-  const progress = document.getElementById("progress");
-  const progressText = progress ? progress.querySelector(".progress__text") : null;
-  let elapsedTimer = null;
-
-  const startProgress = (message) => {
-    if (!progress) return;
-    const t0 = performance.now();
-    progress.hidden = false;
-    const tick = () => {
-      const s = Math.round((performance.now() - t0) / 1000);
-      progressText.textContent = `${message} (${s}s)`;
-    };
-    tick();
-    elapsedTimer = window.setInterval(tick, 1000);
-  };
-
-  const stopProgress = () => {
-    if (!progress) return;
-    if (elapsedTimer) { window.clearInterval(elapsedTimer); elapsedTimer = null; }
-    progress.hidden = true;
-    progressText.textContent = "";
-  };
-
   /* --- submit ------------------------------------------------------------------
      One box, one toggle. "Parse outside" plans a single aggregate query outside
-     the wall and animates the gateway steps; "Parse inside" hands the whole
-     question to the inside mechanism, which runs many analyses through the same
-     gateway and returns a vetted dossier. The toggle is present only when the
-     operator enabled the inside path; with it absent, everything is outside. */
+     the wall and animates the gateway-check strip. "Parse inside" streams the
+     inside analyst's steps, each a box that settles released/denied, so a long
+     run reads as working rather than stalled (docs/progress-indicator.md). The
+     toggle is present only when the operator enabled the inside path; with it
+     absent, everything is outside. */
 
   const currentMode = () => {
     const picked = document.querySelector("input[name='mode']:checked");
@@ -161,11 +133,38 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   };
 
-  const runInside = async (q) => {
-    // The gateway-step strip is per single query; an inside run reports its own
-    // per-step gateway calls in the dossier, so leave the strip idle here.
-    resetSteps();
-    result.innerHTML = "<p class=\"hint\">Working inside the environment&hellip;</p>";
+  /* --- parse inside: one box per step, streamed as each settles -------------- */
+
+  const CHIMP_TAG = {
+    running:  { label: "running",  cls: "tag--blue" },
+    released: { label: "released", cls: "tag--green" },
+    redacted: { label: "redacted", cls: "tag--yellow" },
+    denied:   { label: "denied",   cls: "tag--red" },
+    skipped:  { label: "skipped",  cls: "tag--grey" },
+    review:   { label: "review",   cls: "tag--yellow" },
+  };
+
+  const liveBox = (list, id, subq) => {
+    const li = document.createElement("li");
+    li.className = "step";
+    li.innerHTML =
+      "<span class=\"step-circle\" aria-hidden=\"true\"></span>" +
+      "<span class=\"step-name\"></span>" +
+      "<strong class=\"tag step-status\"></strong>";
+    li.querySelector(".step-circle").textContent = id;
+    li.querySelector(".step-name").textContent = subq;      // textContent: never HTML
+    list.appendChild(li);
+    return li;
+  };
+
+  const settleBox = (li, status) => {
+    const s = CHIMP_TAG[status] || CHIMP_TAG.skipped;
+    const tag = li.querySelector(".step-status");
+    tag.textContent = s.label;
+    tag.className = `tag step-status ${s.cls}`;
+  };
+
+  const runInsideBlocking = async (q) => {
     const resp = await fetch("/api/chimp", {
       method: "POST",
       headers: { "Content-Type": "application/json", "Accept": "text/html" },
@@ -175,6 +174,56 @@ document.addEventListener("DOMContentLoaded", () => {
     decorateTables(result);
   };
 
+  const runInside = async (q) => {
+    resetSteps();
+    let resp = null;
+    try {
+      resp = await fetch("/api/chimp/stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Accept": "text/event-stream" },
+        body: JSON.stringify({ q }),
+      });
+    } catch (e) { resp = null; }
+    if (!resp || !resp.ok || !resp.body || !window.ReadableStream) {
+      return runInsideBlocking(q);          // no streaming available — fall back
+    }
+    result.innerHTML =
+      "<h3 class=\"heading-s\">Working inside the environment</h3>" +
+      "<ol class=\"steps chimp-live\" id=\"chimp-live\" aria-live=\"polite\"></ol>";
+    const list = document.getElementById("chimp-live");
+    const boxes = {};
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = "";
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      let sep;
+      while ((sep = buf.indexOf("\n\n")) >= 0) {
+        const chunk = buf.slice(0, sep);
+        buf = buf.slice(sep + 2);
+        let event = "message", data = "";
+        chunk.split("\n").forEach((line) => {
+          if (line.startsWith("event:")) event = line.slice(6).trim();
+          else if (line.startsWith("data:")) data += line.slice(5).trim();
+        });
+        if (!data) continue;
+        const payload = JSON.parse(data);
+        if (event === "step_start") {
+          boxes[payload.id] = liveBox(list, payload.id, payload.sub_question);
+          settleBox(boxes[payload.id], "running");
+        } else if (event === "step") {
+          const li = boxes[payload.id] || liveBox(list, payload.id, payload.sub_question);
+          settleBox(li, payload.status);
+        } else if (event === "done") {
+          result.innerHTML = payload.html;
+          decorateTables(result);
+        }
+      }
+    }
+  };
+
   const run = async () => {
     const q = input.value.trim();
     if (!q) return;
@@ -182,9 +231,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const mode = currentMode();
     button.disabled = true;
     const t0 = performance.now();
-    startProgress(mode === "inside"
-      ? "Working inside the environment — several analyses through the gateway"
-      : "Checking in the safepod");
 
     try {
       if (mode === "inside") await runInside(q);
@@ -194,7 +240,6 @@ document.addEventListener("DOMContentLoaded", () => {
       result.innerHTML =
         "<p class=\"hint\">The request failed. Try again or contact the TRE operator.</p>";
     } finally {
-      stopProgress();
       button.disabled = false;
     }
   };

@@ -702,18 +702,8 @@ table.agg td.suppressed { color: var(--secondary); }
 .mode-switch__opt input:checked + span { background: var(--blue); color: #fff; border-color: var(--blue); }
 .mode-switch__opt input:focus-visible + span { outline: 3px solid var(--focus); outline-offset: 1px; }
 
-/* --- still-working indicator (indeterminate; honest, not faked progress) --- */
-.progress { margin-top: 1rem; }
-.progress__bar {
-  height: 6px; background: var(--panel);
-  border: 1px solid var(--border); overflow: hidden;
-}
-.progress__fill {
-  display: block; height: 100%; width: 33%; background: var(--blue);
-  animation: progress-slide 1.4s ease-in-out infinite;
-}
-.progress__text { margin: 0.4rem 0 0; }
-@keyframes progress-slide { 0% { margin-left: -33%; } 100% { margin-left: 100%; } }
-@media (prefers-reduced-motion: reduce) {
-  .progress__fill { animation: none; width: 100%; opacity: 0.5; }
-}
+/* --- parse-inside: live step boxes (reuse the gateway-strip .step look) -----
+   Discrete state, no animation: each step is a box that settles from running
+   (blue) to released (green) / denied (red). See docs/progress-indicator.md. */
+.chimp-live { margin-top: 0.5rem; }
+.chimp-live .step-name { white-space: normal; }

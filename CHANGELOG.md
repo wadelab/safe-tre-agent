@@ -16,8 +16,16 @@ and fixes are in [docs/hardening-log.md](docs/hardening-log.md).
   outside / parse inside** toggle routes each question to the single-query
   gateway (`/api/query`) or to Chimp (`/api/chimp`). The operator still gates
   whether an inside analyst exists at all; the per-question toggle is a demo
-  stopgap meant to become an operator/server setting. A progress bar with a live
-  elapsed-seconds counter now shows while a request runs.
+  stopgap meant to become an operator/server setting.
+- **The inside analyst streams its progress.** A parse-inside run now shows one
+  box per analysis step, settling from running to released/denied as each
+  sub-question clears the gateway, driven by a Server-Sent Events endpoint
+  (`/api/chimp/stream`) that relays `AnalystLoop.iter_run` — so a minute-long run
+  reads as working, in discrete state rather than animation
+  ([docs/progress-indicator.md](docs/progress-indicator.md)). This replaces the
+  short-lived indeterminate progress bar. A step event carries only the
+  sub-question and the gateway verdict, both already in the returned dossier;
+  `/api/chimp` stays for non-streaming callers and as the fallback.
 - **`SAFETRE_DATA_DIR`** points the web app at a base-table CSV directory other
   than `./data`, so a larger synthetic population can be served from its own
   folder without a same-named, differently-shaped table clobbering `./data`.

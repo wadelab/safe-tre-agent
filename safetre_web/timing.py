@@ -119,8 +119,10 @@ def _always_admitted(path: str) -> bool:
 
 
 # Paths exempt from the response-time DEADLINE entirely (not merely the pool
-# cap). The inside analyst ("/api/chimp") runs a whole multi-step analysis and
-# legitimately takes far longer than the per-query ceiling; racing it against
+# cap). The inside analyst (`/api/chimp` and its streaming sibling
+# `/api/chimp/stream`, which relays each step as it settles) runs a whole
+# multi-step analysis and legitimately takes far longer than the per-query
+# ceiling — and the stream must not be buffered by this boundary at all; racing it against
 # that deadline would refuse every real research question. Its timing reveals
 # how many analyses the analyst ran, not any withheld cell value — the dossier
 # carries only vetted releases, so this is a weaker and different channel than
@@ -128,7 +130,7 @@ def _always_admitted(path: str) -> bool:
 # long-running analyst is asynchronous submit-and-collect (decision D5); until
 # that lands, this synchronous exemption is a stated proof-of-concept limit,
 # and it is the ONLY path allowed past the deadline.
-DEADLINE_EXEMPT = ("/api/chimp",)
+DEADLINE_EXEMPT = ("/api/chimp", "/api/chimp/stream")
 
 
 def _deadline_exempt(path: str) -> bool:
