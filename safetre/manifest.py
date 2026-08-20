@@ -131,6 +131,23 @@ def public_manifest(policy: PolicyConfig) -> dict[str, Any]:
             "code_execution_available": False,
             "sql_available": False,
         },
+        # The response-time boundary (R18, D5). Published because a caller
+        # cannot use the deadline it is subject to without knowing it, and a
+        # client that wants to show the analyst how long is left before the
+        # ceiling refuses must calibrate to the real number rather than guess
+        # (D11). Safe to publish: both are policy constants, identical for
+        # every request, and the control R18 provides is that responses are
+        # INDISTINGUISHABLE within a quantum — knowing the quantum does not
+        # help tell two of them apart. `minimum_cell_size` sits a few lines
+        # below and is a far more sensitive dial.
+        "response_timing": {
+            "quantum_ms": policy.response_quantum_ms,
+            "ceiling_ms": policy.response_ceiling_ms,
+            "streamed": False,
+            "note": ("every response is buffered and released on a quantum "
+                     "boundary; work exceeding the ceiling is refused at the "
+                     "boundary rather than answered late"),
+        },
         "datasets": _catalogue_for_manifest(),
         "tools": [
             {

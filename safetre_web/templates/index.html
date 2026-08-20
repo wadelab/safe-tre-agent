@@ -47,6 +47,11 @@
       </div>
       <button id="chimpbtn" class="button button--chimp" type="submit">Ask Chimp</button>
     </form>
+    {# No data-ceiling-ms, deliberately: "/api/chimp" is DEADLINE_EXEMPT
+       (safetre_web/timing.py), so there is no ceiling on this path to count
+       toward and claiming one would be false. `startElapsed` falls back to a
+       bare elapsed readout. See D11. #}
+    <p id="cq-elapsed" class="hint elapsed" hidden></p>
     <div id="dossier" class="result" role="status" aria-live="polite"></div>
   </div>
   {% endif %}
@@ -113,6 +118,8 @@
         </ol>
 
         <h2 class="heading-m">Result</h2>
+        <p id="q-elapsed" class="hint elapsed" hidden
+           data-ceiling-ms="{{ manifest.response_timing.ceiling_ms }}"></p>
         <div id="result" class="result" role="status" aria-live="polite">
           <p class="hint">Results appear here after the gateway releases them.</p>
         </div>

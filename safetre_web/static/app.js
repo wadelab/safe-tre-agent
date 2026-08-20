@@ -56,6 +56,42 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   };
 
+  /* --- elapsed-time indicator (decision D11) ---------------------------------
+     Reports the CLOCK, never the work. It is driven entirely by the browser's
+     own `performance.now()` and the ceiling the manifest publishes, so it is a
+     rendering of two numbers this page already holds — no server event, no new
+     response, no new timing.
+
+     The version this replaces would have advanced a pipeline step as each one
+     finished, and that is a disclosure three times over: a step reporting its
+     own outcome reports the gateway's verdict on the cohort; a counter that
+     converges on the inside analyst's true step count reports a number decided
+     by the data; and an event emitted when a stage finishes is an unpadded
+     timestamp of that stage's work, which would hand an attacker one timing
+     sample per stage where R18 leaves them one per request. See D11 and D5.
+
+     Deliberately NOT a fraction. "How far along" has no request-decided
+     denominator for a loop that stops when it has concluded, so the readout is
+     elapsed against the ceiling and is labelled as such. */
+
+  const startElapsed = (el) => {
+    if (!el) return () => {};
+    const ceiling = Number(el.dataset.ceilingMs || 0);
+    const t0 = performance.now();
+    const tick = () => {
+      const s = Math.floor((performance.now() - t0) / 1000);
+      el.textContent = ceiling
+        ? `Working in the safepod — ${s}s elapsed of a ${Math.round(ceiling / 1000)}s ceiling.`
+        : `Working in the safepod — ${s}s elapsed.`;
+    };
+    el.hidden = false;
+    tick();
+    // A fixed cadence, and that is the point: the interval is a constant, so
+    // the readout advances at the same rate whatever the query is doing.
+    const timer = setInterval(tick, 1000);
+    return () => { clearInterval(timer); el.hidden = true; el.textContent = ""; };
+  };
+
   /* --- table decoration ------------------------------------------------------
      Numeric columns right-align; a NaN in a released table means the value was
      suppressed or not computable, shown as "[c]" (the ONS convention) with a
@@ -108,6 +144,7 @@ document.addEventListener("DOMContentLoaded", () => {
     steps.forEach((s) => setStep(s, "checking"));
     result.innerHTML = "<p class=\"hint\">Checking the request in the safepod.</p>";
     const t0 = performance.now();
+    const stopElapsed = startElapsed(document.getElementById("q-elapsed"));
 
     try {
       const resp = await fetch("/api/query", {
@@ -133,6 +170,7 @@ document.addEventListener("DOMContentLoaded", () => {
       result.innerHTML =
         "<p class=\"hint\">The request failed. Try again or contact the TRE operator.</p>";
     } finally {
+      stopElapsed();
       button.disabled = false;
     }
   };
@@ -201,6 +239,9 @@ document.addEventListener("DOMContentLoaded", () => {
       dossier.innerHTML =
         "<p class=\"hint\">Chimp is working inside the environment. It may run several " +
         "analyses through the gateway, so this can take a little while&hellip;</p>";
+      // The long path, and the reason D11 exists: an inside-analyst run can
+      // take minutes, and the honest thing to show is the clock.
+      const stopElapsed = startElapsed(document.getElementById("cq-elapsed"));
       try {
         const resp = await fetch("/api/chimp", {
           method: "POST",
@@ -212,6 +253,7 @@ document.addEventListener("DOMContentLoaded", () => {
         dossier.innerHTML =
           "<p class=\"hint\">Could not reach the inside analyst. Please try again.</p>";
       } finally {
+        stopElapsed();
         cbtn.disabled = false;
       }
     };

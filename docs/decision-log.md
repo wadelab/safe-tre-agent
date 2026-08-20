@@ -26,6 +26,7 @@ alongside the reasoning that replaced it.
 |---|---|---|---|
 | D1 | [Models fit from vetted cells, not from rows](decisions/D1-cells-first-models.md) | accepted | R14, R15, P19, P21 |
 | D10 | [Authenticated release domains and deterministic accounting come before differential privacy](decisions/D10-authenticated-release-domains.md) | accepted | R6, R10, P13 |
+| D11 | [A progress indicator may report the clock, never the work](decisions/D11-progress-indicator.md) | accepted | R9, R11, R18 |
 | D2 | [Rule sets compose as a union, and the checker runs out of process](decisions/D2-acro-composition.md) | accepted | R5 |
 | D3 | [Second-moment cells get their own bound, and their own failure mode](decisions/D3-second-moment-parameters.md) | accepted | R5, R15, P19 |
 | D4 | [Inference from a dispersion that cannot be released](decisions/D4-robust-dispersion.md) | **parked** | R15, P21 |
@@ -54,6 +55,16 @@ In an answer-level TRE, should cumulative disclosure be controlled primarily by 
 **What would change our mind.** Deterministic shared accounting has been implemented and attacked with the collusion corpus. Add a DP mechanism only where a measured residual cannot be bounded cleanly enough by deterministic release rules, identity-aware limits, memoisation and shared lineage, or where a quantitative privacy guarantee is itself the research objective.
 
 [Read the record](decisions/D10-authenticated-release-domains.md)
+
+## D11 — A progress indicator may report the clock, never the work
+
+*2026-08-19 · accepted*
+
+A multi-step analysis behind one HTTP request leaves the analyst watching nothing for as long as it runs, and the inside analyst's loop is the worst case. Should the interface report progress, and if so what may it report — the pipeline stages as they complete, the analyst loop's step count, or something narrower?
+
+**What would change our mind.** Someone wants the indicator to reflect actual progress rather than elapsed time — which needs a server-sent event per step, a new channel, and a new normative clause, because the argument below turns entirely on the server sending nothing between the request and the quantised response. Also revisit if asynchronous delivery arrives (D5's preferred future for the timing channel): a job-handle design changes the shape of this question, because the poll interval becomes the client's choice rather than the work's.
+
+[Read the record](decisions/D11-progress-indicator.md)
 
 ## D2 — Rule sets compose as a union, and the checker runs out of process
 
