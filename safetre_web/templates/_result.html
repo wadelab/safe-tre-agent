@@ -1,5 +1,5 @@
 <div class="result-card status-{{ r.status }}" data-status="{{ r.status }}"
-     data-stages="{% for step in r.trace %}{{ step.split(':', 1)[0] }}{% if not loop.last %},{% endif %}{% endfor %}">
+     data-stages="{% for step in r.trace %}{{ step.split(':', 1)[0].split('[', 1)[0] }}{% if not loop.last %},{% endif %}{% endfor %}">
 
   {% if r.status == 'denied' %}
   <div class="error-summary">

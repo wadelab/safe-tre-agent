@@ -193,7 +193,7 @@ def test_packaged_demo_is_the_single_source_of_demo_facts():
     assert schema.COLUMN_META == defn.column_meta_as_dict()
     assert engine._VIEWS == defn.public_view_sql()
     assert engine._UNIT_VIEWS == defn.unit_view_sql()
-    assert analyst.DIMENSION_SYNONYMS == dict(defn.lexicon.dimension_synonyms)
+    assert dict(defn.lexicon.dimension_synonyms).items() <= analyst.DIMENSION_SYNONYMS.items()
     assert analyst.DOMAIN_CUES == list(defn.lexicon.domain_cues)
     assert analyst.RESPONSE_SYNONYMS == {
         k: dict(v) for k, v in defn.lexicon.response_synonyms.items()}

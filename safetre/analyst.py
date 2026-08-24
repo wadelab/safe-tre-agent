@@ -92,6 +92,15 @@ RESPONSE_SYNONYMS: dict[str, dict[str, str]] = {}
 def _apply(defn) -> None:
     DOMAIN_CUES[:] = list(defn.lexicon.domain_cues)
     DIMENSION_SYNONYMS.clear()
+    # Every dimension's column name, and its underscores-as-spaces form, names
+    # itself. The catalogue panel shows analysts the column names, so a request
+    # typed as "night_use_band" is the expected case; without this the fidelity
+    # gate could not see the word and refused the planner's correct choice.
+    # Explicit lexicon entries take precedence.
+    for view in defn.datasets.values():
+        for dim in view.dims:
+            DIMENSION_SYNONYMS.setdefault(dim, dim)
+            DIMENSION_SYNONYMS.setdefault(dim.replace("_", " "), dim)
     DIMENSION_SYNONYMS.update(defn.lexicon.dimension_synonyms)
     RESPONSE_SYNONYMS.clear()
     RESPONSE_SYNONYMS.update({k: dict(v) for k, v in defn.lexicon.response_synonyms.items()})
@@ -323,10 +332,15 @@ def check_term_coherence(request: str, dataset: str, response: str,
     time_axes = set(CATALOGUE[dataset].get("time_dims", ()))
     hallucinated = sorted(t for t in modelled if t not in referenced and t not in time_axes)
     if hallucinated:
+        if not referenced:
+            return False, (
+                f"query models with {', '.join(hallucinated)}, but no predictor "
+                f"was recognised in the request; name one of: "
+                f"{', '.join(sorted(dims))}")
         return False, (
             f"query models with {', '.join(hallucinated)}, which was not part "
-            f"of the request; valid predictors for {dataset!r}: "
-            f"{', '.join(sorted(dims))}")
+            f"of the request (recognised: {', '.join(sorted(referenced))}); "
+            f"valid predictors for {dataset!r}: {', '.join(sorted(dims))}")
     return True, "model terms match request"
 
 

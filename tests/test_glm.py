@@ -250,3 +250,27 @@ def test_plan_aggregates_are_valid_queryspecs():
         for agg in aggs:
             assert isinstance(agg, QuerySpec)       # O2/O3/O4 inherited
             assert agg.group_by == spec.terms
+
+
+def test_column_name_typed_verbatim_is_a_recognised_term(service):
+    """A request that names the predictor by its column name ("device_os")
+    must pass the fidelity gate: the catalogue panel shows analysts those
+    names, so typing one is the expected case, not a hallucinated term."""
+    planner = _FixedModelPlanner({
+        "tool": "glm", "dataset": "wellbeing", "family": "gaussian",
+        "response": "wemwbs_score", "terms": ["device_os"]})
+    r = service.handle("Is there a correlation between device_os and wemwbs_score", planner)
+    assert not any(f.rule == "term_mismatch" for f in r.findings), r.message
+    assert any(line.startswith("terms: model terms match") for line in r.trace)
+
+
+def test_model_trace_prefixes_match_the_stage_strip(service):
+    """The web stage strip keys on the text before ':' with any '[role]'
+    stripped, so a released model must expose engine, auditor and gateway."""
+    planner = _FixedModelPlanner({
+        "tool": "glm", "dataset": "wellbeing", "family": "gaussian",
+        "response": "wemwbs_score", "terms": ["device_os"]})
+    r = service.handle("regress wellbeing on device os", planner)
+    assert r.status == "released", (r.status, r.message)
+    stages = {line.split(":", 1)[0].split("[", 1)[0] for line in r.trace}
+    assert {"engine", "auditor", "gateway"} <= stages, stages

@@ -664,6 +664,7 @@ class QueryService:
             audit_findings += auditor.observe_cohort(
                 agg.dataset, cohort,
                 self._difference_bound(agg.dataset, marginals), quantity=quantity)
+            trace.append(f"auditor[{role}]: {[f.rule for f in audit_findings]}")
             if audit_findings:
                 trace.append(WITHHELD_TRACE)
                 return deny(audit_findings, WITHHELD_MESSAGE, public=_withheld())
