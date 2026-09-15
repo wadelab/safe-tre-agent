@@ -142,6 +142,8 @@ def test_index_accessibility_contract():
     r = client.get("/").text
     assert 'class="skip-link"' in r                 # first focusable element
     assert 'role="status"' in r and 'aria-live="polite"' in r   # results announced
+    assert 'id="working-status"' in r
+    assert 'class="working-spinner"' in r
     assert 'lang="en"' in r
     # the codebook is real content, not title-attribute tooltips (which
     # keyboards and touchscreens cannot reach)
@@ -344,3 +346,51 @@ def test_middleware_order_is_asserted_not_just_documented():
         "a request off the channel must not spend a bucket")
     assert pos["security_headers"] < pos["restricted_channel"], (
         "#77: CSP/nosniff must land on the 403 the channel gate generates")
+
+
+# --- the inside analyst's stream always closes with an answer ----------------
+
+def _stream_events(text):
+    return [line.split(":", 1)[1].strip() for line in text.splitlines()
+            if line.startswith("event:")]
+
+
+def test_chimp_stream_reports_an_unavailable_model(monkeypatch):
+    """On the hosted demo a model 503 escaped the loop and the stream closed
+    with no `done`, leaving the page on "working". Now the loop stops typed and
+    the page gets a dossier that says why."""
+    import safetre_web.app as web
+    from safetre.llm import LLMError
+
+    class Unavailable:
+        def __init__(self, *_a, **_k):
+            pass
+
+        def next(self, _state):
+            raise LLMError("LLM request failed: HTTP Error 503: Service Unavailable")
+
+    monkeypatch.setattr(web, "CHIMP_ENABLED", True)
+    monkeypatch.setattr(web, "LLMAnalystPolicy", Unavailable)
+    r = client.post("/api/chimp/stream", json={"q": "mean spend by age band"})
+    assert r.status_code == 200
+    assert _stream_events(r.text)[-1] == "done"
+    assert "model_unavailable" in r.text and "503" not in r.text
+
+
+def test_chimp_stream_closes_with_done_whatever_fails(monkeypatch):
+    import safetre_web.app as web
+
+    class Broken:
+        def __init__(self, *_a, **_k):
+            pass
+
+        def iter_run(self, _q):
+            raise RuntimeError("boom")
+            yield  # pragma: no cover - makes this a generator
+
+    monkeypatch.setattr(web, "CHIMP_ENABLED", True)
+    monkeypatch.setattr(web, "AnalystLoop", Broken)
+    r = client.post("/api/chimp/stream", json={"q": "mean spend by age band"})
+    assert r.status_code == 200
+    assert _stream_events(r.text) == ["done"]
+    assert "stopped unexpectedly" in r.text and "boom" not in r.text

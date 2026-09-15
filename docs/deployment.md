@@ -125,6 +125,8 @@ All configuration is via environment variables.
 | `SAFETRE_LLM_MODEL` | `local-120b` | runtime model id; default documents the 120B-class planning assumption |
 | `SAFETRE_LLM_TEMPERATURE` | `0` | deterministic planning |
 | `SAFETRE_LLM_TIMEOUT` | `60` | model request timeout in seconds |
+| `SAFETRE_LLM_RETRIES` | `2` | extra attempts when the model endpoint answers 429, 500, 502, 503 or 504; timeouts and other errors are not retried |
+| `SAFETRE_LLM_RETRY_BACKOFF` | `1` | seconds before the first retry, doubling on each further one |
 | `SAFETRE_ALLOWED_LLM_HOSTS` | `localhost,127.0.0.1,::1` | comma-separated model endpoint hosts allowed without remote opt-in |
 | `SAFETRE_ALLOW_REMOTE_LLM` | unset | set `1` only for synthetic-data remote endpoint experiments |
 | `SAFETRE_ALLOWLIST` | – (open) | comma-separated Safe People logins |

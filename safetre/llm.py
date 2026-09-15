@@ -16,6 +16,7 @@ import json
 import os
 import re
 import textwrap
+import time
 from urllib import error, parse, request
 
 DEFAULT_LLM_BASE_URL = "http://127.0.0.1:8000/v1"
@@ -24,6 +25,16 @@ DEFAULT_ALLOWED_HOSTS = "localhost,127.0.0.1,::1"
 FALSEY = {"0", "false", "no", "off"}
 TRUTHY = {"1", "true", "yes", "on"}
 PLANNER_MODES = {"real", "mock"}
+# statuses a model runtime returns when it is briefly unable to serve (rate
+# limited, overloaded, restarting); worth a short retry, unlike a 4xx
+RETRYABLE_STATUS = frozenset({429, 500, 502, 503, 504})
+
+
+class LLMError(RuntimeError):
+    """The model endpoint could not produce a usable completion: a transport
+    failure, a timeout, an HTTP error that survived the retries, or a reply
+    outside the chat-completions schema. Callers that must not raise on the
+    model's account (the inside analyst's loop) catch this and nothing wider."""
 
 
 def _strip_code_fences(text: str) -> str:
@@ -91,6 +102,8 @@ class LLMConfig:
     api_key: str = "local"
     temperature: float = 0.0
     timeout: float = 60.0
+    retries: int = 2
+    retry_backoff: float = 1.0
 
     @classmethod
     def from_env(cls, *, model: str | None = None, base_url: str | None = None,
@@ -113,6 +126,8 @@ class LLMConfig:
                 else float(os.environ.get("SAFETRE_LLM_TEMPERATURE", "0"))
             ),
             timeout=float(os.environ.get("SAFETRE_LLM_TIMEOUT", "60")),
+            retries=int(os.environ.get("SAFETRE_LLM_RETRIES", "2")),
+            retry_backoff=float(os.environ.get("SAFETRE_LLM_RETRY_BACKOFF", "1")),
         )
         resolved.validate()
         return resolved
@@ -198,23 +213,36 @@ class LLMClient:
         req = request.Request(
             self.config.chat_completions_url, data=body, headers=headers, method="POST",
         )
-        try:
-            with _OPENER.open(req, timeout=self.config.timeout) as resp:  # nosec B310
-                data = json.loads(resp.read().decode())
-        except error.URLError as exc:
-            raise RuntimeError(f"LLM request failed: {exc}") from exc
-        except json.JSONDecodeError as exc:
-            raise RuntimeError("LLM response was not JSON") from exc
+        attempts = max(0, self.config.retries) + 1
+        for attempt in range(attempts):
+            try:
+                with _OPENER.open(req, timeout=self.config.timeout) as resp:  # nosec B310
+                    data = json.loads(resp.read().decode())
+                break
+            except error.HTTPError as exc:
+                # A runtime that is briefly unable to serve is retried with
+                # backoff. Anything else fails at once -- a 4xx, and the
+                # redirect refusal (#80), which carries its 3xx status.
+                if exc.code in RETRYABLE_STATUS and attempt + 1 < attempts:
+                    time.sleep(self.config.retry_backoff * 2 ** attempt)
+                    continue
+                raise LLMError(f"LLM request failed: {exc}") from exc
+            except json.JSONDecodeError as exc:
+                raise LLMError("LLM response was not JSON") from exc
+            except OSError as exc:
+                # URLError, and the bare TimeoutError a slow read raises. Not
+                # retried: each attempt may already have waited `timeout`.
+                raise LLMError(f"LLM request failed: {exc}") from exc
         # the response is untrusted: a bare list or scalar must reach the
         # schema error below rather than an AttributeError on `.get`
         if not isinstance(data, dict):
-            raise RuntimeError("LLM response did not match chat-completions schema")
+            raise LLMError("LLM response did not match chat-completions schema")
         if "choices" not in data and isinstance(data.get("data"), dict):
             data = data["data"]
         try:
             content = data["choices"][0]["message"]["content"]
         except (KeyError, IndexError, TypeError) as exc:
-            raise RuntimeError("LLM response did not match chat-completions schema") from exc
+            raise LLMError("LLM response did not match chat-completions schema") from exc
         return _strip_code_fences(content or "")
 
 

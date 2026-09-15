@@ -76,6 +76,22 @@ and fixes are in [docs/hardening-log.md](docs/hardening-log.md).
   default), giving generous headroom for large-cohort queries; per R18 raising
   the ceiling slows nothing and does not weaken the timing hiding.
 
+### Fixed
+
+- **A model endpoint that fails no longer breaks the inside analyst.** On the
+  hosted demo the model provider intermittently answered `503 Service
+  Unavailable`, and the error escaped the analyst loop: the blocking endpoint
+  returned HTTP 500 and the streaming one closed without its `done` event, so
+  the page sat on "working" with no answer. Three changes. The model client
+  retries 429/500/502/503/504 with backoff (`SAFETRE_LLM_RETRIES`, default 2;
+  `SAFETRE_LLM_RETRY_BACKOFF`, default 1 s), which also covers the outside
+  planner; a redirect refusal (#80) and other errors still fail at once. Every
+  client failure, a read timeout included, is now a typed `LLMError`. The loop
+  catches it and stops with `stopped_because: model_unavailable`, keeping the
+  steps already released and returning a `not_answerable` dossier, with the
+  cause in the operator log rather than the dossier. And the stream closes with
+  `done` whatever fails, so the page always shows an outcome.
+
 ### Security
 
 - **Round 15: the inside analyst survived a live jailbreak red-team

@@ -61,11 +61,14 @@ By default, the client rejects non-allowlisted LLM hosts. If the model server is
 a separate machine inside the safepod, add that fixed hostname or IP to
 `SAFETRE_ALLOWED_LLM_HOSTS`.
 
-For synthetic-data development only:
+For synthetic-data development only, the public demo uses Gemini Flash:
 
 ```bash
+export SAFETRE_LLM=real
 SAFETRE_ALLOW_REMOTE_LLM=1
-SAFETRE_LLM_BASE_URL=https://example-llm-provider.invalid/v1
+SAFETRE_LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
+SAFETRE_LLM_API_KEY=your-google-api-key
+SAFETRE_LLM_MODEL=gemini-2.5-flash
 ```
 
 A hosted OpenAI-compatible endpoint works the same way — set the base URL,
@@ -75,15 +78,14 @@ channels and must stay synthetic-data-only:
 ```bash
 export SAFETRE_LLM=real
 export SAFETRE_ALLOW_REMOTE_LLM=1
-export SAFETRE_LLM_BASE_URL=https://<provider>/v1
+export SAFETRE_LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
 export SAFETRE_LLM_API_KEY=...
-export SAFETRE_LLM_MODEL=<model-id>
+export SAFETRE_LLM_MODEL=gemini-2.5-flash
 ```
 
-This documentation deliberately does not name the provider or model used for
-the maintainers' own demos: advertising which model plans queries invites
-model-targeted prompt injection, and no safety property depends on the choice —
-the planner is untrusted whichever model fills the role.
+Use the current Flash model ID from Google AI Studio if this model is retired or
+replaced. The planner remains untrusted whichever model fills the role, and
+remote use is restricted to synthetic data.
 
 Legacy `OPENAI_BASE_URL`, `OPENAI_API_KEY`, and `SAFETRE_MODEL` are still read as
 fallbacks, but new deployments should use the `SAFETRE_LLM_*` names.

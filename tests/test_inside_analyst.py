@@ -14,7 +14,8 @@ test:
   must cite a released step or is downgraded to a typed refusal; a loop that
   runs out of budget or steps says so rather than answering.
 - The model's replies are untrusted input: malformed replies are retried and
-  then converted into a typed refusal, never raised.
+  then converted into a typed refusal, never raised; a model runtime that
+  fails outright stops the loop with a typed reason, also never raised.
 - The narrative check flags invented figures and accepts honest rounding.
 
 The offline harness is the NIGHTPLAY study at 2,500 people (its plants are
@@ -32,6 +33,7 @@ import pytest
 from safetre import dataset as dataset_mod
 from safetre import disclosure as D
 from safetre.audit import AuditLog
+from safetre.llm import LLMError
 from safetre.inside_analyst import (
     VERDICTS, AnalystLoop, Claim, Conclude, Dossier, LLMAnalystPolicy, LLMNarrator,
     LoopState, Query, ScriptedPolicy, Step, parse_action, render_dossier_markdown,
@@ -330,6 +332,62 @@ def test_llm_policy_recovers_on_the_retry(service):
     assert '"dataset":"sessions|bets|panel|wellbeing|giving"' in client.calls[0][0]
     assert "RESEARCH QUESTION: q" in client.calls[-1][1]
     assert "released table:" in client.calls[-1][1]
+
+
+def test_exact_operator_example_starts_inside_analysis_without_llm_call(service):
+    client = FakeClient([])
+    policy = LLMAnalystPolicy(client)
+    state = LoopState(question="  MEAN MONTHLY STAKE BY NIGHT USE BAND  ", steps=[],
+                      budget_remaining=20, steps_remaining=8)
+    action = policy.next(state)
+    assert isinstance(action, Query)
+    assert action.spec == dataset_mod.active().planner_examples[0].spec
+    assert client.calls == []
+
+
+def test_premature_inside_conclusion_falls_back_to_constrained_planner(service):
+    conclusion = json.dumps({
+        "action": "conclude", "verdict": "not_answerable",
+        "claims": [{"text": "no evidence", "verdict": "not_answerable", "evidence": []}],
+    })
+    spec = json.dumps(dataset_mod.active().planner_examples[0].spec)
+    client = FakeClient([conclusion, spec])
+    policy = LLMAnalystPolicy(client)
+    state = LoopState(question="could employment modify the stake pattern across late-night phone-use categories?",
+                      steps=[],
+                      budget_remaining=20, steps_remaining=8)
+
+    action = policy.next(state)
+
+    assert isinstance(action, Query)
+    assert action.spec == dataset_mod.active().planner_examples[0].spec
+    assert len(client.calls) == 2
+
+
+class FailingClient(FakeClient):
+    """Answers from `replies`, then fails the way an unavailable model
+    runtime does once the client's own retries are spent."""
+
+    def complete(self, system, user):
+        if not self.replies:
+            self.calls.append((system, user))
+            raise LLMError("LLM request failed: HTTP Error 503: Service Unavailable")
+        return super().complete(system, user)
+
+
+def test_a_model_that_fails_mid_run_stops_the_loop_typed(service):
+    """On the hosted demo a 503 on the second planning call escaped the loop:
+    HTTP 500, or a stream that closed with no answer. The released step stands,
+    and the dossier says why the analyst stopped."""
+    good = json.dumps({"action": "query", "sub_question": "mean stake by night use band",
+                       "spec": MEAN_BY_BAND})
+    d = AnalystLoop(service, LLMAnalystPolicy(FailingClient([good]))).run("q")
+    assert [s.status for s in d.steps] == ["released"]
+    assert d.stopped_because == "model_unavailable"
+    assert d.verdict == "not_answerable"
+    assert [c.reason for c in d.claims] == ["model_unavailable"]
+    # the endpoint's error text stays in the operator log, not the dossier
+    assert "503" not in d.to_json()
 
 
 def test_conclusion_within_budget_and_the_dossier_round_trips(service):

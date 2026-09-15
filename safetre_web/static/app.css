@@ -304,6 +304,38 @@ a:focus, .link-button:focus {
 
 .button:disabled { opacity: 0.5; cursor: wait; }
 
+.button-spinner, .working-spinner {
+  display: inline-block;
+  width: 0.85em;
+  height: 0.85em;
+  margin-right: 0.35em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  vertical-align: -0.1em;
+  animation: working-spin 0.8s linear infinite;
+}
+
+.button-spinner { display: none; }
+.button:disabled .button-spinner { display: inline-block; }
+
+.working-status {
+  display: inline-block;
+  margin: 0 0 22px 12px;
+  color: var(--secondary);
+  vertical-align: middle;
+}
+
+.working-status[hidden] { display: none; }
+
+@keyframes working-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .button-spinner, .working-spinner { animation: none; }
+}
+
 /* a button that looks like a link (example queries) */
 .link-button {
   display: inline;

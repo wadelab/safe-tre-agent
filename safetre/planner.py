@@ -126,6 +126,26 @@ def _extract_json(text: str) -> str:
     return m.group(0) if m else text
 
 
+def _normalise_example_text(text: str) -> str:
+    text = text.casefold().replace("-", " ")
+    words = []
+    aliases = {"average": "mean", "averages": "mean", "bands": "band"}
+    ignored = {"a", "an", "the", "what", "is", "of", "by", "across", "between"}
+    for word in re.findall(r"[a-z0-9_]+", text):
+        if word not in ignored:
+            words.append(aliases.get(word, word))
+    return " ".join(words)
+
+
+def operator_example(request: str) -> dict | None:
+    """Return the declared spec for an exact or conservative paraphrase."""
+    wanted = _normalise_example_text(request)
+    for example in _dataset.active().planner_examples:
+        if wanted == _normalise_example_text(example.request):
+            return json.loads(json.dumps(example.spec))
+    return None
+
+
 class LLMPlanner:
     """Real planner over any OpenAI-compatible client (see safetre.llm).
 
@@ -139,6 +159,12 @@ class LLMPlanner:
         self.policy = policy
 
     def plan(self, request: str) -> dict:
+        # Operator-authored UI examples are exact contracts, not suggestions.
+        # Resolve them before the remote model so a hosted planner cannot turn
+        # the demo's own advertised question into a different valid query.
+        example = operator_example(request)
+        if example is not None:
+            return example
         raw = self.client.complete(planner_system(self.policy), request)
         return json.loads(_extract_json(raw))
 

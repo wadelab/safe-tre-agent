@@ -135,14 +135,14 @@ SAFETRE_ALLOW_REMOTE_LLM=1
 
 Remote endpoints are synthetic-data-only because they are data-egress channels.
 
-For a remote-endpoint synthetic demo, set:
+For a Gemini Flash synthetic demo, set:
 
 ```bash
 export SAFETRE_LLM=real
 export SAFETRE_ALLOW_REMOTE_LLM=1
-export SAFETRE_LLM_BASE_URL=https://<provider>/v1
-export SAFETRE_LLM_API_KEY=...
-export SAFETRE_LLM_MODEL=<model-id>
+export SAFETRE_LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
+export SAFETRE_LLM_API_KEY=...           # Google API key; never commit this
+export SAFETRE_LLM_MODEL=gemini-2.5-flash
 ```
 
 Then run `scripts/run_web.sh` or the `uvicorn` command from step 4. Do not store

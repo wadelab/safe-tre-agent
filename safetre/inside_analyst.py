@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import io
 import json
+import logging
 import math
 import re
 from dataclasses import asdict, dataclass, field
@@ -47,12 +48,15 @@ from typing import Protocol
 import pandas as pd
 
 from . import disclosure as D
-from .planner import _extract_json, planner_system
+from .llm import LLMError
+from .planner import LLMPlanner, _extract_json, operator_example, planner_system
 from .stats import benjamini_hochberg
 
 VERDICTS = ("supported", "not_supported", "null", "not_answerable")
 DEFAULT_MAX_STEPS = 12
 FRAME_ROWS_SHOWN = 60
+
+_log = logging.getLogger("safetre")
 
 
 # --------------------------------------------------------------------------- #
@@ -350,7 +354,17 @@ class AnalystLoop:
             if state.budget_remaining <= 0:
                 dossier.stopped_because = "budget_exhausted"
                 break
-            action = self.policy.next(state)
+            try:
+                action = self.policy.next(state)
+            except LLMError as exc:
+                # The model runtime failed outright, after the client's own
+                # retries. The loop never raises on the model's account: keep
+                # the steps already released and stop with a typed reason. The
+                # cause goes to the operator log, not the dossier -- its text
+                # can name the endpoint.
+                _log.warning("inside analyst stopped, model unavailable: %s", exc)
+                dossier.stopped_because = "model_unavailable"
+                break
             if isinstance(action, Conclude):
                 dossier.claims = _ground_claims(action.claims, steps)
                 dossier.verdict = action.verdict if action.verdict in VERDICTS else "not_answerable"
@@ -528,11 +542,16 @@ class LLMAnalystPolicy:
     def __init__(self, client, policy=None, retries: int = 1):
         self.client = client
         self.retries = retries
+        self.policy = policy
         self.system = ANALYST_PROTOCOL + "\n\nThe request grammar and catalogue:\n" \
             + planner_system(policy)
         self.raw_replies: list[str] = []
 
     def next(self, state: LoopState) -> Query | Conclude:
+        if not state.steps:
+            spec = operator_example(state.question)
+            if spec is not None:
+                return Query(state.question, spec)
         user = transcript(state)
         last_error = ""
         for _ in range(self.retries + 1):
@@ -541,7 +560,15 @@ class LLMAnalystPolicy:
                 "Reply with exactly one JSON object.)" if last_error else ""))
             self.raw_replies.append(raw)
             try:
-                return parse_action(raw)
+                action = parse_action(raw)
+                if isinstance(action, Conclude) and not state.steps:
+                    # CHIMP must gather evidence before concluding. If the
+                    # analyst jumps straight to a conclusion, ask the same
+                    # constrained planner used by the outside path for one
+                    # first query; its proposal still faces every gateway.
+                    spec = LLMPlanner(self.client, self.policy).plan(state.question)
+                    return Query(state.question, spec)
+                return action
             except ValueError as exc:
                 last_error = str(exc)
         return Conclude(

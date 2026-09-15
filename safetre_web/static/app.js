@@ -6,6 +6,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const input = document.getElementById("q");
   const result = document.getElementById("result");
   const button = document.getElementById("runbtn");
+  const runLabel = document.getElementById("run-label");
+  const workingStatus = document.getElementById("working-status");
   const countMsg = document.getElementById("q-info");
   const steps = [...document.querySelectorAll("#pipeline .step")];
   // The single-query stage strip (#pipeline) applies to parse-outside. In
@@ -17,6 +19,14 @@ document.addEventListener("DOMContentLoaded", () => {
   const gatewayMode = (inside) => {
     if (pipeline) pipeline.hidden = inside;
     if (gatewayLive) gatewayLive.hidden = !inside;
+  };
+
+  const setWorking = (working) => {
+    button.disabled = working;
+    button.setAttribute("aria-busy", working ? "true" : "false");
+    form.setAttribute("aria-busy", working ? "true" : "false");
+    runLabel.textContent = working ? "Working..." : "Ask";
+    workingStatus.hidden = !working;
   };
 
   /* --- character count (GOV.UK character-count behaviour) ------------------- */
@@ -242,7 +252,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!q) return;
 
     const mode = currentMode();
-    button.disabled = true;
+    setWorking(true);
     const t0 = performance.now();
 
     try {
@@ -253,7 +263,7 @@ document.addEventListener("DOMContentLoaded", () => {
       result.innerHTML =
         "<p class=\"hint\">The request failed. Try again or contact the TRE operator.</p>";
     } finally {
-      button.disabled = false;
+      setWorking(false);
     }
   };
 

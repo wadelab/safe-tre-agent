@@ -9,7 +9,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(
 
 from run_planner_eval import canonical, score_item, summarise, try_spec  # noqa: E402
 
-from safetre.planner import MockPlanner
+from safetre import dataset
+from safetre.planner import LLMPlanner, MockPlanner
 from safetre.query import QuerySpec
 
 CORPUS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -65,3 +66,14 @@ def test_harness_runs_end_to_end_with_mock_planner():
     # the unanswerable items (it proposes off-allowlist specs for them)
     assert summary["rejected_ok_pct"] is not None
     assert all(r["error"] is None for r in results)
+
+
+def test_exact_operator_example_does_not_consult_remote_planner():
+    example = dataset.active().planner_examples[0]
+
+    class MustNotBeCalled:
+        def complete(self, system, user):
+            raise AssertionError("exact operator example reached the remote planner")
+
+    planner = LLMPlanner(MustNotBeCalled())
+    assert planner.plan(f"  {example.request.upper()}  ") == example.spec

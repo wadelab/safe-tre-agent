@@ -63,7 +63,14 @@
               You have 500 characters remaining</div>
           </div>
 
-          <button id="runbtn" class="button" type="submit">Ask</button>
+          <button id="runbtn" class="button" type="submit">
+            <span class="button-spinner" aria-hidden="true"></span>
+            <span id="run-label">Ask</span>
+          </button>
+          <p id="working-status" class="working-status" role="status" aria-live="polite" hidden>
+            <span class="working-spinner" aria-hidden="true"></span>
+            Working&hellip; the gateway is checking your request.
+          </p>
         </form>
 
         {% if examples %}

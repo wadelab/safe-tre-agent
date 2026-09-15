@@ -104,14 +104,14 @@ The endpoint must implement OpenAI-compatible `/v1/chat/completions`. Remote
 model endpoints require `SAFETRE_ALLOW_REMOTE_LLM=1` and are for synthetic-data
 development only.
 
-For a remote-endpoint synthetic-data web demo:
+For a Gemini Flash synthetic-data web demo:
 
 ```bash
 export SAFETRE_LLM=real
 export SAFETRE_ALLOW_REMOTE_LLM=1        # synthetic-data-only opt-in
-export SAFETRE_LLM_BASE_URL=https://<provider>/v1
-export SAFETRE_LLM_API_KEY=...           # never commit this
-export SAFETRE_LLM_MODEL=<model-id>
+export SAFETRE_LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
+export SAFETRE_LLM_API_KEY=...           # Google API key; never commit this
+export SAFETRE_LLM_MODEL=gemini-2.5-flash
 scripts/run_web.sh
 ```
 

@@ -43,19 +43,23 @@ enforced at the boundary, not by the planner.
 SAFETRE_LLM=mock uv run uvicorn safetre_web.app:app --host 127.0.0.1 --port 8800
 ```
 
-**Variant B — remote model, synthetic-data-only.** Any hosted
-OpenAI-compatible endpoint gives the full planning experience. Remote
-endpoints are egress channels, so they require an explicit opt-in and must
-never be used with real data:
+**Variant B — Gemini Flash, synthetic-data-only.** Google exposes Gemini through
+an OpenAI-compatible endpoint, which the generic adapter can call directly.
+Remote endpoints are egress channels, so they require an explicit opt-in and
+must never be used with real data:
 
 ```bash
 export SAFETRE_LLM=real
 export SAFETRE_ALLOW_REMOTE_LLM=1        # synthetic-data-only opt-in
-export SAFETRE_LLM_BASE_URL=https://<provider>/v1
-export SAFETRE_LLM_API_KEY=...           # never commit this
-export SAFETRE_LLM_MODEL=<model-id>
+export SAFETRE_LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
+export SAFETRE_LLM_API_KEY=...           # Google API key; never commit this
+export SAFETRE_LLM_MODEL=gemini-2.5-flash
 uv run uvicorn safetre_web.app:app --host 127.0.0.1 --port 8800
 ```
+
+Use the current Flash model ID from Google AI Studio if this model is retired
+or replaced. A Google AI subscription and Gemini API access are separate; the
+API key must be enabled for the Gemini API.
 
 `scripts/run_web.sh` does the same, sourcing the variables from `.env.local`.
 A local OpenAI-compatible endpoint (vLLM, llama.cpp) needs no opt-in; see

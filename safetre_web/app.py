@@ -502,30 +502,39 @@ def chimp_stream(request: Request, body: QueryRequest):
     client = LLMClient()
 
     def events():
-        with sess.lock:
-            loop = AnalystLoop(service, LLMAnalystPolicy(client, _cfg),
-                               auditor=sess.auditor, audit_log=audit_log, user=user,
-                               max_steps=CHIMP_MAX_STEPS)
-            dossier = None
-            for kind, payload in loop.iter_run(body.q):
-                if kind == "step_start":
-                    yield f"event: step_start\ndata: {json.dumps(payload)}\n\n"
-                elif kind == "step":
-                    data = json.dumps({"id": payload.id,
-                                       "sub_question": payload.sub_question,
-                                       "status": payload.status})
-                    yield f"event: step\ndata: {data}\n\n"
-                else:
-                    dossier = payload
-            try:
-                LLMNarrator(client).render(dossier)
-            except Exception:                     # noqa: BLE001
-                _log.warning("narrator failed; returning the dossier without prose")
-            sess.history.append((body.q, dossier.verdict))
-            spent = sess.auditor.spent
-            html = templates.get_template("_dossier.html").render(
-                d=dossier, tables=_dossier_tables(dossier),
-                budget_left=max(0, sess.auditor.budget - spent))
+        try:
+            with sess.lock:
+                loop = AnalystLoop(service, LLMAnalystPolicy(client, _cfg),
+                                   auditor=sess.auditor, audit_log=audit_log, user=user,
+                                   max_steps=CHIMP_MAX_STEPS)
+                dossier = None
+                for kind, payload in loop.iter_run(body.q):
+                    if kind == "step_start":
+                        yield f"event: step_start\ndata: {json.dumps(payload)}\n\n"
+                    elif kind == "step":
+                        data = json.dumps({"id": payload.id,
+                                           "sub_question": payload.sub_question,
+                                           "status": payload.status})
+                        yield f"event: step\ndata: {data}\n\n"
+                    else:
+                        dossier = payload
+                try:
+                    LLMNarrator(client).render(dossier)
+                except Exception:                     # noqa: BLE001
+                    _log.warning("narrator failed; returning the dossier without prose")
+                sess.history.append((body.q, dossier.verdict))
+                spent = sess.auditor.spent
+                html = templates.get_template("_dossier.html").render(
+                    d=dossier, tables=_dossier_tables(dossier),
+                    budget_left=max(0, sess.auditor.budget - spent))
+                yield f"event: done\ndata: {json.dumps({'html': html})}\n\n"
+        except Exception:                         # noqa: BLE001
+            # A stream that ends without `done` leaves the page on "working"
+            # with no answer and no error. Whatever failed, close it with a
+            # message the page renders, and leave the traceback to the log.
+            _log.exception("inside analyst stream failed")
+            html = ("<p class=\"hint\">The safe analysis engine stopped "
+                    "unexpectedly. Try again or contact the TRE operator.</p>")
             yield f"event: done\ndata: {json.dumps({'html': html})}\n\n"
 
     return StreamingResponse(events(), media_type="text/event-stream")

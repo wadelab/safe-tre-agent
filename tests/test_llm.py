@@ -1,5 +1,6 @@
 """Tests for local-first, model-agnostic LLM configuration."""
 
+from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import threading
@@ -11,6 +12,7 @@ from safetre.llm import (
     DEFAULT_LLM_MODEL,
     LLMClient,
     LLMConfig,
+    LLMError,
     real_llm_enabled,
 )
 
@@ -22,6 +24,8 @@ LLM_ENV = [
     "SAFETRE_LLM_API_KEY",
     "SAFETRE_LLM_TEMPERATURE",
     "SAFETRE_LLM_TIMEOUT",
+    "SAFETRE_LLM_RETRIES",
+    "SAFETRE_LLM_RETRY_BACKOFF",
     "SAFETRE_ALLOWED_LLM_HOSTS",
     "SAFETRE_ALLOW_REMOTE_LLM",
     "SAFETRE_LLM",
@@ -301,3 +305,86 @@ def test_a_non_object_response_is_a_schema_error_not_a_crash(monkeypatch):
     finally:
         server.shutdown()
         thread.join(timeout=5)
+
+
+# --- transient endpoint failures: retried, then typed ------------------------
+
+@contextmanager
+def _endpoint(statuses, *, delay=0.0):
+    """A chat-completions endpoint answering each POST with the next status in
+    `statuses` (200 once they run out); yields the base URL and the hit list."""
+    hits = []
+    queue = list(statuses)
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self):  # noqa: N802
+            self.rfile.read(int(self.headers["Content-Length"]))
+            hits.append(self.path)
+            if delay:
+                import time
+                time.sleep(delay)
+            status = queue.pop(0) if queue else 200
+            raw = json.dumps({"choices": [{"message": {"content": "ok"}}]}).encode() \
+                if status == 200 else b"{}"
+            self.send_response(status)
+            if 300 <= status < 400:
+                self.send_header("Location", "http://127.0.0.2:9/v1/chat/completions")
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(raw)))
+            self.end_headers()
+            self.wfile.write(raw)
+
+        def log_message(self, *_args):
+            return
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield f"http://127.0.0.1:{server.server_port}/v1", hits
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+
+
+def test_a_briefly_unavailable_endpoint_is_retried(monkeypatch):
+    """The hosted demo's provider answered 503 intermittently and the next call
+    succeeded; one 503 used to fail the whole request."""
+    clear_llm_env(monkeypatch)
+    monkeypatch.setenv("SAFETRE_LLM_RETRY_BACKOFF", "0")
+    with _endpoint([503, 429]) as (base_url, hits):
+        assert LLMClient(base_url=base_url).complete("system", "user") == "ok"
+    assert len(hits) == 3
+
+
+def test_an_endpoint_that_stays_unavailable_raises_typed(monkeypatch):
+    clear_llm_env(monkeypatch)
+    monkeypatch.setenv("SAFETRE_LLM_RETRY_BACKOFF", "0")
+    monkeypatch.setenv("SAFETRE_LLM_RETRIES", "2")
+    with _endpoint([503, 503, 503, 503]) as (base_url, hits):
+        with pytest.raises(LLMError, match="503"):
+            LLMClient(base_url=base_url).complete("system", "user")
+    assert len(hits) == 3
+
+
+@pytest.mark.parametrize("status", [400, 401, 302])
+def test_a_non_transient_failure_is_not_retried(monkeypatch, status):
+    """A 4xx will not change on a retry, and a redirect is refused outright
+    (#80) -- retrying it would only repeat the refusal."""
+    clear_llm_env(monkeypatch)
+    monkeypatch.setenv("SAFETRE_LLM_RETRY_BACKOFF", "0")
+    with _endpoint([status]) as (base_url, hits):
+        with pytest.raises(LLMError):
+            LLMClient(base_url=base_url).complete("system", "user")
+    assert len(hits) == 1
+
+
+def test_a_read_timeout_raises_typed_not_bare(monkeypatch):
+    """A slow read raises a bare TimeoutError, which is not a URLError, so it
+    used to escape the client's error handling altogether."""
+    clear_llm_env(monkeypatch)
+    monkeypatch.setenv("SAFETRE_LLM_TIMEOUT", "0.2")
+    with _endpoint([200], delay=1.0) as (base_url, hits):
+        with pytest.raises(LLMError, match="request failed"):
+            LLMClient(base_url=base_url).complete("system", "user")
+    assert len(hits) == 1
