@@ -152,12 +152,12 @@ more turn the safe analysis engine on than move the gateway. With it on, the sin
 small **parse outside / parse inside** toggle — `outside` routes a question to
 the single-query gateway (`/api/query`), `inside` hands the whole question to
 the safe analysis engine (`/api/chimp`), which plans and runs the whole analysis server-side behind
-the same safe-outputs gateway and returns only a dossier of vetted releases.
-The per-question toggle is a demo stopgap: the operator still gates whether an
-inside analyst exists at all, and the routing choice is intended to become an
-operator/server setting rather than a browser control
+the same safe-outputs gateway and returns only a dossier of vetted releases
 and the narrative written from them &mdash; its working notes and the raw data
-never cross to the browser. The endpoint runs a whole multi-step analysis and
+never cross to the browser. The per-question toggle is a demo stopgap: the
+operator still gates whether an inside analyst exists at all, and the routing
+choice is intended to become an operator/server setting rather than a browser
+control. The endpoint runs a whole multi-step analysis and
 is exempt from the per-query response-time deadline, a proof-of-concept
 limitation whose principled answer is asynchronous submit-and-collect
 ([D5](decisions/D5-timing-channel.md)). Synthetic data only; see

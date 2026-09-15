@@ -28,6 +28,26 @@ The safepod receives the proposed tool call, validates it, runs only approved
 fixed tools, checks the output for disclosure risk, and returns either a result
 or a refusal.
 
+## Parse outside and parse inside
+
+Where the operator has enabled the inside analyst, the ask box shows a
+**parse outside / parse inside** switch:
+
+- **Parse outside** (the default) turns one request into one tool call, as
+  described above. Use it for a single, well-formed aggregate question.
+- **Parse inside** hands the whole research question to the safe analysis
+  engine, which runs several analyses inside the environment. Each step passes
+  through the same validation, session and disclosure checks, and the page
+  shows one box per step as it is released or denied. You receive a dossier of
+  the vetted releases and a summary written only from them; the engine's working
+  notes and the raw data are never returned. A run takes tens of seconds to a
+  minute.
+
+If the switch is absent, every request is processed outside. Whether an inside
+analyst runs is set by the operator, not by you
+([deployment](deployment.md#the-inside-analyst-safe-analysis-engine)). Both
+modes draw on the same session budget.
+
 ## Asking questions
 
 Good requests are specific about the outcome, grouping, and filters:

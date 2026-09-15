@@ -67,6 +67,18 @@ hash-chained audit log. Editing or deleting any entry breaks the chain and
 this endpoint returns `false`. The verification is simulatable: an auditor can
 re-run it from the log alone, without trusting the server that produced it.
 
+## 6. Parse inside — the switch the operator can enable
+
+![The ask box with the inside analyst enabled](figures/demo-inside-toggle.png)
+
+The captures above use **parse outside**, the default single-query path, with
+the inside analyst off. When an operator sets `SAFETRE_ANALYST=chimp`, the ask
+box gains a **parse outside / parse inside** switch. Parse inside sends the
+whole question to the safe analysis engine, which runs several analyses behind
+the same gateway and returns a dossier of vetted releases. This capture shows
+only the switch; an inside run needs a model endpoint, so it is not part of the
+reproducible `mock` set. See [the inside analyst](inside-analyst.md).
+
 ## Reproducing the captures
 
 The images in this page are generated, not hand-curated:
@@ -80,7 +92,8 @@ The script starts a throwaway server on `127.0.0.1:8801` with `SAFETRE_LLM=mock`
 (the deterministic tests/CI planner, chosen so captures need no model endpoint)
 and a fresh temporary audit log, screenshots each state with headless Chrome,
 and writes `docs/figures/demo-{home,released,redacted,denied}.png` plus
-`demo-mobile.png` (the home page at 390px width). A running demo server on
+`demo-mobile.png` (the home page at 390px width) and `demo-inside-toggle.png`
+(the home page with `SAFETRE_ANALYST=chimp`). A running demo server on
 port 8800 is left untouched.
 
 To capture by hand instead, open these URLs — the fragment pre-fills and

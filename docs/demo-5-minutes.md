@@ -87,6 +87,19 @@ In the UI, run these in order — or follow the
 Then re-run the audit check from step 4: the chain now covers those requests,
 including the denial.
 
+These queries use **parse outside**, the default single-query path. The
+[web interface walkthrough](web-walkthrough.md) narrates the same steps for a
+first-time user.
+
+### Optional: parse inside
+
+To see the inside analyst, restart the server from Variant B (it needs a model
+endpoint; the `mock` planner does not drive it) with `SAFETRE_ANALYST=chimp`.
+A **parse outside / parse inside** switch appears above the page title. Choose
+`inside` and ask a research question that needs more than one table; the page
+shows one box per analysis step as each is released or denied, then a dossier
+of vetted releases. See [the inside analyst](inside-analyst.md).
+
 ## 6. Stop cleanly
 
 Stop the server with `Ctrl-C`. The run leaves only generated, gitignored

@@ -67,6 +67,24 @@ panels:
 
 Denied requests are important. They are a safety feature, not a crash.
 
+## Two ways a question is processed
+
+The web interface can process a question in one of two ways:
+
+- **Parse outside** (the default). The planner turns your question into one
+  aggregate query, and the gateway-check strip shows it passing through each
+  control. This is the shipped single-query gateway.
+- **Parse inside**. A safe analysis engine inside the environment plans and runs
+  several analyses for a larger research question. Each step goes through the
+  same gateway, and only a dossier of vetted releases, with a summary written
+  from them, comes back.
+
+The **parse outside / parse inside** switch appears only when the operator has
+enabled the inside analyst (`SAFETRE_ANALYST=chimp`); otherwise everything is
+processed outside. The [web interface walkthrough](web-walkthrough.md) shows
+both in two minutes, and [the inside analyst](inside-analyst.md) explains the
+design.
+
 ## What makes this different from a normal chatbot?
 
 A normal chatbot has broad freedom to answer. This system deliberately narrows
@@ -98,5 +116,6 @@ least:
 - site-specific safepod hardening, identity, and physical controls;
 - a decision on whether differential privacy is needed for any release mode.
 
-Start with [How to install](install.md), then follow the
+Start with the [web interface walkthrough](web-walkthrough.md) for a first
+look, then [How to install](install.md), then follow the
 [Test deployment runbook](test-deployment.md).
