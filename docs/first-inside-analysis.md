@@ -67,10 +67,13 @@ interpretation.
 ## A broader question
 
 The same approach can gather a larger body of evidence. This second synthetic
-example asks how late-night phone use relates to gambling and wellbeing. It
-uses five linked steps: the stake gradient, the correlation with late-night
-sessions, product differences, problem-gambling severity over three study
-waves, and sleep quality.
+example asks:
+
+> How does late-night phone use relate to gambling and wellbeing?
+
+The engine answers it in five linked steps: the stake gradient, the
+correlation with late-night sessions, product differences, problem-gambling
+severity over three study waves, and sleep quality.
 
 ![A five-step inside-analysis dossier for a broader social-science question](figures/demo-inside-complex-dossier.png)
 

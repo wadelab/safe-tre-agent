@@ -178,6 +178,8 @@ def test_capture_dossier_is_available_only_in_mock_capture_mode(monkeypatch):
     complex_run = client.get("/?inside-demo=complex")
     assert complex_run.status_code == 200
     assert "What the safe analysis engine asked the gateway (5 steps)" in complex_run.text
+    assert "How does late-night phone use relate to gambling and wellbeing?</textarea>" \
+        in complex_run.text
 
 
 # --- #50: a prefill link fills the box, it does not run it ----------------------

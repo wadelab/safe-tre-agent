@@ -255,14 +255,27 @@ def _capture_inside_demo() -> bool:
         in ("1", "true", "yes", "on")
 
 
+_CAPTURE_QUESTIONS = {
+    "1": "Does late-night phone use relate to gambling behaviour?",
+    "complex": "How does late-night phone use relate to gambling and wellbeing?",
+}
+
+
+def _capture_question(request: Request) -> str | None:
+    """The question shown in the box of an offline capture, if this is one."""
+    if not _capture_inside_demo():
+        return None
+    return _CAPTURE_QUESTIONS.get(request.query_params.get("inside-demo"))
+
+
 def _capture_dossier_html(request: Request) -> str | None:
     """Render a completed dossier for reproducible offline screenshots only."""
-    demo = request.query_params.get("inside-demo")
-    if not (_capture_inside_demo() and demo in ("1", "complex")):
+    question = _capture_question(request)
+    if question is None:
         return None
     if (os.environ.get("SAFETRE_LLM") or "").strip().lower() != "mock":
         raise RuntimeError("inside demo capture requires SAFETRE_LLM=mock")
-    question = "Does late-night phone use relate to gambling behaviour?"
+    demo = request.query_params.get("inside-demo")
     loop = AnalystLoop(service, _capture_demo_policy(complex_analysis=demo == "complex"),
                        auditor=SessionAuditor(),
                        max_steps=CHIMP_MAX_STEPS)
@@ -480,6 +493,7 @@ def index(request: Request):
         "dataset_description": _definition.description,
         "version": _version,
         "chimp_enabled": CHIMP_ENABLED,
+        "capture_question": _capture_question(request),
         "capture_dossier_html": _capture_dossier_html(request),
     })
 

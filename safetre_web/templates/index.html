@@ -55,7 +55,7 @@
                 </svg>
               </span>
               <textarea id="q" name="q" class="textarea" rows="3" maxlength="500"
-                        aria-describedby="q-hint q-info" required></textarea>
+                        aria-describedby="q-hint q-info" required>{{ capture_question or "" }}</textarea>
             </div>
             <div id="q-info" class="hint count-message" aria-live="polite">
               You have 500 characters remaining</div>
