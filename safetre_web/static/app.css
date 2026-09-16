@@ -698,6 +698,7 @@ table.agg td.suppressed { color: var(--secondary); }
 .engine-step{margin-bottom:14px}
 .engine-step-head{display:flex;justify-content:space-between;gap:12px;align-items:baseline;margin:0 0 6px}
 .engine-step-q{font-weight:600}
+.engine-step-head .tag{flex:none}
 .table-scroll{overflow-x:auto}
 
 /* --- unified ask box: neutral oracle mark --------------------------------- */

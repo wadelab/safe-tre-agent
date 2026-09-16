@@ -63,6 +63,14 @@ SHOTS_INSIDE = {
         "/?inside-demo=1#mode=inside",
         "390,2200",
     ),
+    "demo-inside-complex-dossier": (
+        "/?inside-demo=complex#mode=inside",
+        "1280,3900",
+    ),
+    "demo-inside-complex-dossier-mobile": (
+        "/?inside-demo=complex#mode=inside",
+        "390,6000",
+    ),
 }
 
 

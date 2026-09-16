@@ -193,23 +193,61 @@ CHIMP_ENABLED = ANALYST_MODE == "chimp"
 CHIMP_MAX_STEPS = int(os.environ.get("SAFETRE_CHIMP_MAX_STEPS", "6"))
 
 
-def _analyst_policy(client):
-    """Use a fixed, vetted two-step plan only for offline documentation capture."""
-    capture_demo = os.environ.get("SAFETRE_CAPTURE_INSIDE_DEMO", "").strip().lower()
-    if capture_demo not in ("1", "true", "yes", "on"):
-        return LLMAnalystPolicy(client, _cfg)
+def _capture_demo_policy(complex_analysis: bool = False):
+    """Fixed, vetted plans used only by the offline documentation captures."""
     if (os.environ.get("SAFETRE_LLM") or "").strip().lower() != "mock":
         raise RuntimeError("SAFETRE_CAPTURE_INSIDE_DEMO requires SAFETRE_LLM=mock")
     examples = _definition.planner_examples[:2]
     if len(examples) < 2:
         raise RuntimeError("inside demo capture needs two planner examples")
+    queries = [(example.request, example.spec) for example in examples]
+    if not complex_analysis:
+        conclusion = Conclude(
+            [Claim("The two released analyses provide evidence for the research question.",
+                   "supported", [1, 2])],
+            "supported",
+            "This synthetic example is a walkthrough, not a substantive study finding.",
+        )
+        return ScriptedPolicy(queries, conclusion)
+
+    queries.extend([
+        ("compare stake by gambling product and night use band", {
+            "dataset": "bets", "measure": {"fn": "mean", "column": "stake_gbp"},
+            "group_by": ["product", "night_use_band"], "filters": [],
+        }),
+        ("compare problem-gambling severity by night use band across study waves", {
+            "dataset": "wellbeing", "measure": {"fn": "mean", "column": "pgsi_score"},
+            "group_by": ["night_use_band", "wave"], "filters": [],
+        }),
+        ("compare sleep quality by night use band", {
+            "dataset": "wellbeing", "measure": {"fn": "mean", "column": "sleep_quality"},
+            "group_by": ["night_use_band"], "filters": [],
+        }),
+    ])
     conclusion = Conclude(
-        [Claim("The two released analyses provide evidence for the research question.",
-               "supported", [1, 2])],
+        [
+            Claim("Mean monthly stake rises from 9.69 in the rare group to 36.84 in the "
+                  "heavy group. Heavy users have the highest mean stake on casino, sports "
+                  "and bingo but not on slots or lottery, and the session-level "
+                  "correlation is weak (0.0297).",
+                  "supported", [1, 2, 3]),
+            Claim("Problem-gambling severity in the heavy group rises across the three "
+                  "waves (2.37, 3.69, 5.14) while the other groups stay flat, and the "
+                  "heavy group reports the lowest sleep quality (5.91).",
+                  "supported", [4, 5]),
+        ],
         "supported",
-        "This synthetic example is a walkthrough, not a substantive study finding.",
+        "Synthetic data: heavy late-night phone use goes with higher stakes, worsening "
+        "problem-gambling severity and poorer sleep. A walkthrough, not a study finding.",
     )
-    return ScriptedPolicy([(example.request, example.spec) for example in examples], conclusion)
+    return ScriptedPolicy(queries, conclusion)
+
+
+def _analyst_policy(client):
+    """Use a fixed plan only for explicit offline documentation capture."""
+    if not _capture_inside_demo():
+        return LLMAnalystPolicy(client, _cfg)
+    return _capture_demo_policy()
 
 
 def _capture_inside_demo() -> bool:
@@ -219,12 +257,14 @@ def _capture_inside_demo() -> bool:
 
 def _capture_dossier_html(request: Request) -> str | None:
     """Render a completed dossier for reproducible offline screenshots only."""
-    if not (_capture_inside_demo() and request.query_params.get("inside-demo") == "1"):
+    demo = request.query_params.get("inside-demo")
+    if not (_capture_inside_demo() and demo in ("1", "complex")):
         return None
     if (os.environ.get("SAFETRE_LLM") or "").strip().lower() != "mock":
         raise RuntimeError("inside demo capture requires SAFETRE_LLM=mock")
     question = "Does late-night phone use relate to gambling behaviour?"
-    loop = AnalystLoop(service, _analyst_policy(None), auditor=SessionAuditor(),
+    loop = AnalystLoop(service, _capture_demo_policy(complex_analysis=demo == "complex"),
+                       auditor=SessionAuditor(),
                        max_steps=CHIMP_MAX_STEPS)
     dossier = loop.run(question)
     return templates.get_template("_dossier.html").render(

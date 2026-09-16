@@ -64,12 +64,35 @@ This gives you a simple way to discuss the result with a collaborator: start
 with the claim, then ask whether the table beneath it supports the
 interpretation.
 
+## A broader question
+
+The same approach can gather a larger body of evidence. This second synthetic
+example asks how late-night phone use relates to gambling and wellbeing. It
+uses five linked steps: the stake gradient, the correlation with late-night
+sessions, product differences, problem-gambling severity over three study
+waves, and sleep quality.
+
+![A five-step inside-analysis dossier for a broader social-science question](figures/demo-inside-complex-dossier.png)
+
+The engine's answer is written from the released tables, and each figure can
+be checked against them. Stake rises steadily with late-night use, from 9.69 in
+the rare group to 36.84 in the heavy group, although the correlation across
+individual sessions is weak. The product breakdown is mixed. Problem-gambling
+severity in the heavy group climbs across the three waves (2.37, 3.69, 5.14)
+while the other groups stay flat, and the heavy group sleeps worst.
+
+Not every question needs five analyses. The point is that one broad question
+produces a readable record of the separate checks behind the answer, and each
+table is still a separately checked release.
+
 ## It also works on a small screen
 
-The same dossier remains readable on a phone. Tables scroll horizontally when
+Both dossiers remain readable on a phone. Tables scroll horizontally when
 needed; the claim and step labels stay visible.
 
 ![The inside-analysis dossier on a phone](figures/demo-inside-dossier-mobile.png)
+
+![The five-step dossier on a phone](figures/demo-inside-complex-dossier-mobile.png)
 
 ## What to take away
 
