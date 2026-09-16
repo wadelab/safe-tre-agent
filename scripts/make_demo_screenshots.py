@@ -49,13 +49,20 @@ SHOTS = {
     "demo-mobile": ("/", MOBILE),
 }
 
-# One extra capture with the inside analyst enabled, so the subtle top-right
-# parse-outside/parse-inside toggle is in frame. The home page is enough — the
-# toggle is what this shot documents; an actual dossier needs a live model and
-# so is deliberately not part of this deterministic, mock-planner set.
+# The inside walkthrough uses a fixed two-step plan over the same gateway. The
+# capture-only policy is allowed only with SAFETRE_LLM=mock, so the docs remain
+# reproducible and no hosted model is involved.
 PORT_INSIDE = 8802
 SHOTS_INSIDE = {
     "demo-inside-toggle": ("/", DESKTOP),
+    "demo-inside-dossier": (
+        "/?inside-demo=1#mode=inside",
+        "1280,2200",
+    ),
+    "demo-inside-dossier-mobile": (
+        "/?inside-demo=1#mode=inside",
+        "390,2200",
+    ),
 }
 
 
@@ -90,6 +97,15 @@ def capture(chrome: str, base: str, shots: dict) -> None:
         print(f"captured {name} -> {os.path.relpath(out, ROOT)}")
 
 
+def stop_server(server: subprocess.Popen) -> None:
+    server.terminate()
+    try:
+        server.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        server.kill()
+        server.wait(timeout=10)
+
+
 def main() -> None:
     if not os.path.exists(os.path.join(ROOT, "data", "donors.csv")):
         sys.exit("data/ is missing — run: uv run python scripts/make_data.py")
@@ -117,11 +133,12 @@ def main() -> None:
             wait_healthy(BASE)
             capture(chrome, BASE, SHOTS)
         finally:
-            server.terminate()
-            server.wait(timeout=10)
+            stop_server(server)
 
-        # Phase 2: one shot with the inside analyst enabled, so the toggle shows.
-        env_inside = dict(env, SAFETRE_ANALYST="chimp",
+        # Phase 2: the complete deterministic inside-analysis walkthrough.
+        env_inside = dict(env, SAFETRE_ANALYST="chimp", SAFETRE_CAPTURE_INSIDE_DEMO="1",
+                  SAFETRE_DATASET="studies/nightplay/nightplay.yaml",
+                  SAFETRE_DATA_DIR="data/nightplay_big",
                           SAFETRE_AUDIT_DB=os.path.join(tmp, "audit-inside.db"))
         base_inside = f"http://127.0.0.1:{PORT_INSIDE}"
         server_inside = subprocess.Popen(
@@ -134,8 +151,7 @@ def main() -> None:
             wait_healthy(base_inside)
             capture(chrome, base_inside, SHOTS_INSIDE)
         finally:
-            server_inside.terminate()
-            server_inside.wait(timeout=10)
+            stop_server(server_inside)
 
 
 if __name__ == "__main__":

@@ -306,6 +306,13 @@ document.addEventListener("DOMContentLoaded", () => {
   // like SAFETRE_ALLOW_TEST_CLIENT it is a sentinel: never enable it on a real
   // deployment.
   const hash = new URLSearchParams(location.hash.slice(1));
+  if (hash.get("mode") === "inside") {
+    const inside = document.querySelector("input[name='mode'][value='inside']");
+    if (inside) {
+      inside.checked = true;
+      gatewayMode(true);
+    }
+  }
   const preset = hash.get("q");
   if (preset) {
     input.value = preset.slice(0, input.maxLength);

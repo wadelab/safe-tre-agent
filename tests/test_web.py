@@ -4,6 +4,8 @@ import json
 import os
 import tempfile
 
+import pytest
+
 os.environ.setdefault("SAFETRE_AUDIT_DB", os.path.join(tempfile.mkdtemp(), "audit.db"))
 os.environ.setdefault("SAFETRE_AUDIT_KEY", "web-test-key")
 os.environ.setdefault("SAFETRE_RESTRICTED_CHANNEL", "1")
@@ -150,6 +152,28 @@ def test_index_accessibility_contract():
     assert "title=" not in r
     # step state is text in a tag, never colour alone
     assert r.count("step-status") >= 7
+
+
+def test_capture_only_inside_policy_requires_mock_planner(monkeypatch):
+    from safetre.inside_analyst import ScriptedPolicy
+    from safetre_web.app import _analyst_policy
+
+    monkeypatch.setenv("SAFETRE_CAPTURE_INSIDE_DEMO", "1")
+    monkeypatch.setenv("SAFETRE_LLM", "mock")
+    assert isinstance(_analyst_policy(object()), ScriptedPolicy)
+
+    monkeypatch.setenv("SAFETRE_LLM", "real")
+    with pytest.raises(RuntimeError, match="requires SAFETRE_LLM=mock"):
+        _analyst_policy(object())
+
+
+def test_capture_dossier_is_available_only_in_mock_capture_mode(monkeypatch):
+    monkeypatch.setenv("SAFETRE_CAPTURE_INSIDE_DEMO", "1")
+    monkeypatch.setenv("SAFETRE_LLM", "mock")
+    r = client.get("/?inside-demo=1")
+    assert r.status_code == 200
+    assert 'class="dossier"' in r.text
+    assert "What the safe analysis engine asked the gateway (2 steps)" in r.text
 
 
 # --- #50: a prefill link fills the box, it does not run it ----------------------

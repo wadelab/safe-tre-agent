@@ -75,9 +75,10 @@ The captures above use **parse outside**, the default single-query path, with
 the inside analyst off. When an operator sets `SAFETRE_ANALYST=chimp`, the ask
 box gains a **parse outside / parse inside** switch. Parse inside sends the
 whole question to the safe analysis engine, which runs several analyses behind
-the same gateway and returns a dossier of vetted releases. This capture shows
-only the switch; an inside run needs a model endpoint, so it is not part of the
-reproducible `mock` set. See [the inside analyst](inside-analyst.md).
+the same gateway and returns a dossier of vetted releases. The reproducible
+capture set also includes a fixed two-step dossier; see [Your first inside
+analysis](first-inside-analysis.md). It uses an explicit mock-only capture
+policy, not a hosted model. See [the inside analyst](inside-analyst.md).
 
 ## Reproducing the captures
 
@@ -92,8 +93,8 @@ The script starts a throwaway server on `127.0.0.1:8801` with `SAFETRE_LLM=mock`
 (the deterministic tests/CI planner, chosen so captures need no model endpoint)
 and a fresh temporary audit log, screenshots each state with headless Chrome,
 and writes `docs/figures/demo-{home,released,redacted,denied}.png` plus
-`demo-mobile.png` (the home page at 390px width) and `demo-inside-toggle.png`
-(the home page with `SAFETRE_ANALYST=chimp`). A running demo server on
+`demo-mobile.png` (the home page at 390px width), `demo-inside-toggle.png`, and
+the desktop and mobile `demo-inside-dossier` captures. A running demo server on
 port 8800 is left untouched.
 
 To capture by hand instead, open these URLs — the fragment pre-fills and

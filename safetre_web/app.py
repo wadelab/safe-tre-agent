@@ -32,9 +32,11 @@ from safetre import dataset as dataset_mod
 from safetre import synth
 from safetre.audit import AuditLog, claim_exclusive
 from safetre.config import load_policy_config
-from safetre.disclosure import DisclosurePolicy, build_vetter
+from safetre.disclosure import DisclosurePolicy, SessionAuditor, build_vetter
 from safetre.manifest import manifest_for_response, public_schema
-from safetre.inside_analyst import AnalystLoop, LLMAnalystPolicy, LLMNarrator
+from safetre.inside_analyst import (
+    AnalystLoop, Claim, Conclude, LLMAnalystPolicy, LLMNarrator, ScriptedPolicy,
+)
 from safetre.llm import LLMClient
 from safetre.planner import LLMPlanner, MockPlanner
 from safetre.query import CATALOGUE
@@ -189,6 +191,46 @@ CHIMP_ENABLED = ANALYST_MODE == "chimp"
 # A modest cap: each step is an LLM turn, and a browser request waits for the
 # whole loop. The session budget still bounds disclosure; this bounds latency.
 CHIMP_MAX_STEPS = int(os.environ.get("SAFETRE_CHIMP_MAX_STEPS", "6"))
+
+
+def _analyst_policy(client):
+    """Use a fixed, vetted two-step plan only for offline documentation capture."""
+    capture_demo = os.environ.get("SAFETRE_CAPTURE_INSIDE_DEMO", "").strip().lower()
+    if capture_demo not in ("1", "true", "yes", "on"):
+        return LLMAnalystPolicy(client, _cfg)
+    if (os.environ.get("SAFETRE_LLM") or "").strip().lower() != "mock":
+        raise RuntimeError("SAFETRE_CAPTURE_INSIDE_DEMO requires SAFETRE_LLM=mock")
+    examples = _definition.planner_examples[:2]
+    if len(examples) < 2:
+        raise RuntimeError("inside demo capture needs two planner examples")
+    conclusion = Conclude(
+        [Claim("The two released analyses provide evidence for the research question.",
+               "supported", [1, 2])],
+        "supported",
+        "This synthetic example is a walkthrough, not a substantive study finding.",
+    )
+    return ScriptedPolicy([(example.request, example.spec) for example in examples], conclusion)
+
+
+def _capture_inside_demo() -> bool:
+    return os.environ.get("SAFETRE_CAPTURE_INSIDE_DEMO", "").strip().lower() \
+        in ("1", "true", "yes", "on")
+
+
+def _capture_dossier_html(request: Request) -> str | None:
+    """Render a completed dossier for reproducible offline screenshots only."""
+    if not (_capture_inside_demo() and request.query_params.get("inside-demo") == "1"):
+        return None
+    if (os.environ.get("SAFETRE_LLM") or "").strip().lower() != "mock":
+        raise RuntimeError("inside demo capture requires SAFETRE_LLM=mock")
+    question = "Does late-night phone use relate to gambling behaviour?"
+    loop = AnalystLoop(service, _analyst_policy(None), auditor=SessionAuditor(),
+                       max_steps=CHIMP_MAX_STEPS)
+    dossier = loop.run(question)
+    return templates.get_template("_dossier.html").render(
+        d=dossier, tables=_dossier_tables(dossier),
+        budget_left=max(0, dossier.budget - dossier.budget_spent),
+    )
 
 
 def make_planner():
@@ -398,6 +440,7 @@ def index(request: Request):
         "dataset_description": _definition.description,
         "version": _version,
         "chimp_enabled": CHIMP_ENABLED,
+        "capture_dossier_html": _capture_dossier_html(request),
     })
 
 
@@ -464,16 +507,17 @@ def chimp(request: Request, body: QueryRequest):
     sess = sessions.get(user)
     client = LLMClient()
     with sess.lock:
-        loop = AnalystLoop(service, LLMAnalystPolicy(client, _cfg),
+        loop = AnalystLoop(service, _analyst_policy(client),
                            auditor=sess.auditor, audit_log=audit_log, user=user,
                            max_steps=CHIMP_MAX_STEPS)
         dossier = loop.run(body.q)
-        try:
-            LLMNarrator(client).render(dossier)
-        except Exception:                         # noqa: BLE001
-            # the narrator is a convenience over the dossier; if the model call
-            # fails the vetted dossier still stands, so degrade to no prose
-            _log.warning("narrator failed; returning the dossier without prose")
+        if not _capture_inside_demo():
+            try:
+                LLMNarrator(client).render(dossier)
+            except Exception:                     # noqa: BLE001
+                # the narrator is a convenience over the dossier; if the model call
+                # fails the vetted dossier still stands, so degrade to no prose
+                _log.warning("narrator failed; returning the dossier without prose")
         sess.history.append((body.q, dossier.verdict))
 
     spent = sess.auditor.spent
@@ -504,7 +548,7 @@ def chimp_stream(request: Request, body: QueryRequest):
     def events():
         try:
             with sess.lock:
-                loop = AnalystLoop(service, LLMAnalystPolicy(client, _cfg),
+                loop = AnalystLoop(service, _analyst_policy(client),
                                    auditor=sess.auditor, audit_log=audit_log, user=user,
                                    max_steps=CHIMP_MAX_STEPS)
                 dossier = None
@@ -518,10 +562,11 @@ def chimp_stream(request: Request, body: QueryRequest):
                         yield f"event: step\ndata: {data}\n\n"
                     else:
                         dossier = payload
-                try:
-                    LLMNarrator(client).render(dossier)
-                except Exception:                     # noqa: BLE001
-                    _log.warning("narrator failed; returning the dossier without prose")
+                if not _capture_inside_demo():
+                    try:
+                        LLMNarrator(client).render(dossier)
+                    except Exception:                 # noqa: BLE001
+                        _log.warning("narrator failed; returning the dossier without prose")
                 sess.history.append((body.q, dossier.verdict))
                 spent = sess.auditor.spent
                 html = templates.get_template("_dossier.html").render(

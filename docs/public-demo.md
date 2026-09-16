@@ -18,13 +18,15 @@ claim without asking anyone for access.
 
 1. **[Demo in 5 minutes](demo-5-minutes.md)** — clone, generate synthetic
    data, run the web app locally, and smoke-test the three public endpoints.
-2. **[Screenshot tour](screenshot-tour.md)** — the five states that carry the
+2. **[Your first inside analysis](first-inside-analysis.md)** — a plain-language,
+   screenshot-led walkthrough of one question answered with two linked analyses.
+3. **[Screenshot tour](screenshot-tour.md)** — the five states that carry the
    safety argument (home, released, redacted, denied, audit verify), each with
    what to look for and the exact query that produces it.
-3. **[Web interface walkthrough](web-walkthrough.md)** — a two-minute first
+4. **[Web interface walkthrough](web-walkthrough.md)** — a two-minute first
    look for a new user: three simple queries, then parse outside versus parse
    inside.
-4. **[Evidence checklist](evidence-checklist.md)** — what to record so a demo
+5. **[Evidence checklist](evidence-checklist.md)** — what to record so a demo
    run becomes citable evidence: commit, lock hash, check results, red-team
    summary, audit verification.
 

@@ -37,9 +37,7 @@
         </div>
         {% endif %}
         <h1 class="heading-xl">Ask the safe-outputs mechanism</h1>
-        <p class="lead">Put your question to the gateway. It validates every
-          computation against the allowlist, runs it read-only, and checks
-          each output before release &mdash; the protected data never leaves.</p>
+        <p class="lead">Put your question to the gateway. Simple questions can be parsed 'outside' the environment, more complex ones 'inside'. &mdash; Potected data never leave the TRE.</p>
 
         <form id="qform" autocomplete="off">
           <div class="form-group">
@@ -120,7 +118,11 @@
 
         <h2 class="heading-m">Result</h2>
         <div id="result" class="result" role="status" aria-live="polite">
+          {% if capture_dossier_html %}
+          {{ capture_dossier_html | safe }}
+          {% else %}
           <p class="hint">Results appear here after the gateway releases them.</p>
+          {% endif %}
         </div>
       </div>
 
