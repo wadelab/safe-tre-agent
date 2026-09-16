@@ -71,10 +71,10 @@ re-run it from the log alone, without trusting the server that produced it.
 
 ![The ask box with the inside analyst enabled](figures/demo-inside-toggle.png)
 
-The captures above use **parse outside**, the default single-query path, with
-the inside analyst off. When an operator sets `SAFETRE_ANALYST=chimp`, the ask
-box gains a **parse outside / parse inside** switch. Parse inside sends the
-whole question to the safe analysis engine, which runs several analyses behind
+The captures above use **parse outside**, the single-query path and the only
+one with the inside analyst off. When an operator sets `SAFETRE_ANALYST=chimp`,
+the ask box gains a **parse outside / parse inside** switch, set to inside by
+default. Parse inside sends the whole question to the safe analysis engine, which runs several analyses behind
 the same gateway and returns a dossier of vetted releases. The reproducible
 capture set also includes a fixed two-step dossier; see [Your first inside
 analysis](first-inside-analysis.md). It uses an explicit mock-only capture

@@ -182,6 +182,19 @@ def test_capture_dossier_is_available_only_in_mock_capture_mode(monkeypatch):
         in complex_run.text
 
 
+def test_parse_switch_defaults_to_inside(monkeypatch):
+    import safetre_web.app as web
+
+    monkeypatch.setattr(web, "CHIMP_ENABLED", False)
+    assert 'name="mode"' not in client.get("/").text
+
+    monkeypatch.setattr(web, "CHIMP_ENABLED", True)
+    page = client.get("/").text
+    assert 'value="inside" checked' in page
+    assert 'value="outside" checked' not in page
+    assert '<ol class="steps" id="pipeline" hidden>' in page
+
+
 # --- #50: a prefill link fills the box, it does not run it ----------------------
 
 def test_a_prefill_link_does_not_run_itself_by_default():

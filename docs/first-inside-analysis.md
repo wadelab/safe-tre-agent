@@ -17,8 +17,9 @@ whether the number of late-night sessions relates to stake.
 
 ## Choose inside analysis
 
-The small switch above the question box has two options. Choose **inside** when
-one question needs several linked analyses.
+The small switch above the question box has two options. **Inside** is
+selected by default; keep it when one question needs several linked analyses,
+and switch to **outside** for a single calculation.
 
 ![The inside option above the question box](figures/demo-inside-toggle.png)
 

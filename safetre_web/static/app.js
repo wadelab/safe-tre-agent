@@ -306,13 +306,14 @@ document.addEventListener("DOMContentLoaded", () => {
   // like SAFETRE_ALLOW_TEST_CLIENT it is a sentinel: never enable it on a real
   // deployment.
   const hash = new URLSearchParams(location.hash.slice(1));
-  if (hash.get("mode") === "inside") {
-    const inside = document.querySelector("input[name='mode'][value='inside']");
-    if (inside) {
-      inside.checked = true;
-      gatewayMode(true);
-    }
-  }
+  // Inside is the default when the switch is present; #mode=outside (or
+  // #mode=inside) in a link picks one explicitly.
+  const linked = document.querySelector(`input[name='mode'][value='${hash.get("mode")}']`);
+  if (linked) linked.checked = true;
+  gatewayMode(currentMode() === "inside");
+  document.querySelectorAll("input[name='mode']").forEach((radio) => {
+    radio.addEventListener("change", () => gatewayMode(currentMode() === "inside"));
+  });
   const preset = hash.get("q");
   if (preset) {
     input.value = preset.slice(0, input.maxLength);

@@ -37,6 +37,27 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Every dataset this demo serves is synthetic; say so behind every screen,
+   screenshot and screen share. Generated content, not an element: it cannot
+   take clicks or focus, and the empty alt text keeps it out of the
+   accessibility tree (the page banner already says it in words). */
+body::before {
+  content: "Synthetic data";
+  content: "Synthetic data" / "";
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: -1;
+  transform: translate(-50%, -50%) rotate(-30deg);
+  font-size: clamp(56px, 13vw, 180px);
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  color: rgba(11, 12, 12, 0.06);
+  pointer-events: none;
+  user-select: none;
+}
+
 @media (min-width: 641px) {
   body { font-size: 19px; line-height: 1.3157894737; }
 }

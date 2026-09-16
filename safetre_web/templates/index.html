@@ -32,8 +32,8 @@
         {% if chimp_enabled %}
         <div class="mode-switch" id="mode" role="radiogroup" aria-label="How the question is parsed">
           <span class="mode-switch__label">parse</span>
-          <label class="mode-switch__opt"><input type="radio" name="mode" value="outside" checked><span>outside</span></label>
-          <label class="mode-switch__opt"><input type="radio" name="mode" value="inside"><span>inside</span></label>
+          <label class="mode-switch__opt"><input type="radio" name="mode" value="outside"><span>outside</span></label>
+          <label class="mode-switch__opt"><input type="radio" name="mode" value="inside" checked><span>inside</span></label>
         </div>
         {% endif %}
         <h1 class="heading-xl">Ask the safe-outputs mechanism</h1>
@@ -85,7 +85,7 @@
         {% endif %}
 
         <h2 class="heading-m">Gateway checks</h2>
-        <ol class="steps" id="pipeline">
+        <ol class="steps" id="pipeline"{% if chimp_enabled %} hidden{% endif %}>
           <li class="step" data-stage="vetting"><span class="step-circle" aria-hidden="true">1</span>
             <span class="step-name">Vetting</span>
             <strong class="tag tag--grey step-status">Not run</strong></li>
@@ -109,7 +109,7 @@
             <strong class="tag tag--grey step-status">Not run</strong></li>
         </ol>
 
-        <div id="gateway-live" hidden>
+        <div id="gateway-live"{% if not chimp_enabled %} hidden{% endif %}>
           <p class="gateway-note hint">In this mode the safe analysis engine sends
             each step through the whole gateway above. Each box below is one step
             and the gateway&rsquo;s verdict on it.</p>
