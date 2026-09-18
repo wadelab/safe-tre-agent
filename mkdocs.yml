@@ -91,6 +91,7 @@ nav:
   - Engineering record:
       - Hardening log: hardening-log.md
       - Complexity & opacity review: complexity-review.md
+      - Independent verification (next steps): independent-verification.md
       - Decision log: decision-log.md
       - Decision records:
           - D1 Cells-first models: decisions/D1-cells-first-models.md
