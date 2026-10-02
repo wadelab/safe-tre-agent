@@ -75,6 +75,10 @@ artifacts/shots/
 artifacts/vrr/
 artifacts/vrr-demo/
 
+# talk outlines and speaker notes are private working material, never committed
+# (same spirit as the decks above, which are distributed via releases, not git)
+artifacts/talks/
+
 # Lean build artifacts (formal/lean)
 formal/lean/.lake/
 
